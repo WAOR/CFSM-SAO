@@ -673,12 +673,19 @@
   overflow: visible;
   touch-action: pan-y;
   cursor: crosshair;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mao-realtime-chart-canvas {
   width: 100%;
   height: 100%;
   display: block;
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* 实时图表节点悬浮详情卡片 */
@@ -688,6 +695,9 @@
   transform: translateX(-50%);
   z-index: 20;
   pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
   min-width: 110px;
   padding: 4px 7px;
   border-radius: 6px;

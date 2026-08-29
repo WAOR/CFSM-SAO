@@ -353,6 +353,7 @@ function SingleTrafficCard({
         onPointerDown={handlePointer}
         onPointerLeave={handlePointerLeave}
         onPointerCancel={handlePointerLeave}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <canvas ref={canvasRef} className="mao-realtime-chart-canvas" />
         {hoverInfo && (
