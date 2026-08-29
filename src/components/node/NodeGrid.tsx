@@ -250,10 +250,10 @@ function HomeOverviewCards({
     ? `今日全节点出入站累计 ${formatBytes(todayTrafficTotal)}`
     : "今日流量统计中...";
   const trafficRating =
-    showOverviewRatings && showTrafficRating
+    showOverviewRatings && showTrafficRating && todayTrafficTotal !== null
       ? getOverviewRating({
         kind: "traffic",
-        value: overview.trafficUp + overview.trafficDown,
+        value: todayTrafficBytes,
         customLabels: trafficRatingLabels,
       })
       : null;

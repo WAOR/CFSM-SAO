@@ -27,7 +27,7 @@ describe("overview ratings", () => {
   });
 
   it("rates traffic and bandwidth on their native byte inputs", () => {
-    expect(getOverviewRating({ kind: "traffic", value: 740 * GB })).toEqual({
+    expect(getOverviewRating({ kind: "traffic", value: 35 * GB })).toEqual({
       level: 1,
       label: "常规",
     });

@@ -53,7 +53,7 @@ export function getOverviewRating({
     kind === "asset"
       ? levelFromThresholds(value, [500, 1500, 3000])
       : kind === "traffic"
-        ? levelFromThresholds(value, [500 * GB, 2000 * GB, 10000 * GB])
+        ? levelFromThresholds(value, [10 * GB, 50 * GB, 200 * GB])
         : levelFromThresholds(value, [
             1 * MBPS_IN_BYTES_PER_SECOND,
             10 * MBPS_IN_BYTES_PER_SECOND,
