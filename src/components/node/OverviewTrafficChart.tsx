@@ -1,13 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatByteRateLabel } from "@/utils/format";
 
-interface TrafficPoint {
+interface SingleTrafficPoint {
   time: number;
-  up: number;
-  down: number;
+  rate: number;
+}
+
+interface HoverInfo {
+  index: number;
+  time: number;
+  rate: number;
+  x: number;
 }
 
 const MAX_HISTORY_POINTS = 16;
+
+function formatPointTime(timeMs: number): string {
+  const d = new Date(timeMs);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
 
 // 动态整值标尺刻度对齐算法：确保 Y 轴在动态缩放时数值始终整洁优雅（如 400 MB/s、200 MB/s、0）
 function getNiceRateCeiling(value: number): number {
@@ -38,17 +49,29 @@ function getNiceRateCeiling(value: number): number {
   return Math.ceil(value / GIB) * GIB;
 }
 
-export function OverviewTrafficChart({
-  netUp,
-  netDown,
-  bandwidthRating,
+function SingleTrafficCard({
+  title,
+  direction,
+  rate,
+  color,
+  gradientTop,
+  gradientBottom,
+  haloRgba,
 }: {
-  netUp: number;
-  netDown: number;
-  bandwidthRating?: { level: 0 | 1 | 2 | 3; label: string } | null;
+  title: string;
+  direction: "up" | "down";
+  rate: number;
+  color: string;
+  gradientTop: string;
+  gradientBottom: string;
+  haloRgba: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const historyRef = useRef<TrafficPoint[]>([]);
+  const historyRef = useRef<SingleTrafficPoint[]>([]);
+  const hoverIndexRef = useRef<number | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+
+  hoverIndexRef.current = hoverInfo?.index ?? null;
 
   // 记录滚动历史点
   useEffect(() => {
@@ -59,16 +82,15 @@ export function OverviewTrafficChart({
       for (let i = 11; i >= 1; i--) {
         history.push({
           time: now - i * 1500,
-          up: Math.max(0, netUp * (0.88 + Math.random() * 0.24)),
-          down: Math.max(0, netDown * (0.88 + Math.random() * 0.24)),
+          rate: Math.max(0, rate * (0.88 + Math.random() * 0.24)),
         });
       }
     }
-    history.push({ time: now, up: netUp, down: netDown });
+    history.push({ time: now, rate });
     if (history.length > MAX_HISTORY_POINTS) {
       history.shift();
     }
-  }, [netUp, netDown]);
+  }, [rate]);
 
   // Canvas 绘制曲线与波形
   useEffect(() => {
@@ -77,21 +99,29 @@ export function OverviewTrafficChart({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    let animId: number;
+
     const draw = () => {
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
       const width = rect.width;
       const height = rect.height;
 
-      if (width === 0 || height === 0) return;
-
-      if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-        canvas.width = Math.round(width * dpr);
-        canvas.height = Math.round(height * dpr);
+      if (width === 0 || height === 0) {
+        animId = requestAnimationFrame(draw);
+        return;
       }
 
-      ctx.save();
-      ctx.scale(dpr, dpr);
+      const dpr = window.devicePixelRatio || 1;
+      const pixelWidth = Math.max(1, Math.round(width * dpr));
+      const pixelHeight = Math.max(1, Math.round(height * dpr));
+
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+
+      // 每次重置变换矩阵，保证 X 与 Y 等比缩放，彻底杜绝拉伸畸变与模糊
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
       const history = historyRef.current;
@@ -99,23 +129,21 @@ export function OverviewTrafficChart({
         history.length > 1
           ? history
           : [
-              { time: Date.now() - 2000, up: 0, down: 0 },
-              { time: Date.now(), up: netUp, down: netDown },
+              { time: Date.now() - 2000, rate: 0 },
+              { time: Date.now(), rate },
             ];
 
       // 动态计算当前区间的最高速率并对齐整值刻度
       let peakRate = 0;
       for (const p of points) {
-        if (p.down > peakRate) peakRate = p.down;
-        if (p.up > peakRate) peakRate = p.up;
+        if (p.rate > peakRate) peakRate = p.rate;
       }
       const maxVal = getNiceRateCeiling(peakRate);
 
-      const isMobile = width < 420;
-      const paddingLeft = isMobile ? 62 : 68;
-      const paddingBottom = 20;
-      const paddingTop = 8;
-      const paddingRight = isMobile ? 28 : 22;
+      const paddingLeft = 50;
+      const paddingBottom = 18;
+      const paddingTop = 6;
+      const paddingRight = 14;
       const plotWidth = width - paddingLeft - paddingRight;
       const plotHeight = height - paddingTop - paddingBottom;
 
@@ -124,9 +152,7 @@ export function OverviewTrafficChart({
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
 
-      ctx.font = isMobile
-        ? "9px Inter, system-ui, -apple-system, sans-serif"
-        : "10px Inter, system-ui, -apple-system, sans-serif";
+      ctx.font = "9px Inter, system-ui, -apple-system, sans-serif";
       ctx.fillStyle = "rgba(140, 140, 140, 0.75)";
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
@@ -146,10 +172,10 @@ export function OverviewTrafficChart({
 
       ctx.setLineDash([]);
 
-      // 绘制 X 轴时间刻度
+      // 绘制 X 轴时间刻度（首尾两个时间点）
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      const timeSteps = isMobile ? 2 : 3;
+      const timeSteps = 2;
       const startTime = points[0].time;
       const endTime = points[points.length - 1].time;
       const timeSpan = Math.max(1000, endTime - startTime);
@@ -165,132 +191,224 @@ export function OverviewTrafficChart({
         } else {
           ctx.textAlign = "center";
         }
-        ctx.fillText(timeStr, x, height - paddingBottom + 5);
+        ctx.fillText(timeStr, x, height - paddingBottom + 4);
       }
 
       if (points.length > 1) {
-        const downColor = "#2f9e65";
-        const upColor = "#3b82f6";
+        const isDark = typeof document !== "undefined" && document.documentElement.dataset.appearance === "dark";
+        const hoverIdx = hoverIndexRef.current;
 
-        // 下行流量 (Downstream: 绿色区域与绿色曲线)
-        const downGradient = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + plotHeight);
-        downGradient.addColorStop(0, "rgba(47, 158, 101, 0.22)");
-        downGradient.addColorStop(1, "rgba(47, 158, 101, 0.01)");
+        // 绘制悬浮垂直高亮轴
+        if (hoverIdx !== null && hoverIdx >= 0 && hoverIdx < points.length) {
+          const hoverX = paddingLeft + (hoverIdx / (points.length - 1)) * plotWidth;
+          const barWidth = 18;
+
+          ctx.fillStyle = isDark ? "rgba(255, 255, 255, 0.06)" : haloRgba;
+          ctx.beginPath();
+          if (typeof ctx.roundRect === "function") {
+            ctx.roundRect(hoverX - barWidth / 2, paddingTop - 2, barWidth, plotHeight + 4, 5);
+          } else {
+            ctx.rect(hoverX - barWidth / 2, paddingTop - 2, barWidth, plotHeight + 4);
+          }
+          ctx.fill();
+
+          ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.28)" : color;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 2]);
+          ctx.beginPath();
+          ctx.moveTo(hoverX, paddingTop);
+          ctx.lineTo(hoverX, paddingTop + plotHeight);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // 区域渐变填充
+        const gradient = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + plotHeight);
+        gradient.addColorStop(0, gradientTop);
+        gradient.addColorStop(1, gradientBottom);
 
         ctx.beginPath();
         points.forEach((p, idx) => {
           const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
-          const y = paddingTop + plotHeight - (p.down / maxVal) * plotHeight;
+          const y = paddingTop + plotHeight - (p.rate / maxVal) * plotHeight;
           if (idx === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
         ctx.lineTo(paddingLeft + plotWidth, paddingTop + plotHeight);
         ctx.lineTo(paddingLeft, paddingTop + plotHeight);
         ctx.closePath();
-        ctx.fillStyle = downGradient;
+        ctx.fillStyle = gradient;
         ctx.fill();
 
-        // 下行流量折线 (Downstream Line - Green)
+        // 折线
         ctx.beginPath();
         points.forEach((p, idx) => {
           const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
-          const y = paddingTop + plotHeight - (p.down / maxVal) * plotHeight;
+          const y = paddingTop + plotHeight - (p.rate / maxVal) * plotHeight;
           if (idx === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
-        ctx.strokeStyle = downColor;
+        ctx.strokeStyle = color;
         ctx.lineWidth = 1.8;
         ctx.stroke();
 
-        // 下行流量节点 (Downstream Nodes: 内部为线条绿色，外圈为白色)
+        // 数据圆圈节点（内部线条色，外圈纯白）
         points.forEach((p, idx) => {
           const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
-          const y = paddingTop + plotHeight - (p.down / maxVal) * plotHeight;
+          const y = paddingTop + plotHeight - (p.rate / maxVal) * plotHeight;
+          const isHovered = hoverIdx === idx;
+
+          if (isHovered) {
+            ctx.beginPath();
+            ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+            ctx.fillStyle = haloRgba;
+            ctx.fill();
+          }
+
           ctx.beginPath();
-          ctx.arc(x, y, 2.6, 0, Math.PI * 2);
-          ctx.fillStyle = downColor;
+          ctx.arc(x, y, isHovered ? 3.3 : 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = color;
           ctx.fill();
           ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1.6;
-          ctx.stroke();
-        });
-
-        // 上行流量折线 (Upstream Line - Blue)
-        ctx.beginPath();
-        points.forEach((p, idx) => {
-          const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
-          const y = paddingTop + plotHeight - (p.up / maxVal) * plotHeight;
-          if (idx === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.strokeStyle = upColor;
-        ctx.lineWidth = 1.8;
-        ctx.stroke();
-
-        // 上行流量节点 (Upstream Nodes: 内部为线条蓝色，外圈为白色)
-        points.forEach((p, idx) => {
-          const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
-          const y = paddingTop + plotHeight - (p.up / maxVal) * plotHeight;
-          ctx.beginPath();
-          ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = upColor;
-          ctx.fill();
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = isHovered ? 2 : 1.5;
           ctx.stroke();
         });
       }
-
-      ctx.restore();
     };
 
     draw();
-    const animId = requestAnimationFrame(draw);
+    animId = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animId);
-  }, [netUp, netDown]);
+  }, [rate, color, gradientTop, gradientBottom, haloRgba]);
+
+  // 处理鼠标悬浮与触屏滑动
+  const handlePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const paddingLeft = 50;
+    const paddingRight = 14;
+    const plotWidth = rect.width - paddingLeft - paddingRight;
+
+    if (plotWidth <= 0) return;
+
+    const history = historyRef.current;
+    const points = history.length > 1 ? history : [];
+    if (points.length <= 1) return;
+
+    const x = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, (x - paddingLeft) / plotWidth));
+    const idx = Math.round(ratio * (points.length - 1));
+    const point = points[idx];
+    if (!point) return;
+
+    const pointX = paddingLeft + (idx / (points.length - 1)) * plotWidth;
+    setHoverInfo({
+      index: idx,
+      time: point.time,
+      rate: point.rate,
+      x: pointX,
+    });
+  };
+
+  const handlePointerLeave = () => {
+    setHoverInfo(null);
+  };
 
   return (
     <div className="mao-realtime-chart-card">
       <div className="mao-realtime-chart-head">
         <div className="mao-realtime-chart-title">
           <svg
-            width="15"
-            height="15"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+            stroke={color}
+            strokeWidth="2.2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="text-(--status-success)"
           >
-            <rect width="6" height="6" x="9" y="2" rx="1" />
-            <rect width="6" height="6" x="2" y="16" rx="1" />
-            <rect width="6" height="6" x="16" y="16" rx="1" />
-            <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-            <path d="M12 8v4" />
+            {direction === "up" ? (
+              <>
+                <path d="m18 15-6-6-6 6" />
+                <path d="M12 9v12" />
+              </>
+            ) : (
+              <>
+                <path d="m6 9 6 6 6-6" />
+                <path d="M12 3v12" />
+              </>
+            )}
           </svg>
-          <span>网络</span>
+          <span>{title}</span>
         </div>
-        {bandwidthRating && (
-          <span
-            className="overview-card-rating is-bandwidth-badge"
-            data-rating-level={bandwidthRating.level}
-            title={`实时带宽评级: ${bandwidthRating.label}`}
+        <span className="mao-realtime-chart-rates" style={{ color }}>
+          {direction === "up" ? "↑" : "↓"} {formatByteRateLabel(rate)}
+        </span>
+      </div>
+      <div
+        className="mao-realtime-chart-canvas-wrap"
+        onPointerMove={handlePointer}
+        onPointerDown={handlePointer}
+        onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerLeave}
+      >
+        <canvas ref={canvasRef} className="mao-realtime-chart-canvas" />
+        {hoverInfo && (
+          <div
+            className="mao-chart-tooltip"
+            style={{
+              left: `clamp(60px, ${hoverInfo.x}px, calc(100% - 60px))`,
+            }}
           >
-            <span className="mao-status-dot" />
-            {bandwidthRating.label}
-          </span>
+            <div className="mao-chart-tooltip-header">
+              <span className="mao-chart-tooltip-time">{formatPointTime(hoverInfo.time)}</span>
+            </div>
+            <div className="mao-chart-tooltip-row">
+              <span className="mao-chart-tooltip-label">
+                <i style={{ background: color }} />
+                {direction === "up" ? "上传" : "下载"}
+              </span>
+              <span className="mao-chart-tooltip-val" style={{ color }}>
+                {formatByteRateLabel(hoverInfo.rate)}
+              </span>
+            </div>
+          </div>
         )}
       </div>
-      <div className="mao-realtime-chart-rates">
-        <span style={{ color: "var(--traffic-up, #3b82f6)" }}>↑ {formatByteRateLabel(netUp)}</span>
-        <span className="text-(--text-tertiary)">/</span>
-        <span style={{ color: "var(--traffic-down, #2f9e65)" }}>↓ {formatByteRateLabel(netDown)}</span>
-      </div>
-      <div className="mao-realtime-chart-canvas-wrap">
-        <canvas ref={canvasRef} className="mao-realtime-chart-canvas" />
-      </div>
+    </div>
+  );
+}
+
+export function OverviewTrafficChart({
+  netUp,
+  netDown,
+}: {
+  netUp: number;
+  netDown: number;
+  bandwidthRating?: { level: 0 | 1 | 2 | 3; label: string } | null;
+}) {
+  return (
+    <div className="mao-realtime-charts-grid">
+      <SingleTrafficCard
+        title="上行网络"
+        direction="up"
+        rate={netUp}
+        color="#3b82f6"
+        gradientTop="rgba(59, 130, 246, 0.22)"
+        gradientBottom="rgba(59, 130, 246, 0.01)"
+        haloRgba="rgba(59, 130, 246, 0.25)"
+      />
+      <SingleTrafficCard
+        title="下行网络"
+        direction="down"
+        rate={netDown}
+        color="#2f9e65"
+        gradientTop="rgba(47, 158, 101, 0.22)"
+        gradientBottom="rgba(47, 158, 101, 0.01)"
+        haloRgba="rgba(47, 158, 101, 0.25)"
+      />
     </div>
   );
 }

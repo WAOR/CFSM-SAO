@@ -33,7 +33,7 @@ describe("overview ratings", () => {
     });
     expect(getOverviewRating({ kind: "bandwidth", value: 672 * 1024 / 8 })).toEqual({
       level: 0,
-      label: "闲置",
+      label: "流量闲置",
     });
   });
 

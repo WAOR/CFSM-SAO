@@ -456,10 +456,22 @@ function HomeOverviewCards({
               </h3>
               <p className="mao-progress-subtitle">服务器在线率与实时网络吞吐</p>
             </div>
-            <span className={`mao-status-pill ${isAllHealthy ? "is-healthy" : "is-warning"}`}>
-              <span className="mao-status-dot" />
-              {isAllHealthy ? "状态健康" : overview.totalNodes === 0 ? "未连接" : `存在离线 (${overview.offlineNodes})`}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <span className={`mao-status-pill ${isAllHealthy ? "is-healthy" : "is-warning"}`}>
+                <span className="mao-status-dot" />
+                {isAllHealthy ? "状态健康" : overview.totalNodes === 0 ? "未连接" : `存在离线 (${overview.offlineNodes})`}
+              </span>
+              {bandwidthRating && (
+                <span
+                  className="overview-card-rating is-bandwidth-badge"
+                  data-rating-level={bandwidthRating.level}
+                  title={`全站实时带宽评级: ${bandwidthRating.label}`}
+                >
+                  <span className="mao-status-dot" />
+                  {bandwidthRating.label}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 进度模块 1：服务器在线状态 */}
