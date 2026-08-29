@@ -7,7 +7,7 @@ interface TrafficPoint {
   down: number;
 }
 
-const MAX_HISTORY_POINTS = 32;
+const MAX_HISTORY_POINTS = 16;
 
 // 动态整值标尺刻度对齐算法：确保 Y 轴在动态缩放时数值始终整洁优雅（如 400 MB/s、200 MB/s、0）
 function getNiceRateCeiling(value: number): number {
@@ -56,7 +56,7 @@ export function OverviewTrafficChart({
     const history = historyRef.current;
     if (history.length === 0) {
       // 初始填充平滑历史点
-      for (let i = 10; i >= 1; i--) {
+      for (let i = 11; i >= 1; i--) {
         history.push({
           time: now - i * 1500,
           up: Math.max(0, netUp * (0.88 + Math.random() * 0.24)),
@@ -169,6 +169,9 @@ export function OverviewTrafficChart({
       }
 
       if (points.length > 1) {
+        const downColor = "#2f9e65";
+        const upColor = "#3b82f6";
+
         // 下行流量 (Downstream: 绿色区域与绿色曲线)
         const downGradient = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + plotHeight);
         downGradient.addColorStop(0, "rgba(47, 158, 101, 0.22)");
@@ -195,9 +198,22 @@ export function OverviewTrafficChart({
           if (idx === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
-        ctx.strokeStyle = "#2f9e65";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = downColor;
+        ctx.lineWidth = 1.8;
         ctx.stroke();
+
+        // 下行流量节点 (Downstream Nodes: 内部为线条绿色，外圈为白色)
+        points.forEach((p, idx) => {
+          const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
+          const y = paddingTop + plotHeight - (p.down / maxVal) * plotHeight;
+          ctx.beginPath();
+          ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+          ctx.fillStyle = downColor;
+          ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.6;
+          ctx.stroke();
+        });
 
         // 上行流量折线 (Upstream Line - Blue)
         ctx.beginPath();
@@ -207,33 +223,22 @@ export function OverviewTrafficChart({
           if (idx === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         });
-        ctx.strokeStyle = "#3b82f6";
+        ctx.strokeStyle = upColor;
         ctx.lineWidth = 1.8;
         ctx.stroke();
 
-        // 最新采样点发光端点
-        const latestIdx = points.length - 1;
-        const latestX = paddingLeft + plotWidth;
-        const latestDownY = paddingTop + plotHeight - (points[latestIdx].down / maxVal) * plotHeight;
-        const latestUpY = paddingTop + plotHeight - (points[latestIdx].up / maxVal) * plotHeight;
-
-        // 下行最新点 (Green)
-        ctx.beginPath();
-        ctx.arc(latestX, latestDownY, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#2f9e65";
-        ctx.fill();
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // 上行最新点 (Blue)
-        ctx.beginPath();
-        ctx.arc(latestX, latestUpY, 3.2, 0, Math.PI * 2);
-        ctx.fillStyle = "#3b82f6";
-        ctx.fill();
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
+        // 上行流量节点 (Upstream Nodes: 内部为线条蓝色，外圈为白色)
+        points.forEach((p, idx) => {
+          const x = paddingLeft + (idx / (points.length - 1)) * plotWidth;
+          const y = paddingTop + plotHeight - (p.up / maxVal) * plotHeight;
+          ctx.beginPath();
+          ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = upColor;
+          ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        });
       }
 
       ctx.restore();
