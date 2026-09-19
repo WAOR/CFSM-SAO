@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hostAssetUrl } from "@/services/cfsm/config";
 import { getDisplayRegionCode } from "@/utils/geo";
 
 interface FlagProps {
@@ -8,7 +9,7 @@ interface FlagProps {
 
 export function Flag({ region, size = 14 }: FlagProps) {
   const value = region?.trim() ?? "";
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [failStage, setFailStage] = useState(0);
 
   if (!value) {
     return (
@@ -25,10 +26,9 @@ export function Flag({ region, size = 14 }: FlagProps) {
   }
 
   const flagCode = getDisplayRegionCode(value);
-  const src = `/assets/flags/${flagCode}.svg`;
   const alt = `地区旗帜: ${flagCode}`;
 
-  if (failedSrc === src) {
+  if (failStage >= 2) {
     return (
       <span
         role="img"
@@ -43,6 +43,12 @@ export function Flag({ region, size = 14 }: FlagProps) {
       />
     );
   }
+
+  // 首选用后端官方提供的 /flags/xx.svg，失败时回退到主题 assets/flags/XX.svg
+  const src =
+    failStage === 0
+      ? hostAssetUrl(`/flags/${flagCode.toLowerCase()}.svg`)
+      : `/assets/flags/${flagCode}.svg`;
 
   return (
     <span
@@ -63,7 +69,7 @@ export function Flag({ region, size = 14 }: FlagProps) {
           objectFit: "contain",
           display: "block",
         }}
-        onError={() => setFailedSrc(src)}
+        onError={() => setFailStage((prev) => prev + 1)}
       />
     </span>
   );

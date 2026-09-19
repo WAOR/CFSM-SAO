@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { hostAssetUrl } from "@/services/cfsm/config";
 
 interface OsConfig {
   name: string;
@@ -8,172 +9,181 @@ interface OsConfig {
 
 const OS_NAME_SPLIT_REGEX = /[\s/]+/;
 
+/**
+ * OS 图标走后端默认皮肤的静态文件，主题不打包（见 theme-develop.md）。
+ * 下面 `image` 里只记文件名，必须存在于后端 `public/os-icons/`；没有对应图标的系统
+ * 统一落到 os-unknown。URL 在渲染时才拼，模块初始化阶段不依赖 window。
+ */
+function osIconUrl(file: string) {
+  return hostAssetUrl(`/os-icons/${file}`);
+}
+
 const OS_CONFIGS: OsConfig[] = [
   {
     name: "AlmaLinux",
-    image: "/images/logo/os-alma.svg",
+    image: "os-alma.svg",
     keywords: ["alma", "almalinux"],
   },
   {
     name: "Alpine Linux",
-    image: "/images/logo/os-alpine.webp",
+    image: "os-alpine.webp",
     keywords: ["alpine", "alpine linux"],
   },
   {
     name: "Armbian",
-    image: "/images/logo/os-armbian.svg",
+    image: "os-armbian.png",
     keywords: ["armbian"],
   },
   {
     name: "CentOS",
-    image: "/images/logo/os-centos.svg",
+    image: "os-centos.svg",
     keywords: ["centos", "cent os"],
   },
   {
     name: "Debian",
-    image: "/images/logo/os-debian.svg",
+    image: "os-debian.svg",
     keywords: ["debian", "deb"],
   },
   {
     name: "FreeBSD",
-    image: "/images/logo/os-freebsd.svg",
+    image: "os-unknown.svg",
     keywords: ["freebsd", "bsd"],
   },
   {
     name: "Ubuntu",
-    image: "/images/logo/os-ubuntu.svg",
+    image: "os-ubuntu.svg",
     keywords: ["ubuntu", "elementary"],
   },
   {
     name: "Windows",
-    image: "/images/logo/os-windows.svg",
+    image: "os-windows.svg",
     keywords: ["windows", "win", "microsoft", "ms"],
   },
   {
     name: "Arch Linux",
-    image: "/images/logo/os-arch.svg",
+    image: "os-arch.svg",
     keywords: ["arch", "archlinux", "arch linux"],
   },
   {
     name: "Kali Linux",
-    image: "/images/logo/os-kail.svg",
+    image: "os-kail.svg",
     keywords: ["kail", "kali", "kali linux"],
   },
   {
     name: "iStoreOS",
-    image: "/images/logo/os-istore.png",
+    image: "os-istore.png",
     keywords: ["istore", "istoreos", "istore os"],
   },
   {
     name: "OpenWrt",
-    image: "/images/logo/os-openwrt.svg",
+    image: "os-openwrt.svg",
     keywords: ["openwrt", "open wrt", "open-wrt", "qwrt"],
   },
   {
     name: "ImmortalWrt",
-    image: "/images/logo/os-openwrt.svg",
+    image: "os-openwrt.svg",
     keywords: ["immortalwrt", "immortal", "emmortal"],
   },
   {
     name: "NixOS",
-    image: "/images/logo/os-nix.svg",
+    image: "os-nix.svg",
     keywords: ["nixos", "nix os", "nix"],
   },
   {
     name: "Rocky Linux",
-    image: "/images/logo/os-rocky.svg",
+    image: "os-rocky.svg",
     keywords: ["rocky", "rocky linux"],
   },
   {
     name: "Fedora",
-    image: "/images/logo/os-fedora.svg",
+    image: "os-fedora.svg",
     keywords: ["fedora"],
   },
   {
     name: "openSUSE",
-    image: "/images/logo/os-openSUSE.svg",
+    image: "os-openSUSE.svg",
     keywords: ["opensuse", "suse"],
   },
   {
     name: "Gentoo",
-    image: "/images/logo/os-gentoo.svg",
+    image: "os-gentoo.svg",
     keywords: ["gentoo"],
   },
   {
     name: "Red Hat",
-    image: "/images/logo/os-redhat.svg",
+    image: "os-redhat.svg",
     keywords: ["redhat", "rhel", "red hat"],
   },
   {
     name: "Linux Mint",
-    image: "/images/logo/os-mint.svg",
+    image: "os-mint.svg",
     keywords: ["mint", "linux mint"],
   },
   {
     name: "Manjaro",
-    image: "/images/logo/os-manjaro-.svg",
+    image: "os-manjaro-.svg",
     keywords: ["manjaro"],
   },
   {
     name: "Synology DSM",
-    image: "/images/logo/os-synology.ico",
+    image: "os-synology.ico",
     keywords: ["synology", "dsm", "synology dsm"],
   },
   {
     name: "fnOS",
-    image: "/images/logo/os-fnos.ico",
+    image: "os-unknown.svg",
     keywords: ["fnos", "fnnas"],
   },
   {
     name: "Proxmox VE",
-    image: "/images/logo/os-proxmox.ico",
+    image: "os-proxmox.ico",
     keywords: ["proxmox", "proxmox ve"],
   },
   {
     name: "macOS",
-    image: "/images/logo/os-macos.svg",
+    image: "os-macos.svg",
     keywords: ["macos", "mac os", "mac os x", "osx", "darwin"],
   },
   {
     name: "QTS",
-    image: "/images/logo/os-qnap.svg",
+    image: "os-unknown.svg",
     keywords: ["qts", "quts hero", "qes", "qutscloud"],
   },
   {
     name: "Astra Linux",
-    image: "/images/logo/os-astar.png",
+    image: "os-unknown.svg",
     keywords: ["astra", "astra linux"],
   },
   {
     name: "Orange Pi",
-    image: "/images/logo/os-orange-pi.svg",
+    image: "os-unknown.svg",
     keywords: ["orange pi", "orangepi"],
   },
   {
     name: "Huawei",
-    image: "/images/logo/os-huawei.svg",
+    image: "os-unknown.svg",
     keywords: ["huawei", "euleros", "euler os"],
   },
   {
     name: "Aliyun",
-    image: "/images/logo/alibabacloud-color.svg",
+    image: "os-alibaba.svg",
     keywords: ["aliyun", "alibaba"],
   },
   {
     name: "OpenCloudOS",
-    image: "/images/logo/os-OpenCloudOS.png",
+    image: "os-opencloud.svg",
     keywords: ["opencloud"],
   },
   {
     name: "Unraid",
-    image: "/images/logo/os-unraid.svg",
+    image: "os-unknown.svg",
     keywords: ["unraid"],
   },
 ];
 
 const DEFAULT_OS_CONFIG: OsConfig = {
   name: "Linux",
-  image: "/images/logo/linux.svg",
+  image: "os-unknown.svg",
   keywords: ["unknown"],
 };
 
@@ -222,8 +232,34 @@ export const OsLogo = memo(function OsLogo({
   size?: number;
 }) {
   const os = resolveOsInfo(value);
-  const [failedImage, setFailedImage] = useState<string | null>(null);
-  const src = failedImage === os.image ? DEFAULT_OS_CONFIG.image : os.image;
+  const [failStage, setFailStage] = useState<number>(0);
+
+  if (failStage >= 2) {
+    // 降级兜底：当后端未提供图标或网络异常时，以无碎图的通用 Server SVG 兜底
+    return (
+      <svg
+        className="os-logo shrink-0"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-label={os.name}
+        style={{ "--os-logo-size": `${size}px` } as React.CSSProperties}
+      >
+        <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+        <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+        <line x1="6" x2="6.01" y1="6" y2="6" />
+        <line x1="6" x2="6.01" y1="18" y2="18" />
+      </svg>
+    );
+  }
+
+  const file = failStage === 1 ? DEFAULT_OS_CONFIG.image : os.image;
+  const src = osIconUrl(file);
 
   return (
     <img
@@ -236,7 +272,7 @@ export const OsLogo = memo(function OsLogo({
       loading="lazy"
       draggable={false}
       onError={() => {
-        if (src !== DEFAULT_OS_CONFIG.image) setFailedImage(os.image);
+        setFailStage((prev) => prev + 1);
       }}
       style={{ "--os-logo-size": `${size}px` } as React.CSSProperties}
     />
