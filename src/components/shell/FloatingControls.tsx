@@ -364,7 +364,7 @@ export function FloatingControls({
         {refreshAlert && !colorsOpen && (
           <div
             className={clsx(
-              "floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-[280px] max-w-[340px] items-start gap-3 rounded-xl border p-3 shadow-lg shadow-black/5 backdrop-blur-md transition-all animate-in fade-in-0 slide-in-from-top-1 duration-200",
+              "floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-70 max-w-85 items-start gap-3 rounded-xl border p-3 shadow-lg shadow-black/5 backdrop-blur-md transition-all animate-in fade-in-0 slide-in-from-top-1 duration-200",
               refreshAlert.variant === "warning" && [
                 "border-amber-500/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100",
                 "[&>svg]:text-amber-600 dark:[&>svg]:text-amber-400",
@@ -397,7 +397,7 @@ export function FloatingControls({
         )}
         {showSyncWarning && !collapsed && !colorsOpen && !refreshAlert && (
           <div
-            className="floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-[280px] max-w-[340px] items-start gap-3 rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-red-950 shadow-lg shadow-black/5 backdrop-blur-md dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-100 [&>svg]:text-red-600 dark:[&>svg]:text-red-400 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+            className="floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-70 max-w-85 items-start gap-3 rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-red-950 shadow-lg shadow-black/5 backdrop-blur-md dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-100 [&>svg]:text-red-600 dark:[&>svg]:text-red-400 animate-in fade-in-0 slide-in-from-top-1 duration-200"
             role="alert"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
