@@ -220,13 +220,31 @@ body::after {
 .floating-controls {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 10px);
-  right: max(calc((100vw - 1720px) / 2 + 1.5rem), max(var(--app-gutter), env(safe-area-inset-right, 16px)));
+  right: max(calc((100vw - 1720px) / 2 + 2rem), max(var(--app-gutter), env(safe-area-inset-right, 24px)));
   /* 快捷栏及其调色盘在顶栏右上角 */
   z-index: 50;
   display: inline-flex;
   flex: 0 0 auto;
   justify-content: flex-end;
   pointer-events: none;
+}
+
+@media (max-width: 1023px) {
+  .floating-controls {
+    right: max(calc((100vw - 1720px) / 2 + 1.5rem), max(var(--app-gutter), env(safe-area-inset-right, 16px)));
+  }
+}
+
+@media (max-width: 767px) {
+  .floating-controls {
+    right: max(calc((100vw - 1720px) / 2 + 1.25rem), max(var(--app-gutter), env(safe-area-inset-right, 16px)));
+  }
+}
+
+@media (max-width: 639px) {
+  .floating-controls {
+    right: max(calc((100vw - 1720px) / 2 + 0.75rem), max(var(--app-gutter), env(safe-area-inset-right, 12px)));
+  }
 }
 
 .floating-controls-inner {
@@ -245,11 +263,13 @@ body::after {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  height: 36px;
 }
 
 .floating-controls-actions {
   position: absolute;
-  top: 0;
+  top: 50%;
+  transform: translateY(-50%) translateX(0) scale(1);
   right: calc(100% + 8px);
   display: inline-flex;
   width: max-content;
@@ -258,10 +278,7 @@ body::after {
   gap: 8px;
   overflow: hidden;
   opacity: 1;
-  transform: translateX(0) scale(1);
   transform-origin: right center;
-  padding: 2px;
-  margin: -2px;
   transition:
     max-width 220ms cubic-bezier(0.32, 0.72, 0, 1),
     opacity 160ms ease,
@@ -269,18 +286,61 @@ body::after {
 }
 
 .floating-controls-actions .control-button,
+.floating-controls-refresh,
 .floating-controls-trigger {
   width: 36px;
   min-width: 36px;
   height: 36px;
   flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 外观选择与其他快捷按钮共用同一个 36px 规格对齐 */
+.floating-controls .floating-controls-appearance {
+  flex: 0 0 auto;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-a) 84%, transparent);
+  box-shadow: 0 8px 24px -22px rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.floating-controls .floating-controls-appearance .control-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.floating-controls .floating-controls-appearance .control-button.is-active {
+  background: color-mix(in srgb, var(--surface-elev-a) 92%, var(--hover-bg-a));
+  border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-strong) 48%, transparent);
 }
 
 .floating-controls.is-collapsed .floating-controls-actions {
   max-width: 0;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(18px) scale(0.96);
+  transform: translateY(-50%) translateX(18px) scale(0.96);
 }
 
 .floating-controls-inner > .metric-color-picker,

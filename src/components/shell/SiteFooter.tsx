@@ -14,7 +14,7 @@ import { formatVersionLabel } from "@/utils/versionCompare";
  */
 
 const BACKEND_REPO_URL = "https://github.com/huilang-me/CF-Server-Monitor";
-const THEME_REPO_URL = "https://github.com/volcano-1025/CFSM-Theme-LuminaPlus";
+const THEME_REPO_URL = "https://github.com/WAOR/CFSM-SAO";
 const THEME_CHANGELOG_URL = `${THEME_REPO_URL}/blob/main/CHANGELOG.md`;
 
 export function SiteFooter() {
@@ -36,7 +36,7 @@ export function SiteFooter() {
       <span className="site-footer-item">
         Theme by{" "}
         <FooterLink href={THEME_REPO_URL} hint={versionHint(theme.current)}>
-          LuminaPlus
+          SAO
         </FooterLink>
         {theme.update && (
           <UpdateBadge href={THEME_CHANGELOG_URL} current={theme.current} update={theme.update} />

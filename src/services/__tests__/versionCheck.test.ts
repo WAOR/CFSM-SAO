@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 8, 11, 12, 0);
 const RELEASE_HTML =
-  '<!doctype html><html><head>\n  <meta name="theme-version" content="LuminaPlus v1.2.16" />\n  </head></html>';
+  '<!doctype html><html><head>\n  <meta name="theme-version" content="SAO v1.0.1" />\n  </head></html>';
 
 // 模块有缓存：每条用例重新求值，等于刷新页面。
 async function loadModule() {
@@ -30,12 +30,12 @@ describe("theme version parsing", () => {
     const { extractThemeVersionFromHtml, parseThemeVersionMeta, readCurrentThemeVersion } =
       await loadModule();
 
-    expect(parseThemeVersionMeta("LuminaPlus v1.2.15")).toBe("1.2.15");
-    expect(parseThemeVersionMeta("LuminaPlus")).toBeNull();
-    expect(extractThemeVersionFromHtml(RELEASE_HTML)).toBe("1.2.16");
+    expect(parseThemeVersionMeta("SAO v1.0.0")).toBe("1.0.0");
+    expect(parseThemeVersionMeta("SAO")).toBeNull();
+    expect(extractThemeVersionFromHtml(RELEASE_HTML)).toBe("1.0.1");
 
-    document.head.innerHTML = '<meta name="theme-version" content="LuminaPlus v1.2.15" />';
-    expect(readCurrentThemeVersion()).toBe("1.2.15");
+    document.head.innerHTML = '<meta name="theme-version" content="SAO v1.0.0" />';
+    expect(readCurrentThemeVersion()).toBe("1.0.0");
   });
 });
 
@@ -45,11 +45,11 @@ describe("fetchLatestThemeVersion", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const first = await loadModule();
-    expect(await first.fetchLatestThemeVersion(NOW)).toBe("1.2.16");
+    expect(await first.fetchLatestThemeVersion(NOW)).toBe("1.0.1");
 
     // 刷新页面也不再查。
     const reloaded = await loadModule();
-    expect(await reloaded.fetchLatestThemeVersion(NOW + 11 * HOUR)).toBe("1.2.16");
+    expect(await reloaded.fetchLatestThemeVersion(NOW + 11 * HOUR)).toBe("1.0.1");
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await reloaded.fetchLatestThemeVersion(NOW + 13 * HOUR);
@@ -65,8 +65,8 @@ describe("fetchLatestThemeVersion", () => {
     fetchMock.mockImplementation(async () => {
       throw new Error("offline");
     });
-    expect(await module.fetchLatestThemeVersion(NOW + 13 * HOUR)).toBe("1.2.16");
-    expect(await module.fetchLatestThemeVersion(NOW + 13.5 * HOUR)).toBe("1.2.16");
+    expect(await module.fetchLatestThemeVersion(NOW + 13 * HOUR)).toBe("1.0.1");
+    expect(await module.fetchLatestThemeVersion(NOW + 13.5 * HOUR)).toBe("1.0.1");
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await module.fetchLatestThemeVersion(NOW + 14.5 * HOUR);
