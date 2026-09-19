@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>⚔️ 为 CF-Server-Monitor 量身打造的刀剑神域 (SAO) 现代化科技感探针监控主题</strong>
+  <strong>SAO 克制的探针监控主题</strong>
 </p>
 
 <p align="center">
@@ -14,6 +14,8 @@
   <a href="https://github.com/WAOR/CFSM-SAO/tree/dist"><img src="https://img.shields.io/badge/branch-dist-blue" alt="Dist Branch"></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
+
+> 💡 **相关版本**：如果您使用的是 Komari 探针服务端，请前往查看对应的 Komari 版本主题：[Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO)。
 
 ---
 
@@ -43,7 +45,7 @@ https://github.com/WAOR/CFSM-SAO/tree/<40位dist分支CommitSHA>
   - **严格访客防御**：未开启「向访客公开价格与资产」时，卡片续费价格标签与资产总览默认向未登录访客彻底隐藏（资产脱敏显示为 `**`）。
   - **管理员快捷开关**：已登录管理员可通过导航栏快捷眼睛按钮一键临时展开/隐藏敏感价格，方便截图与日常分享。
 
-### ⚔️ SAO 科技感极简立体美学
+### 💎 极简立体仪表盘美学
 - **毛玻璃导航与流光入场**：高质感磨砂玻璃材质，搭配随一天时段自动变化的智能问候语与呼吸流光动效。
 - **全方位集群状态大盘**：
   - **双栏总览仪表盘**：集成全站速率、总流量、在线率指示格、临期提醒、资产总值及平滑吞吐波形图。
@@ -130,6 +132,7 @@ npm run dev
 ## 💖 致谢与项目渊源
 
 本项目汲取了开源社区探针美学设计灵感，特别感谢以下优秀项目与作者：
+- **[WAOR/Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO)**：本项目的前身与对应的 Komari 探针版本主题。
 - **[stqfdyr/komari-theme-Lumina](https://github.com/stqfdyr/komari-theme-Lumina)**：开源了优雅的初代 Lumina 主题。
 - **[shanyang242/Komari-Theme-LuminaPlus](https://github.com/shanyang242/Komari-Theme-LuminaPlus)**：丰富的功能扩展与架构设计。
 - **[Montia37/komari-theme-purcarte](https://github.com/Montia37/komari-theme-purcarte)**：动态背景视频设计思路与素材参考。

@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "CFSM-Theme-SAO - Sword Art Online styled theme for CF-Server-Monitor",
+  "description": "CFSM-Theme-SAO - A restrained modern theme for CF-Server-Monitor",
   "author": "codex&shark&shanyang",
   "scripts": {
     "dev": "vite",
