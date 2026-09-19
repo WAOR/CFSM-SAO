@@ -2,6 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearHistoryCache,
+  extractUsernameFromJwt,
+  extractUsernameFromStorage,
+  getInitialAuth,
   getLoadRecords,
   getMe,
   getPingRecords,
@@ -11,6 +14,7 @@ import {
   normalizeHistoryHours,
   refreshPingHistory,
   resetRecentThemeOptionsWrite,
+  resolveAuthUsername,
   saveThemeOptions,
 } from "@/services/api";
 import {
@@ -267,13 +271,16 @@ describe("getMe", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("derives the login state from config.authorization", async () => {
-    window.localStorage.setItem("jwt_token", "token");
+  it("derives the login state and dynamic username from config.authorization and JWT", async () => {
+    const token = makeMockJwt({ username: "jerry" });
+    window.localStorage.setItem("jwt_token", token);
     fetchMock.mockImplementation(jsonReply({ authorization: true, site_title: "S" }));
 
-    await expect(getMe()).resolves.toMatchObject({ logged_in: true });
+    const me = await getMe();
+    expect(me.logged_in).toBe(true);
+    expect(me.username).toBe("jerry");
     const [, init] = fetchMock.mock.calls[0]!;
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer token");
+    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${token}`);
   });
 
   it("drops an expired token on 401 so later requests go out anonymously", async () => {
@@ -282,6 +289,73 @@ describe("getMe", () => {
 
     await expect(getMe()).rejects.toBeInstanceOf(ApiRequestError);
     expect(window.localStorage.getItem("jwt_token")).toBeNull();
+  });
+});
+
+function makeMockJwt(payload: Record<string, unknown>): string {
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const jsonStr = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(jsonStr);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const body = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `${header}.${body}.signature`;
+}
+
+describe("auth username resolution and zero-flicker initialData", () => {
+  it("extracts username accurately from various standard JWT claims", () => {
+    expect(extractUsernameFromJwt(makeMockJwt({ username: "jerry" }))).toBe("jerry");
+    expect(extractUsernameFromJwt(makeMockJwt({ sub: "kirito" }))).toBe("kirito");
+    expect(extractUsernameFromJwt(makeMockJwt({ user: "asuna" }))).toBe("asuna");
+    expect(extractUsernameFromJwt(makeMockJwt({ name: "alice" }))).toBe("alice");
+    expect(extractUsernameFromJwt(makeMockJwt({ login: "admin_user" }))).toBe("admin_user");
+    expect(extractUsernameFromJwt(makeMockJwt({ account: "operator" }))).toBe("operator");
+  });
+
+  it("decodes UTF-8 and Unicode characters correctly without garbled text", () => {
+    expect(extractUsernameFromJwt(makeMockJwt({ username: "桐人" }))).toBe("桐人");
+  });
+
+  it("sanitizes dangerous control characters and limits length", () => {
+    expect(extractUsernameFromJwt(makeMockJwt({ username: "jerry\x00\x1f\x7f" }))).toBe("jerry");
+    const tooLong = "a".repeat(45);
+    expect(extractUsernameFromJwt(makeMockJwt({ username: tooLong }))).toBe("");
+  });
+
+  it("gracefully falls back to empty string for malformed or non-jwt tokens", () => {
+    expect(extractUsernameFromJwt("")).toBe("");
+    expect(extractUsernameFromJwt(null)).toBe("");
+    expect(extractUsernameFromJwt("not-a-jwt")).toBe("");
+    expect(extractUsernameFromJwt("header.invalid-base64-payload.sig")).toBe("");
+  });
+
+  it("falls back to storage keys if JWT payload lacks username claims", () => {
+    window.localStorage.setItem("username", "storage_user");
+    expect(extractUsernameFromStorage()).toBe("storage_user");
+
+    const noUserJwt = makeMockJwt({ exp: 123456 });
+    expect(resolveAuthUsername(noUserJwt)).toBe("storage_user");
+  });
+
+  it("defaults to Admin if token has no usable username claim and storage is empty", () => {
+    const noUserJwt = makeMockJwt({ exp: 123456 });
+    expect(resolveAuthUsername(noUserJwt)).toBe("Admin");
+  });
+
+  it("provides zero-flicker getInitialAuth synchronously without any async delay", () => {
+    // 1. 无 token 状态：同步返回未登录
+    expect(getInitialAuth()).toEqual({ logged_in: false, username: "", uuid: "" });
+
+    // 2. 有 token 状态：同步秒级提取出真实用户名 jerry，直接喂给 TanStack Query initialData
+    const token = makeMockJwt({ username: "jerry" });
+    window.localStorage.setItem("jwt_token", token);
+    expect(getInitialAuth()).toEqual({
+      logged_in: true,
+      username: "jerry",
+      uuid: "",
+    });
   });
 });
 

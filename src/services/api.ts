@@ -191,18 +191,148 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
   };
 }
 
+function decodeBase64(base64: string): string {
+  if (typeof atob === "function") {
+    return atob(base64);
+  }
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(base64, "base64").toString("binary");
+  }
+  return "";
+}
+
+function decodeUtf8(binary: string): string {
+  if (typeof TextDecoder !== "undefined") {
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder().decode(bytes);
+  }
+  try {
+    return decodeURIComponent(
+      binary
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+  } catch {
+    return binary;
+  }
+}
+
+/**
+ * 从 JWT token 中提取用户名（如 jerry）。
+ * 优先匹配 payload.username / payload.sub / payload.user 等字段。
+ * 兼容 base64url 与 UTF-8 编码，并剔除控制字符。
+ */
+export function extractUsernameFromJwt(token?: string | null): string {
+  if (!token || typeof token !== "string") return "";
+  const parts = token.trim().split(".");
+  if (parts.length < 2) return "";
+
+  try {
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4 !== 0) {
+      base64 += "=";
+    }
+    const binary = decodeBase64(base64);
+    if (!binary) return "";
+    const jsonStr = decodeUtf8(binary);
+    const payload = JSON.parse(jsonStr);
+
+    if (!payload || typeof payload !== "object") return "";
+
+    const candidates = [
+      payload.username,
+      payload.sub,
+      payload.user,
+      payload.name,
+      payload.login,
+      payload.account,
+    ];
+
+    for (const val of candidates) {
+      if (typeof val === "string") {
+        const sanitized = val.replace(/[\x00-\x1F\x7F]/g, "").trim();
+        if (sanitized && sanitized.length <= 40) {
+          return sanitized;
+        }
+      }
+    }
+  } catch {
+    // 畸形 token 或解析失败，降级处理
+  }
+
+  return "";
+}
+
+/**
+ * 从 localStorage 的备选 key 中尝试提取用户名（以防部分扩展/登录器额外写入）。
+ */
+export function extractUsernameFromStorage(): string {
+  if (typeof window === "undefined" || !window.localStorage) return "";
+  const keys = ["username", "user", "admin_user", "login_user", "cfsm_user"];
+  for (const key of keys) {
+    try {
+      const val = window.localStorage.getItem(key);
+      if (typeof val === "string") {
+        const sanitized = val.replace(/[\x00-\x1F\x7F]/g, "").trim();
+        if (sanitized && sanitized.length <= 40) {
+          return sanitized;
+        }
+      }
+    } catch {
+      // 忽略存储访问异常
+    }
+  }
+  return "";
+}
+
+/**
+ * 解析当前登录用户的实际用户名。
+ * 优先读取 JWT Payload，若无则兜底读取 Storage，最后保底返回 "Admin"。
+ */
+export function resolveAuthUsername(token?: string | null): string {
+  const t = token ?? getJwtToken();
+  if (!t) return "";
+  const fromJwt = extractUsernameFromJwt(t);
+  if (fromJwt) return fromJwt;
+  const fromStorage = extractUsernameFromStorage();
+  if (fromStorage) return fromStorage;
+  return "Admin";
+}
+
+/**
+ * 0 毫秒同步解析初始登录态，直接提供给 TanStack Query initialData，
+ * 彻底杜绝页面首屏网络请求前闪现 "Guest" 的问题。
+ */
+export function getInitialAuth(): Me {
+  const token = getJwtToken();
+  if (!token) {
+    return { logged_in: false, username: "", uuid: "" };
+  }
+  const username = resolveAuthUsername(token);
+  return {
+    logged_in: true,
+    username,
+    uuid: "",
+  };
+}
+
 /**
  * CF-Server-Monitor 没有 `/api/me`：登录态由 `/api/config` 的 `authorization` 决定，
  * 令牌本身存在 localStorage 里由 `/admin` 登录时写入。
  */
 export async function getMe(options?: RequestOptions): Promise<Me> {
-  if (!getJwtToken()) {
+  const token = getJwtToken();
+  if (!token) {
     return { logged_in: false, username: "", uuid: "" };
   }
   const config = await getSiteConfig(options);
   return {
     logged_in: config.authorization,
-    username: config.authorization ? "admin" : "",
+    username: config.authorization ? resolveAuthUsername(token) : "",
     uuid: "",
   };
 }
