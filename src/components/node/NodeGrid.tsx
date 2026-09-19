@@ -12,6 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
+import { DraggableCostBall } from "@/components/node/DraggableCostBall";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useAllNodeMeta,
@@ -206,6 +207,7 @@ function HomeOverviewCards({
   bandwidthRatingLabels,
   assetRatingLabels,
   showDetailButton,
+  showAssetCard,
   renewalNodes,
   dense,
   onWarmTraffic,
@@ -225,6 +227,7 @@ function HomeOverviewCards({
   bandwidthRatingLabels: string;
   assetRatingLabels: string;
   showDetailButton: boolean;
+  showAssetCard: boolean;
   renewalNodes: RenewalReminderSource[];
   onWarmTraffic: () => void;
   username: string;
@@ -417,31 +420,33 @@ function HomeOverviewCards({
           </div>
 
           {/* 6. 资产概览 */}
-          <div className="mao-stat-card" data-metric="asset">
-            <div className="mao-stat-head">
-              <div className="mao-stat-title-wrap">
-                <CircleDollarSign size={15} className="mao-stat-icon text-(--accent-500)" />
-                <span className="mao-stat-label">资产总值</span>
+          {showAssetCard && (
+            <div className="mao-stat-card" data-metric="asset">
+              <div className="mao-stat-head">
+                <div className="mao-stat-title-wrap">
+                  <CircleDollarSign size={15} className="mao-stat-icon text-(--accent-500)" />
+                  <span className="mao-stat-label">资产总值</span>
+                </div>
+                {showDetailButton && (
+                  <Link
+                    to="/assets"
+                    className="overview-card-action mao-stat-action"
+                    aria-label="打开资产统计页"
+                    title="资产统计"
+                  >
+                    <CircleDollarSign size={14} />
+                  </Link>
+                )}
               </div>
-              {showDetailButton && (
-                <Link
-                  to="/assets"
-                  className="overview-card-action mao-stat-action"
-                  aria-label="打开资产统计页"
-                  title="资产统计"
-                >
-                  <CircleDollarSign size={14} />
-                </Link>
-              )}
+              <div className="mao-stat-value">
+                {remainingValue}
+              </div>
+              <div className="mao-stat-footer">
+                <span className="mao-stat-caption">实时汇率折算</span>
+                {renderRating(assetRating)}
+              </div>
             </div>
-            <div className="mao-stat-value">
-              {remainingValue}
-            </div>
-            <div className="mao-stat-footer">
-              <span className="mao-stat-caption">实时汇率折算</span>
-              {renderRating(assetRating)}
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -700,7 +705,8 @@ export function NodeGrid() {
   const loggedIn = Boolean(me?.logged_in);
   const canAccessAssets = loggedIn || themeSettings.showPriceForGuests;
   // 卡内入口与悬浮入口互斥，避免重复操作入口。
-  const showAssetCard = showHomeOverview && hasNodes;
+  const showAssetCard =
+    showHomeOverview && hasNodes && themeSettings.showAssetOverview;
   const showCostDetailButton =
     showAssetCard && themeSettings.isReady && themeSettings.showCostSummary && canAccessAssets;
   const showCostFloatingButton =
@@ -907,24 +913,14 @@ export function NodeGrid() {
   // 资产页悬浮入口 + 首页概览卡在「空节点」与正常两个分支里完全一致，提取一次复用。
   const homeHeader = (
     <>
-      {showCostFloatingButton && (
-        <Link
-          to="/assets"
-          className="cost-summary-ball show"
-          aria-label="打开资产统计页"
-          title="资产统计"
-        >
-          <span className="cost-summary-ball-icon" aria-hidden>
-            <CircleDollarSign size={16} />
-          </span>
-        </Link>
-      )}
+      {showCostFloatingButton && <DraggableCostBall />}
       <HomeBrand siteName={siteName} />
       {showHomeOverview && (
         <HomeOverviewCards
           overview={overview}
           dense={mode === "mini" || mode === "list"}
           showDetailButton={showCostDetailButton}
+          showAssetCard={showAssetCard}
           renewalNodes={renewalNodes}
           costSummary={costSummary}
           costLoading={costLoading}
