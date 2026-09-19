@@ -102,7 +102,7 @@ export const NodeCard = memo(function NodeCard({
     isOffline,
     osName,
   } = model;
-  const renewalPrice = showCardPrice && isPriceVisible !== false ? metaRenewalPrice : null;
+  const renewalPrice = showCardPrice && Boolean(isPriceVisible) ? metaRenewalPrice : null;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
 
   return (

@@ -13,7 +13,13 @@ export function resolvePriceVisibility(
   showPriceForGuests: boolean,
   override: PriceVisibilityOverride,
 ): boolean {
-  return loggedIn ? override !== "hidden" : showPriceForGuests;
+  if (override === "hidden") return false;
+  if (override === "visible") return loggedIn || showPriceForGuests;
+
+  // 默认状态（未设置临时覆盖）：严格以「向访客公开价格与资产」为准。
+  // 未勾选向访客公开时，默认全部隐藏价格与资产脱敏，彻底杜绝未登录访客默认泄露价格标签。
+  // 管理员可随时通过右上角快捷按钮一键临时展开查看。
+  return showPriceForGuests;
 }
 
 function readStoredOverride(): PriceVisibilityOverride {
@@ -65,17 +71,17 @@ export function usePriceVisibility() {
 
   const loggedIn = Boolean(me?.logged_in);
 
-  // 未登录访客：严格跟随后台主题配置项 showPriceForGuests（默认 false 为隐藏）
-  // 已登录管理员：默认显示（true），但允许通过快捷开关临时切换显示/隐藏
-  const isPriceVisible = loggedIn
-    ? override !== "hidden"
-    : themeSettings.showPriceForGuests;
+  const isPriceVisible = resolvePriceVisibility(
+    loggedIn,
+    themeSettings.showPriceForGuests,
+    override,
+  );
 
   const togglePriceVisibility = useCallback(() => {
     if (!loggedIn) return;
-    const next = override === "hidden" ? "visible" : "hidden";
+    const next = isPriceVisible ? "hidden" : "visible";
     writeStoredOverride(next);
-  }, [loggedIn, override]);
+  }, [loggedIn, isPriceVisible]);
 
   const setPriceVisible = useCallback(
     (visible: boolean) => {
