@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CircleDollarSign, X } from "lucide-react";
+import { CalendarClock, X } from "lucide-react";
+import { usePriceVisibility } from "@/hooks/usePriceVisibility";
 import {
   DEFAULT_RENEWAL_REMINDER_DAYS,
   EMPTY_RENEWAL_REMINDER_PREFERENCES,
@@ -47,45 +48,25 @@ function storePreferences(value: RenewalReminderPreferences) {
   }
 }
 
-function AssetLink() {
-  return (
-    <Link
-      to="/assets"
-      className="overview-card-action"
-      aria-label="打开资产统计页"
-      title="资产统计"
-    >
-      <CircleDollarSign size={15} aria-hidden />
-    </Link>
-  );
-}
-
 export function RenewalReminder({
   nodes,
   warningDays = DEFAULT_RENEWAL_REMINDER_DAYS,
   onOpenChange,
 }: {
   nodes: RenewalReminderSource[];
-  /** 提前几天提醒；站长在设置里定，0 时首页压根不渲染这个入口。 */
   warningDays?: number;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpenState] = useState(false);
-  const setOpen = useCallback(
-    (valueOrFn: boolean | ((prev: boolean) => boolean)) => {
-      setOpenState((prev) => {
-        const next = typeof valueOrFn === "function" ? valueOrFn(prev) : valueOrFn;
-        onOpenChange?.(next);
-        return next;
-      });
-    },
-    [onOpenChange],
-  );
+  const [open, setOpen] = useState(false);
+  const [align, setAlign] = useState<"left" | "right">("left");
   const [clock, setClock] = useState(() => Date.now());
   const [preferences, setPreferences] = useState(readPreferences);
+  const { isPriceVisible } = usePriceVisibility();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const openTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const panelId = useId();
   const titleId = useId();
   const reminders = useMemo(
@@ -97,15 +78,59 @@ export function RenewalReminder({
     [clock, preferences, reminders],
   );
 
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    if (rect.right < 380) {
+      setAlign("left");
+    } else if (rect.left + 380 > window.innerWidth) {
+      setAlign("right");
+    } else {
+      setAlign("left");
+    }
+  }, [open]);
+
+  const handleMouseEnter = () => {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    openTimerRef.current = window.setTimeout(() => {
+      setOpen(true);
+      onOpenChange?.(true);
+    }, 120);
+  };
+
+  const handleMouseLeave = () => {
+    if (openTimerRef.current) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    closeTimerRef.current = window.setTimeout(() => {
+      setOpen(false);
+      onOpenChange?.(false);
+    }, 200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (openTimerRef.current) window.clearTimeout(openTimerRef.current);
+      if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!open) return;
-    closeRef.current?.focus();
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        onOpenChange?.(false);
+      }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setOpen(false);
+      onOpenChange?.(false);
       triggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", onPointerDown);
@@ -114,11 +139,14 @@ export function RenewalReminder({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, setOpen]);
+  }, [open, onOpenChange]);
 
   useEffect(() => {
-    if (visibleReminders.length === 0 && open) setOpen(false);
-  }, [open, visibleReminders.length, setOpen]);
+    if (visibleReminders.length === 0 && open) {
+      setOpen(false);
+      onOpenChange?.(false);
+    }
+  }, [open, visibleReminders.length, onOpenChange]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -148,6 +176,7 @@ export function RenewalReminder({
 
   const closeAndRestoreFocus = () => {
     setOpen(false);
+    onOpenChange?.(false);
     triggerRef.current?.focus();
   };
 
@@ -175,13 +204,19 @@ export function RenewalReminder({
     closeAndRestoreFocus();
   };
 
-  if (visibleReminders.length === 0) return <AssetLink />;
+  // 只有存在未忽略的临期节点时才渲染；无临期设备时完全不显示图标
+  if (visibleReminders.length === 0) return null;
 
   const rows = visibleReminders.slice(0, MAX_VISIBLE_ROWS);
   const hiddenCount = visibleReminders.length - rows.length;
 
   return (
-    <div className="renewal-reminder" ref={rootRef}>
+    <div
+      className="renewal-reminder shadcn-hover-card-root"
+      ref={rootRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
         ref={triggerRef}
         type="button"
@@ -191,16 +226,20 @@ export function RenewalReminder({
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         title={`${visibleReminders.length} 个续费提醒`}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          const next = !open;
+          setOpen(next);
+          onOpenChange?.(next);
+        }}
       >
-        <CircleDollarSign size={15} aria-hidden />
+        <CalendarClock size={15} aria-hidden />
         <span className="renewal-reminder-dot" aria-hidden />
       </button>
 
       {open && (
         <section
           id={panelId}
-          className="renewal-reminder-panel"
+          className={`renewal-reminder-panel shadcn-hover-card is-align-${align}`}
           role="dialog"
           aria-labelledby={titleId}
         >
@@ -210,7 +249,7 @@ export function RenewalReminder({
                 <h2 id={titleId}>续费提醒</h2>
                 <span className="renewal-reminder-count">{visibleReminders.length}</span>
               </div>
-              <p>{visibleReminders.length} 台节点将在 {warningDays} 天内到期</p>
+              <p>{visibleReminders.length} 台服务器将在 {warningDays} 天内到期</p>
             </div>
             <button
               ref={closeRef}
@@ -230,7 +269,7 @@ export function RenewalReminder({
                 <div className="renewal-reminder-row-main">
                   <strong title={item.name}>{item.name}</strong>
                   <span>{formatRenewalReminderExpiry(item.daysRemaining)}</span>
-                  <span>{item.priceLabel}</span>
+                  {isPriceVisible && item.priceLabel && <span>{item.priceLabel}</span>}
                 </div>
                 <span className="renewal-reminder-status" data-tone={item.tone}>
                   {item.statusLabel}
@@ -238,7 +277,7 @@ export function RenewalReminder({
               </div>
             ))}
             {hiddenCount > 0 && (
-              <p className="renewal-reminder-more">还有 {hiddenCount} 台临期节点</p>
+              <p className="renewal-reminder-more">还有 {hiddenCount} 台临期服务器</p>
             )}
           </div>
 
@@ -246,16 +285,18 @@ export function RenewalReminder({
             <Link to="/assets" className="renewal-reminder-detail" onClick={() => setOpen(false)}>
               查看详情
             </Link>
-            <button type="button" className="renewal-reminder-later" onClick={snooze}>
-              {RENEWAL_SNOOZE_DAYS} 天后提醒
-            </button>
-            <button
-              type="button"
-              className="renewal-reminder-dismiss"
-              onClick={dismissCurrentCycles}
-            >
-              本周期不再提醒
-            </button>
+            <div className="renewal-reminder-btn-group" role="group" aria-label="提醒操作">
+              <button type="button" className="renewal-reminder-later" onClick={snooze}>
+                {RENEWAL_SNOOZE_DAYS} 天后提醒
+              </button>
+              <button
+                type="button"
+                className="renewal-reminder-dismiss"
+                onClick={dismissCurrentCycles}
+              >
+                本周期不再提醒
+              </button>
+            </div>
           </footer>
         </section>
       )}
