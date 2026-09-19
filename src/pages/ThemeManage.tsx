@@ -1870,22 +1870,22 @@ export function ThemeManage() {
                   <div className="grid gap-3 md:grid-cols-3">
                     <ToggleRow
                       field="showCostSummary"
-                      title="启用资产统计页"
-                      desc="开启后可通过 /assets 路由查看财务报表。"
+                      title="显示资产页入口按钮"
+                      desc="在首页资产概览卡右上角显示进入资产统计页的按钮。"
                       checked={draft.showCostSummary}
                       onPatch={patch}
                     />
                     <ToggleRow
                       field="showCostSummaryFloatingButton"
-                      title="首页悬浮入口"
-                      desc="在首页右下角快捷浮动栏显示资产统计入口。"
+                      title="显示资产悬浮按钮"
+                      desc="卡内入口不可用时（总览隐藏或其开关关闭），以悬浮按钮进入资产统计页。"
                       checked={draft.showCostSummaryFloatingButton}
                       onPatch={patch}
                     />
                     <ToggleRow
                       field="showPriceForGuests"
-                      title="向访客公开价格"
-                      desc="未登录访客也可以查看价格与财务报表。"
+                      title="向访客公开价格与资产"
+                      desc="默认关闭。开启后，未登录访客也能查看节点续费价格标签与首页资产概览；关闭时对访客隐藏价格标签，资产概览显示为 **。"
                       checked={draft.showPriceForGuests}
                       onPatch={patch}
                     />
