@@ -191,175 +191,34 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
   };
 }
 
-function decodeBase64(base64: string): string {
-  if (typeof atob === "function") {
-    return atob(base64);
-  }
-  if (typeof Buffer !== "undefined") {
-    return Buffer.from(base64, "base64").toString("binary");
-  }
-  return "";
-}
-
-function decodeUtf8(binary: string): string {
-  if (typeof TextDecoder !== "undefined") {
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return new TextDecoder().decode(bytes);
-  }
-  try {
-    return decodeURIComponent(
-      binary
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-  } catch {
-    return binary;
-  }
-}
-
 /**
- * 从 JWT token 中提取用户名。
- * 优先匹配 payload.username / payload.user / payload.name / payload.login / payload.account。
- * 特别注意：CF-Server-Monitor 后端生成的 JWT 里硬编码了 sub: "admin"；
- * 如果 sub 为 "admin"（不区分大小写），不作为真实用户名，避免掩盖用户的真实配置。
- */
-export function extractUsernameFromJwt(token?: string | null): string {
-  if (!token || typeof token !== "string") return "";
-  const parts = token.trim().split(".");
-  if (parts.length < 2) return "";
-
-  try {
-    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    while (base64.length % 4 !== 0) {
-      base64 += "=";
-    }
-    const binary = decodeBase64(base64);
-    if (!binary) return "";
-    const jsonStr = decodeUtf8(binary);
-    const payload = JSON.parse(jsonStr);
-
-    if (!payload || typeof payload !== "object") return "";
-
-    const candidates = [
-      payload.username,
-      payload.user,
-      payload.name,
-      payload.login,
-      payload.account,
-    ];
-
-    for (const val of candidates) {
-      if (typeof val === "string") {
-        const sanitized = val.replace(/[\x00-\x1F\x7F]/g, "").trim();
-        if (sanitized && sanitized.length <= 40) {
-          return sanitized;
-        }
-      }
-    }
-
-    // 只有当 sub 存在且不等于 CFSM 默认硬编码的 "admin" 时才作为有效用户名
-    if (typeof payload.sub === "string") {
-      const sanitizedSub = payload.sub.replace(/[\x00-\x1F\x7F]/g, "").trim();
-      if (sanitizedSub && sanitizedSub.toLowerCase() !== "admin" && sanitizedSub.length <= 40) {
-        return sanitizedSub;
-      }
-    }
-  } catch {
-    // 畸形 token 或解析失败，降级处理
-  }
-
-  return "";
-}
-
-/**
- * 从 localStorage 的备选 key 中尝试提取用户名（以防部分扩展/登录器额外写入，或此前通过 /admin/api 成功获取并缓存）。
+ * 从 localStorage 中读取管理员自定义昵称（优先 `cfsm_admin_username`）。
  */
 export function extractUsernameFromStorage(): string {
   if (typeof window === "undefined" || !window.localStorage) return "";
-  const keys = [
-    "cfsm_admin_username",
-    "admin_username",
-    "custom_username",
-    "username",
-    "user",
-    "admin_user",
-    "login_user",
-    "cfsm_user",
-  ];
-  for (const key of keys) {
-    try {
-      const val = window.localStorage.getItem(key);
-      if (typeof val === "string") {
-        const sanitized = val.replace(/[\x00-\x1F\x7F]/g, "").trim();
-        if (sanitized && sanitized.toLowerCase() !== "admin" && sanitized.length <= 40) {
-          return sanitized;
-        }
-      }
-    } catch {
-      // 忽略存储访问异常
-    }
-  }
-  return "";
-}
-
-const AdminSettingsSchema = z
-  .object({
-    success: z.boolean().optional(),
-    settings: z
-      .object({
-        username: z.string().optional(),
-      })
-      .passthrough()
-      .optional(),
-  })
-  .passthrough();
-
-/**
- * 通过已有的登录凭据向 `/admin/api` 发起请求，获取 CFSM 后端真实配置的管理员用户名（如 jerry）。
- * 成功后会自动持久化到 localStorage("cfsm_admin_username")，以便下次首屏 0 毫秒秒开。
- */
-export async function fetchAdminUsername(options?: RequestOptions): Promise<string> {
-  const token = getJwtToken();
-  if (!token) return "";
-
   try {
-    const res = await cfsmPost(
-      "/admin/api",
-      { action: "get_settings" },
-      AdminSettingsSchema,
-      options,
-    );
-    const rawUser = res.settings?.username;
-    if (typeof rawUser === "string") {
-      const sanitized = rawUser.replace(/[\x00-\x1F\x7F]/g, "").trim();
-      if (sanitized && sanitized.length <= 40) {
-        if (typeof window !== "undefined" && window.localStorage) {
-          window.localStorage.setItem("cfsm_admin_username", sanitized);
-        }
+    const val = window.localStorage.getItem("cfsm_admin_username");
+    if (typeof val === "string") {
+      const sanitized = val.replace(/[\x00-\x1F\x7F]/g, "").trim();
+      if (sanitized && sanitized.toLowerCase() !== "admin" && sanitized.length <= 40) {
         return sanitized;
       }
     }
   } catch {
-    // 跨域或权限不足时静默降级
+    // 忽略存储访问异常
   }
   return "";
 }
 
 /**
- * 解析当前登录用户的实际用户名。
- * 优先级：Storage 已缓存的真实用户名 -> JWT Payload（排除 admin 硬编码） -> 保底 "Admin"。
+ * 解析当前登录用户的显示名称。
+ * 优先级：Storage 已缓存的自定义用户名 -> 保底 "Admin"。
  */
 export function resolveAuthUsername(token?: string | null): string {
   const t = token ?? getJwtToken();
   if (!t) return "";
   const fromStorage = extractUsernameFromStorage();
   if (fromStorage) return fromStorage;
-  const fromJwt = extractUsernameFromJwt(t);
-  if (fromJwt) return fromJwt;
   return "Admin";
 }
 
@@ -382,7 +241,6 @@ export function getInitialAuth(): Me {
 
 /**
  * CF-Server-Monitor 没有 `/api/me`：登录态由 `/api/config` 的 `authorization` 决定。
- * 登录状态下，若本地未缓存自定义用户名，会自动异步拉取 `/admin/api` 获取真正的 settings.username。
  */
 export async function getMe(options?: RequestOptions): Promise<Me> {
   const token = getJwtToken();
@@ -394,18 +252,19 @@ export async function getMe(options?: RequestOptions): Promise<Me> {
     return { logged_in: false, username: "", uuid: "" };
   }
 
-  let username = resolveAuthUsername(token);
-  // 如果本地当前只有兜底的 "Admin"，尝试通过 /admin/api 拉取真实设置的用户名（如 jerry）
-  if (!username || username.toLowerCase() === "admin") {
-    try {
-      const fetched = await fetchAdminUsername(options);
-      if (fetched) {
-        username = fetched;
+  // 若云端主题设置中带有 adminNickname，自动同步到本地 cfsm_admin_username
+  if (config.theme_options && typeof config.theme_options.adminNickname === "string") {
+    const nick = (config.theme_options.adminNickname as string).replace(/[\x00-\x1F\x7F]/g, "").trim();
+    if (nick && nick.length <= 40 && typeof window !== "undefined" && window.localStorage) {
+      try {
+        window.localStorage.setItem("cfsm_admin_username", nick);
+      } catch {
+        // 忽略写入失败
       }
-    } catch {
-      // 忽略
     }
   }
+
+  const username = resolveAuthUsername(token);
 
   return {
     logged_in: true,

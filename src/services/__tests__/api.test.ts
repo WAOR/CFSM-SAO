@@ -2,9 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearHistoryCache,
-  extractUsernameFromJwt,
   extractUsernameFromStorage,
-  fetchAdminUsername,
   getInitialAuth,
   getLoadRecords,
   getMe,
@@ -272,16 +270,32 @@ describe("getMe", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("derives the login state and dynamic username from config.authorization and JWT", async () => {
-    const token = makeMockJwt({ username: "jerry" });
-    window.localStorage.setItem("jwt_token", token);
+  it("derives the login state and custom nickname from storage and config", async () => {
+    window.localStorage.setItem("jwt_token", "sample-token");
+    window.localStorage.setItem("cfsm_admin_username", "jerry");
     fetchMock.mockImplementation(jsonReply({ authorization: true, site_title: "S" }));
 
     const me = await getMe();
     expect(me.logged_in).toBe(true);
     expect(me.username).toBe("jerry");
     const [, init] = fetchMock.mock.calls[0]!;
-    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${token}`);
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer sample-token");
+  });
+
+  it("syncs theme_options.adminNickname to local storage automatically", async () => {
+    window.localStorage.setItem("jwt_token", "sample-token");
+    fetchMock.mockImplementation(
+      jsonReply({
+        authorization: true,
+        site_title: "S",
+        theme_options: { adminNickname: "jerry_from_cloud" },
+      }),
+    );
+
+    const me = await getMe();
+    expect(me.logged_in).toBe(true);
+    expect(me.username).toBe("jerry_from_cloud");
+    expect(window.localStorage.getItem("cfsm_admin_username")).toBe("jerry_from_cloud");
   });
 
   it("drops an expired token on 401 so later requests go out anonymously", async () => {
@@ -293,85 +307,33 @@ describe("getMe", () => {
   });
 });
 
-function makeMockJwt(payload: Record<string, unknown>): string {
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const jsonStr = JSON.stringify(payload);
-  const bytes = new TextEncoder().encode(jsonStr);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const body = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `${header}.${body}.signature`;
-}
-
 describe("auth username resolution and zero-flicker initialData", () => {
-  it("extracts username accurately from various standard JWT claims", () => {
-    expect(extractUsernameFromJwt(makeMockJwt({ username: "jerry" }))).toBe("jerry");
-    expect(extractUsernameFromJwt(makeMockJwt({ sub: "kirito" }))).toBe("kirito");
-    expect(extractUsernameFromJwt(makeMockJwt({ user: "asuna" }))).toBe("asuna");
-    expect(extractUsernameFromJwt(makeMockJwt({ name: "alice" }))).toBe("alice");
-    expect(extractUsernameFromJwt(makeMockJwt({ login: "admin_user" }))).toBe("admin_user");
-    expect(extractUsernameFromJwt(makeMockJwt({ account: "operator" }))).toBe("operator");
-  });
-
-  it("ignores generic CFSM hardcoded sub: admin to avoid masking user's real name", () => {
-    expect(extractUsernameFromJwt(makeMockJwt({ sub: "admin" }))).toBe("");
-    expect(extractUsernameFromJwt(makeMockJwt({ sub: "Admin" }))).toBe("");
-  });
-
-  it("decodes UTF-8 and Unicode characters correctly without garbled text", () => {
-    expect(extractUsernameFromJwt(makeMockJwt({ username: "桐人" }))).toBe("桐人");
+  it("reads custom nickname from cfsm_admin_username storage", () => {
+    window.localStorage.setItem("cfsm_admin_username", "jerry");
+    expect(extractUsernameFromStorage()).toBe("jerry");
+    expect(resolveAuthUsername("sample-token")).toBe("jerry");
   });
 
   it("sanitizes dangerous control characters and limits length", () => {
-    expect(extractUsernameFromJwt(makeMockJwt({ username: "jerry\x00\x1f\x7f" }))).toBe("jerry");
+    window.localStorage.setItem("cfsm_admin_username", "jerry\x00\x1f\x7f");
+    expect(extractUsernameFromStorage()).toBe("jerry");
+
     const tooLong = "a".repeat(45);
-    expect(extractUsernameFromJwt(makeMockJwt({ username: tooLong }))).toBe("");
+    window.localStorage.setItem("cfsm_admin_username", tooLong);
+    expect(extractUsernameFromStorage()).toBe("");
   });
 
-  it("gracefully falls back to empty string for malformed or non-jwt tokens", () => {
-    expect(extractUsernameFromJwt("")).toBe("");
-    expect(extractUsernameFromJwt(null)).toBe("");
-    expect(extractUsernameFromJwt("not-a-jwt")).toBe("");
-    expect(extractUsernameFromJwt("header.invalid-base64-payload.sig")).toBe("");
-  });
-
-  it("falls back to storage keys if JWT payload lacks username claims", () => {
-    window.localStorage.setItem("cfsm_admin_username", "jerry_cached");
-    expect(extractUsernameFromStorage()).toBe("jerry_cached");
-
-    const genericAdminJwt = makeMockJwt({ sub: "admin" });
-    expect(resolveAuthUsername(genericAdminJwt)).toBe("jerry_cached");
-  });
-
-  it("fetches real username from /admin/api when only generic admin token exists", async () => {
-    const genericToken = makeMockJwt({ sub: "admin" });
-    window.localStorage.setItem("jwt_token", genericToken);
-    fetchMock.mockImplementation(
-      jsonReply({
-        success: true,
-        settings: { username: "jerry" },
-      }),
-    );
-
-    const fetched = await fetchAdminUsername();
-    expect(fetched).toBe("jerry");
-    expect(window.localStorage.getItem("cfsm_admin_username")).toBe("jerry");
-  });
-
-  it("defaults to Admin if token has no usable username claim and storage is empty", () => {
-    const noUserJwt = makeMockJwt({ exp: 123456 });
-    expect(resolveAuthUsername(noUserJwt)).toBe("Admin");
+  it("defaults to Admin if storage has no valid custom nickname", () => {
+    window.localStorage.removeItem("cfsm_admin_username");
+    expect(resolveAuthUsername("sample-token")).toBe("Admin");
   });
 
   it("provides zero-flicker getInitialAuth synchronously without any async delay", () => {
     // 1. 无 token 状态：同步返回未登录
     expect(getInitialAuth()).toEqual({ logged_in: false, username: "", uuid: "" });
 
-    // 2. 有 token 状态且缓存了真实用户名：同步直接返回 jerry
-    const token = makeMockJwt({ sub: "admin" });
-    window.localStorage.setItem("jwt_token", token);
+    // 2. 有 token 状态且缓存了自定义昵称：同步直接返回 jerry
+    window.localStorage.setItem("jwt_token", "sample-token");
     window.localStorage.setItem("cfsm_admin_username", "jerry");
     expect(getInitialAuth()).toEqual({
       logged_in: true,
