@@ -83,7 +83,7 @@ export function InstanceSwitcher({ currentUuid }: { currentUuid: string }) {
   const select = (uuid: string) => {
     triggerRef.current?.focus();
     setOpen(false);
-    if (uuid !== currentUuid) navigate(`/instance/${encodeURIComponent(uuid)}`);
+    if (uuid !== currentUuid) navigate(`/server/${encodeURIComponent(uuid)}`);
   };
 
   const handleListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {

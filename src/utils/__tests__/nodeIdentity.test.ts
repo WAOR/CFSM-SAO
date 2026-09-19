@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 import {
   collectMatchingNodeUuids,
   normalizeNodeIdentityList,

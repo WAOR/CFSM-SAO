@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createHashRouter, Navigate, useParams } from "react-router-dom";
 import { lazy, Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { RouteErrorFallback } from "@/components/shell/ErrorBoundary";
@@ -29,7 +29,15 @@ function suspended(page: ReactNode) {
   return <Suspense fallback={<LoadingFallback />}>{page}</Suspense>;
 }
 
-export const router = createBrowserRouter([
+/** 兼容早期 `#/instance/:uuid` 链接。 */
+function LegacyInstanceRedirect() {
+  const { uuid } = useParams<{ uuid: string }>();
+  return <Navigate to={`/server/${uuid ?? ""}`} replace />;
+}
+
+// CF-Server-Monitor 的主题路由约定是 hash 路由：首页 `/#/`，详情页 `/#/server/:id`。
+// 主题被 Worker 挂在站点根路径下，用 hash 才能避免刷新时打到后端路由。
+export const router = createHashRouter([
   {
     path: "/",
     element: <AppShell />,
@@ -40,8 +48,12 @@ export const router = createBrowserRouter([
         element: <Home />,
       },
       {
-        path: "instance/:uuid",
+        path: "server/:uuid",
         element: suspended(<Instance />),
+      },
+      {
+        path: "instance/:uuid",
+        element: <LegacyInstanceRedirect />,
       },
       {
         path: "assets",

@@ -30,11 +30,11 @@ import {
   fillMissingMetricPoints,
   interpolateMetricGaps,
 } from "./chartData";
-import { formatBytes, formatTrafficRateLabel } from "@/utils/format";
+import { formatByteRateLabel, formatBytes, formatTrafficRateLabel } from "@/utils/format";
 import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
 import { resolveLoadRecordTotals } from "@/utils/loadMetrics";
 import { usePreferences } from "@/hooks/usePreferences";
-import type { LoadRecord, NodeMetrics } from "@/types/komari";
+import type { LoadRecord, NodeMetrics } from "@/types/cfsm";
 
 const LOAD_HISTORY_SAMPLE_LIMIT = 360;
 const LOAD_HISTORY_RENDER_LIMIT = 720;
@@ -47,6 +47,8 @@ const MEMORY_KEYS = ["ram", "swap"];
 const MEMORY_COLORS = [CHART_PALETTE.memory, CHART_PALETTE.warning];
 const DISK_KEYS = ["disk"];
 const DISK_COLORS = [CHART_PALETTE.disk];
+const DISK_IO_KEYS = ["diskRead", "diskWrite"];
+const DISK_IO_COLORS = [CHART_PALETTE.memory, CHART_PALETTE.warning];
 const NETWORK_KEYS = ["netIn", "netOut"];
 const NETWORK_COLORS = [CHART_PALETTE.success, CHART_PALETTE.cpu];
 const CONNECTION_KEYS = ["connections", "udp"];
@@ -58,6 +60,8 @@ const SERIES_LABELS: Record<string, string> = {
   ram: "内存",
   swap: "Swap",
   disk: "磁盘",
+  diskRead: "读取",
+  diskWrite: "写入",
   netIn: "下行",
   netOut: "上行",
   connections: "TCP",
@@ -69,6 +73,8 @@ const LOAD_INTERPOLATE_KEYS = [
   "ram",
   "swap",
   "disk",
+  "diskRead",
+  "diskWrite",
   "netIn",
   "netOut",
   "connections",
@@ -96,6 +102,8 @@ const DOWNSAMPLE_KEYS = [
   "ram",
   "swap",
   "disk",
+  "diskRead",
+  "diskWrite",
   "netIn",
   "netOut",
   "connections",
@@ -138,6 +146,8 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
     ram: node.ramTotal > 0 ? (node.ramUsed / node.ramTotal) * 100 : null,
     swap: node.swapTotal > 0 ? (node.swapUsed / node.swapTotal) * 100 : null,
     disk: node.diskTotal > 0 ? (node.diskUsed / node.diskTotal) * 100 : null,
+    diskRead: node.diskIo?.read_bps ?? null,
+    diskWrite: node.diskIo?.write_bps ?? null,
     netIn: node.netDown,
     netOut: node.netUp,
     connections: node.connectionsTcp,
@@ -149,6 +159,8 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
 function formatTooltipValue(key: string, value: number | null | undefined, unit: string) {
   if (value == null || !Number.isFinite(value)) return "—";
   if (key === "netIn" || key === "netOut") return formatTrafficRateLabel(value);
+  // 磁盘 IO 按字节算(MB/s)，网络按比特算(Mbps)——各自领域的习惯单位。
+  if (key === "diskRead" || key === "diskWrite") return formatByteRateLabel(value);
   if (unit === "%") return `${value.toFixed(2)}%`;
   if (key === "process" || key === "connections" || key === "udp") return `${Math.round(value)}`;
   return value.toFixed(2);
@@ -164,6 +176,11 @@ function formatPercentAxisValue(value: number, min: number, max: number) {
 function formatNetworkAxisValue(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "";
   return formatTrafficRateLabel(value);
+}
+
+function formatByteRateAxisValue(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return formatByteRateLabel(value);
 }
 
 function formatCountAxisValue(value: number, min: number, max: number) {
@@ -185,6 +202,7 @@ function buildBaseOptions({
   axisKind,
   axisSize = 52,
   xRange,
+  fillAllSeries,
 }: {
   title: string;
   keys: string[];
@@ -192,9 +210,10 @@ function buildBaseOptions({
   resolvedAppearance: "light" | "dark";
   rangeHours: number;
   spanGaps?: boolean;
-  axisKind: "percent" | "network" | "count";
+  axisKind: "percent" | "network" | "byteRate" | "count";
   axisSize?: number;
   xRange?: [number, number] | null;
+  fillAllSeries?: boolean;
 }): Omit<uPlot.Options, "width" | "height"> {
   const isDark = resolvedAppearance === "dark";
   const { grid, text } = getAxisColors(isDark);
@@ -226,6 +245,7 @@ function buildBaseOptions({
           return splits.map((value) => {
             if (value === 0 && axisKind !== "percent") return "";
             if (axisKind === "network") return formatNetworkAxisValue(value);
+            if (axisKind === "byteRate") return formatByteRateAxisValue(value);
             if (axisKind === "percent") return formatPercentAxisValue(value, min, max);
             return formatCountAxisValue(value, min, max);
           });
@@ -237,7 +257,9 @@ function buildBaseOptions({
       ...keys.map((key, index) => ({
         label: key,
         stroke: colors[index] ?? colors[0],
-        fill: index === 0 ? `${colors[index] ?? colors[0]}22` : undefined,
+        // 默认只给第一条线填充；两条线地位对等时(磁盘读/写)全填，否则恰好为 0 的那条
+        // 会独占填充色，看起来像它才是主角。
+        fill: fillAllSeries || index === 0 ? `${colors[index] ?? colors[0]}22` : undefined,
         width: 1.6,
         spanGaps: spanGaps ?? false,
         points: { show: false },
@@ -270,6 +292,8 @@ const ChartCard = memo(function ChartCard({
   axisKind,
   axisSize,
   xRange,
+  fillAllSeries,
+  accent,
 }: {
   icon: ReactNode;
   title: string;
@@ -283,9 +307,12 @@ const ChartCard = memo(function ChartCard({
   rangeHours: number;
   unit?: string;
   spanGaps?: boolean;
-  axisKind: "percent" | "network" | "count";
+  axisKind: "percent" | "network" | "byteRate" | "count";
   axisSize?: number;
   xRange?: [number, number] | null;
+  fillAllSeries?: boolean;
+  /** 卡片边框/图标的主色。默认跟随第一条线，指标本身有固定色时用它覆盖。 */
+  accent?: string;
 }) {
   const { w, h, ref: chartSizeRef } = useResponsiveChartSize("grid");
   const dataRef = useRef<uPlot.AlignedData>([[]]);
@@ -312,8 +339,20 @@ const ChartCard = memo(function ChartCard({
         axisKind,
         axisSize,
         xRange,
+        fillAllSeries,
       }),
-    [axisKind, axisSize, colors, keys, rangeHours, resolvedAppearance, spanGaps, title, xRange],
+    [
+      axisKind,
+      axisSize,
+      colors,
+      fillAllSeries,
+      keys,
+      rangeHours,
+      resolvedAppearance,
+      spanGaps,
+      title,
+      xRange,
+    ],
   );
 
   const enhancedOptions = useMemo<Omit<uPlot.Options, "width" | "height">>(() => {
@@ -352,7 +391,7 @@ const ChartCard = memo(function ChartCard({
   return (
     <div
       className="instance-chart-card"
-      style={{ "--chart-accent": colors[0] } as CSSProperties}
+      style={{ "--chart-accent": accent ?? colors[0] } as CSSProperties}
     >
       <header className="instance-chart-card-head">
         <div className="instance-panel-subhead">
@@ -361,7 +400,7 @@ const ChartCard = memo(function ChartCard({
         </div>
         <div className="instance-series-stats">
           <span className="tabular">{value}</span>
-          {note != null && <span className="tabular text-(--text-tertiary)">{note}</span>}
+          {note != null && <span className="tabular text-[var(--text-tertiary)]">{note}</span>}
         </div>
       </header>
       <div ref={chartSizeRef} className="instance-uplot-wrap">
@@ -439,6 +478,8 @@ export function LoadChart({
         ram: totals.ramTotal > 0 ? (record.ram / totals.ramTotal) * 100 : null,
         swap: totals.swapTotal > 0 ? (record.swap / totals.swapTotal) * 100 : null,
         disk: totals.diskTotal > 0 ? (record.disk / totals.diskTotal) * 100 : null,
+        diskRead: record.disk_read,
+        diskWrite: record.disk_write,
         netIn: record.net_in,
         netOut: record.net_out,
         connections: record.connections,
@@ -470,6 +511,30 @@ export function LoadChart({
   const latestHistoryTotals = latestHistoryRecord
     ? resolveLoadRecordTotals(latestHistoryRecord, totalFallbacks)
     : null;
+  // 磁盘 IO：实时档看当前上报，历史档看这段区间里有没有采到过。旧探针/旧后端不下发时
+  // 整段都是 null，此时磁盘卡片退回原来的已用空间图。
+  const latestDiskIo = useMemo(() => {
+    if (isRealtime && node?.diskIo) {
+      return { read: node.diskIo.read_bps, write: node.diskIo.write_bps };
+    }
+    if (latestHistoryRecord?.disk_read != null || latestHistoryRecord?.disk_write != null) {
+      return {
+        read: latestHistoryRecord.disk_read ?? 0,
+        write: latestHistoryRecord.disk_write ?? 0,
+      };
+    }
+    return null;
+  }, [isRealtime, latestHistoryRecord, node?.diskIo]);
+  const hasDiskIo = useMemo(
+    () => points.some((point) => point.diskRead != null || point.diskWrite != null),
+    [points],
+  );
+  const diskUsageLabel =
+    isRealtime && node
+      ? `${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`
+      : latestHistoryRecord && latestHistoryTotals
+        ? `${formatBytes(latestHistoryRecord.disk)} / ${formatBytes(latestHistoryTotals.diskTotal)}`
+        : "—";
   const sourceRecordCount = historyRecords.length;
   const wasDownsampled = !isRealtime && sourceRecordCount > getHistoryRenderLimit(hours);
   const sampleSummary = isRealtime
@@ -607,28 +672,49 @@ export function LoadChart({
           axisKind="percent"
           xRange={requestedXRange}
         />
-        <ChartCard
-          icon={<HardDrive size={13} />}
-          title="磁盘"
-          uuid={uuid}
-          value={
-            isRealtime && node
-              ? `${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`
-              : latestHistoryRecord && latestHistoryTotals
-                ? `${formatBytes(latestHistoryRecord.disk)} / ${formatBytes(latestHistoryTotals.diskTotal)}`
+        {/* 磁盘卡片画 IO 速率，已用空间挪到副标题；探针没上报 IO 时整卡退回原来的空间占用图，
+            否则会是一张空图。 */}
+        {hasDiskIo ? (
+          <ChartCard
+            icon={<HardDrive size={13} />}
+            title="磁盘 IO"
+            uuid={uuid}
+            value={
+              latestDiskIo
+                ? `读 ${formatByteRateLabel(latestDiskIo.read)} · 写 ${formatByteRateLabel(latestDiskIo.write)}`
                 : "—"
-          }
-          note="已用空间"
-          points={points}
-          keys={DISK_KEYS}
-          colors={DISK_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
-          unit="%"
-          spanGaps={connectNulls}
-          axisKind="percent"
-          xRange={requestedXRange}
-        />
+            }
+            note={diskUsageLabel === "—" ? "已用空间 —" : `已用 ${diskUsageLabel}`}
+            points={points}
+            keys={DISK_IO_KEYS}
+            colors={DISK_IO_COLORS}
+            resolvedAppearance={resolvedAppearance}
+            rangeHours={hours}
+            spanGaps={connectNulls}
+            axisKind="byteRate"
+            axisSize={72}
+            xRange={requestedXRange}
+            fillAllSeries
+            accent={CHART_PALETTE.disk}
+          />
+        ) : (
+          <ChartCard
+            icon={<HardDrive size={13} />}
+            title="磁盘"
+            uuid={uuid}
+            value={diskUsageLabel}
+            note="已用空间"
+            points={points}
+            keys={DISK_KEYS}
+            colors={DISK_COLORS}
+            resolvedAppearance={resolvedAppearance}
+            rangeHours={hours}
+            unit="%"
+            spanGaps={connectNulls}
+            axisKind="percent"
+            xRange={requestedXRange}
+          />
+        )}
         <ChartCard
           icon={<Network size={13} />}
           title="网络"

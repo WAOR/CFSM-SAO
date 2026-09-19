@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import {
+  focusRealtimeNode,
   retainStore,
   getAllNodeMetaSnapshot,
   getHomeNodeSummariesSnapshot,
@@ -7,20 +8,22 @@ import {
   getNodeMetricsSnapshot,
   getNodeTrafficTrendSnapshot,
   getNodeOnlineSummariesSnapshot,
-  getVisibleNodeUuidsSnapshot,
   subscribeHomeNodeSummaries,
   subscribeNodeOnlineSummaries,
   subscribeAllNodes,
   subscribeStoreStatus,
-  subscribeVisibleNodeUuids,
   subscribeToNodeMeta,
   subscribeToNodeMetrics,
   subscribeToNodeTrafficTrend,
   getStoreStatusSnapshot,
+  getSysConfigSnapshot,
+  subscribeSysConfig,
   type HomeNodeSummary,
   type NodeOnlineSummary,
 } from "@/services/wsStore";
-import type { NodeInfo, NodeMetrics, TrafficTrendSample } from "@/types/komari";
+import type { NodeInfo, NodeMetrics, TrafficTrendSample } from "@/types/cfsm";
+import { useAuth } from "@/hooks/useAuth";
+import { useHiddenNodeUuids } from "@/hooks/useVisibleNodes";
 
 const noopUnsubscribe = () => undefined;
 
@@ -28,6 +31,13 @@ function useEnsured(enabled = true) {
   useEffect(() => {
     if (enabled) return retainStore();
   }, [enabled]);
+}
+
+/** 详情页：实时订阅只留正在看的这一台，离开时恢复订阅全站（见 wsStore 的 focusRealtimeNode）。 */
+export function useRealtimeFocus(uuid: string | undefined) {
+  useEffect(() => {
+    if (uuid) return focusRealtimeNode(uuid);
+  }, [uuid]);
 }
 
 export function useNodeMeta(uuid: string): NodeInfo | undefined {
@@ -82,25 +92,29 @@ export function useNodeCardSnapshots(uuid: string) {
   };
 }
 
-export function useVisibleNodeUuids(includeHidden = false): string[] {
-  useEnsured();
-  const getSnapshot = useCallback(
-    () => getVisibleNodeUuidsSnapshot(includeHidden),
-    [includeHidden],
-  );
-  return useSyncExternalStore(
-    subscribeVisibleNodeUuids,
-    getSnapshot,
-    getSnapshot,
-  );
-}
-
 export function useAllNodeMeta(): NodeInfo[] {
   useEnsured();
   return useSyncExternalStore(
     subscribeAllNodes,
     getAllNodeMetaSnapshot,
     getAllNodeMetaSnapshot,
+  );
+}
+
+export function useVisibleNodeUuids(includeHidden = false): string[] {
+  const allNodes = useAllNodeMeta();
+  const { data: me } = useAuth();
+  const hiddenUuids = useHiddenNodeUuids();
+  return useMemo(
+    () =>
+      allNodes
+        .filter(
+          (node) =>
+            (includeHidden || me?.logged_in === true || !node.hidden) &&
+            !hiddenUuids.has(node.uuid),
+        )
+        .map((node) => node.uuid),
+    [allNodes, hiddenUuids, includeHidden, me?.logged_in],
   );
 }
 
@@ -127,6 +141,19 @@ const EMPTY_STORE_STATUS = {
   hydrated: false,
   nodeInfoError: false,
 } as const;
+
+/**
+ * 后端 `/api/servers` 下发的 `sysConfig` 里那个开关：**是否输出首页的详细 ping/loss**。
+ *
+ * 关掉时后端不再下发 `servers[].ping[]` / `loss[]` 这一小时窗口，只剩每台节点当前的
+ * 单条 `ping_ct/cu/cm/bd`。主题据此回退：三网那三条线不画（没数据可画），
+ * 开页自检也不跑（本来就不下发，不是数据坏了）。老后端没有这个字段，默认按 true 走。
+ */
+export function useShowThreeNetDetails(): boolean {
+  useEnsured();
+  const getSnapshot = useCallback(() => getSysConfigSnapshot().show_three_net_details, []);
+  return useSyncExternalStore(subscribeSysConfig, getSnapshot, getSnapshot);
+}
 
 export function useNodeStoreStatus(enabled = true) {
   useEnsured(enabled);

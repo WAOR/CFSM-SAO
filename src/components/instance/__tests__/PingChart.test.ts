@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { summarizePingRecords } from "@/components/instance/PingChart";
-import type { PingRecord } from "@/types/komari";
+import type { PingRecord } from "@/types/cfsm";
 
 function record(
   time: string,
@@ -8,7 +8,7 @@ function record(
   count: number,
   loss: number,
 ): PingRecord {
-  return { task_id: 1, client: "node-a", time, value, count, loss };
+  return { task_id: 1, client: "node-a", time: Date.parse(time), value, count, loss };
 }
 
 describe("summarizePingRecords", () => {

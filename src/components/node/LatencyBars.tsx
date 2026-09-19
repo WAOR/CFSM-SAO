@@ -6,7 +6,7 @@ import {
   healthBarInteractionModel,
   healthBarSlotModel,
 } from "./nodeCardShared";
-import type { PingOverviewBucket } from "@/types/komari";
+import type { PingOverviewBucket } from "@/types/cfsm";
 
 interface LatencyBarsProps {
   buckets: PingOverviewBucket[];

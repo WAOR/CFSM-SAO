@@ -1,4 +1,4 @@
-import type { PingOverviewBucket } from "@/types/komari";
+import type { PingOverviewBucket } from "@/types/cfsm";
 import { trimFixed } from "@/utils/format";
 
 function formatPingBucketWindow(bucket: PingOverviewBucket | null) {

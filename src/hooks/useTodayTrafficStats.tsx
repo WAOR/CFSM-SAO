@@ -1,4 +1,4 @@
-﻿// 含 JSX 的 Provider 放这里，因此文件扩展名为 .tsx；外部导入路径不带扩展名，无需改动调用方。
+// 含 JSX 的 Provider 放这里，因此文件扩展名为 .tsx；外部导入路径不带扩展名，无需改动调用方。
 import {
   createContext,
   useCallback,
@@ -23,21 +23,15 @@ import {
 } from "@/hooks/todayTrafficQueryPolicy";
 import {
   getLoadRecords,
-  getTodayTrafficMetrics,
-  MetricApiUnavailableError,
-  warnDegradedOnce,
 } from "@/services/api";
 import {
-  buildTodayTrafficMetricSamples,
   buildTodayTrafficRecordSamples,
-  summarizeTodayTrafficMetrics,
   summarizeTodayTrafficRecords,
   type TodayTrafficSample,
   type TodayTrafficStat,
 } from "@/utils/trafficStats";
 
 const FALLBACK_CONCURRENCY = 8;
-const OPTIONAL_METRIC_TIMEOUT_MS = 6_000;
 const FALLBACK_REQUEST_TIMEOUT_MS = 8_000;
 type TodayTrafficQueryMode = "full" | "summary";
 
@@ -303,8 +297,6 @@ async function loadRecordFallback(
         const data = await getLoadRecords(uuid, rangeHours, {
           signal,
           timeout: FALLBACK_REQUEST_TIMEOUT_MS,
-          // 聚合接口刚刚失败过，兼容路径直接读 records，避免每台节点重复探测。
-          skipMetricQuery: true,
         });
         return {
           row: summarizeTodayTrafficRecords(uuid, data.records, startMs, endMs),
@@ -353,49 +345,19 @@ function getTodayTrafficQueryOptions(
     queryKey: ["traffic-stats", "today", startMs, mode, uuidSignature],
     queryFn: async ({ signal }): Promise<TodayTrafficStatsResponse> => {
       const endMs = Date.now();
-      try {
-        const data = await getTodayTrafficMetrics(stableUuids, startMs, endMs, {
-          signal,
-          timeout: OPTIONAL_METRIC_TIMEOUT_MS,
-        });
-        return {
-          rows: summarizeTodayTrafficMetrics(data.series, stableUuids),
-          samplesByUuid:
-            mode === "full"
-              ? Object.fromEntries(
-                  stableUuids.map((uuid) => [
-                    uuid,
-                    buildTodayTrafficMetricSamples(data.series, uuid),
-                  ]),
-                )
-              : {},
-          rangeStartMs: data.rangeStartMs,
-          rangeEndMs: data.rangeEndMs,
-          intervalSeconds: data.intervalSeconds,
-          source: "metrics",
-        };
-      } catch (error) {
-        if (signal.aborted) throw error;
-        warnDegradedOnce(
-          "today-traffic",
-          error instanceof MetricApiUnavailableError
-            ? "检测到旧版后端,今日流量已使用逐节点 records 统计"
-            : "今日流量 metrics 查询异常,已回退逐节点 records 统计",
-        );
-        const fallback = await loadRecordFallback(
-          stableUuids,
-          startMs,
-          endMs,
-          signal,
-          mode,
-        );
-        return {
-          ...fallback,
-          rangeStartMs: startMs,
-          rangeEndMs: endMs,
-          source: "records",
-        };
-      }
+      const fallback = await loadRecordFallback(
+        stableUuids,
+        startMs,
+        endMs,
+        signal,
+        mode,
+      );
+      return {
+        ...fallback,
+        rangeStartMs: startMs,
+        rangeEndMs: endMs,
+        source: "records",
+      };
     },
     enabled: stableUuids.length > 0,
     staleTime: 60_000,

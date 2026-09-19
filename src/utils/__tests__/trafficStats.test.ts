@@ -1,28 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { LoadRecord } from "@/types/komari";
+import type { LoadRecord } from "@/types/cfsm";
 import {
-  buildTodayTrafficMetricSamples,
   buildTodayTrafficRecordSamples,
-  RATE_DOWN_METRIC,
-  RATE_UP_METRIC,
-  summarizeTodayTrafficMetrics,
   summarizeTodayTrafficRecords,
-  TRAFFIC_DOWN_METRIC,
-  TRAFFIC_UP_METRIC,
-  type TrafficMetricSeries,
 } from "@/utils/trafficStats";
-
-function metricSeries(
-  metricKey: string,
-  values: Array<[string, number | null, number?]>,
-): TrafficMetricSeries {
-  return {
-    metricKey,
-    client: "node-a",
-    intervalSeconds: 300,
-    points: values.map(([time, value, count = 1]) => ({ time, value, count })),
-  };
-}
 
 function record(time: string, overrides: Partial<LoadRecord> = {}): LoadRecord {
   return {
@@ -36,6 +17,8 @@ function record(time: string, overrides: Partial<LoadRecord> = {}): LoadRecord {
     temp: 0,
     disk: 0,
     disk_total: 0,
+    disk_read: null,
+    disk_write: null,
     net_in: 0,
     net_out: 0,
     net_total_up: 0,
@@ -44,137 +27,172 @@ function record(time: string, overrides: Partial<LoadRecord> = {}): LoadRecord {
     connections: 0,
     connections_udp: 0,
     client: "node-a",
-    time,
+    time: Date.parse(time),
     ...overrides,
   };
 }
 
-describe("today traffic stats", () => {
-  it("sums traffic buckets and keeps the timestamp of each direction peak", () => {
-    const stats = summarizeTodayTrafficMetrics(
-      [
-        metricSeries(TRAFFIC_UP_METRIC, [
-          ["2026-07-16T00:00:00Z", 100],
-          ["2026-07-16T00:05:00Z", 50],
-        ]),
-        metricSeries(TRAFFIC_DOWN_METRIC, [["2026-07-16T00:00:00Z", 300]]),
-        metricSeries(RATE_UP_METRIC, [
-          ["2026-07-16T00:00:00Z", 10],
-          ["2026-07-16T00:05:00Z", 25],
-        ]),
-        metricSeries(RATE_DOWN_METRIC, [
-          ["2026-07-16T00:00:00Z", 40],
-          ["2026-07-16T00:05:00Z", 30],
-        ]),
-      ],
-      ["node-a", "node-b"],
-    );
+const DAY_START = Date.parse("2026-07-16T00:00:00Z");
+const DAY_END = Date.parse("2026-07-16T23:59:59Z");
 
-    expect(stats[0]).toMatchObject({
-      trafficUp: 150,
-      trafficDown: 300,
-      peakUp: 25,
-      peakUpAt: Date.parse("2026-07-16T00:05:00Z"),
-      peakDown: 40,
-      peakDownAt: Date.parse("2026-07-16T00:00:00Z"),
-      sampleCount: 2,
-      hasSamples: true,
-    });
-    expect(stats[1]).toMatchObject({ uuid: "node-b", hasSamples: false, sampleCount: 0 });
-  });
-
-  it("derives counter deltas across resets for the compatibility path", () => {
-    const start = Date.parse("2026-07-16T00:00:00Z");
-    const stats = summarizeTodayTrafficRecords(
+describe("summarizeTodayTrafficRecords", () => {
+  it("integrates speed samples over the gap to the previous sample", () => {
+    // 两个间隔 60s 的采样点：1 MB/s 上行 → 每段 60 MB。
+    const stat = summarizeTodayTrafficRecords(
       "node-a",
       [
-        record("2026-07-15T23:55:00Z", { net_total_up: 100, net_total_down: 200 }),
-        record("2026-07-16T00:05:00Z", {
-          net_total_up: 150,
-          net_total_down: 260,
-          net_out: 12,
-          net_in: 24,
-        }),
-        record("2026-07-16T00:10:00Z", {
-          net_total_up: 20,
-          net_total_down: 30,
-          net_out: 30,
-          net_in: 18,
-        }),
+        record("2026-07-16T00:00:00Z", { net_out: 1_000_000, net_in: 2_000_000 }),
+        record("2026-07-16T00:01:00Z", { net_out: 1_000_000, net_in: 2_000_000 }),
+        record("2026-07-16T00:02:00Z", { net_out: 1_000_000, net_in: 2_000_000 }),
       ],
-      start,
-      Date.parse("2026-07-16T01:00:00Z"),
+      DAY_START,
+      DAY_END,
     );
 
-    expect(stats).toMatchObject({
-      trafficUp: 70,
-      trafficDown: 90,
-      peakUp: 30,
-      peakDown: 24,
-      sampleCount: 2,
-      hasSamples: true,
-    });
+    expect(stat.trafficUp).toBe(120_000_000);
+    expect(stat.trafficDown).toBe(240_000_000);
+    expect(stat.sampleCount).toBe(3);
+    expect(stat.hasSamples).toBe(true);
   });
 
-  it("does not assign a pseudo peak timestamp when every rate sample is zero", () => {
-    const metricStat = summarizeTodayTrafficMetrics(
-      [
-        metricSeries(RATE_UP_METRIC, [["2026-07-16T00:05:00Z", 0]]),
-        metricSeries(RATE_DOWN_METRIC, [["2026-07-16T00:05:00Z", 0]]),
-      ],
-      ["node-a"],
-    )[0];
-    const recordStat = summarizeTodayTrafficRecords(
+  it("uses the last pre-range sample only as a time baseline", () => {
+    const stat = summarizeTodayTrafficRecords(
       "node-a",
-      [record("2026-07-16T00:05:00Z")],
-      Date.parse("2026-07-16T00:00:00Z"),
-      Date.parse("2026-07-16T01:00:00Z"),
+      [
+        record("2026-07-15T23:59:00Z", { net_out: 5_000_000 }),
+        record("2026-07-16T00:00:00Z", { net_out: 1_000_000 }),
+      ],
+      DAY_START,
+      DAY_END,
     );
 
-    expect(metricStat).toMatchObject({
-      peakUp: 0,
-      peakUpAt: null,
-      peakDown: 0,
-      peakDownAt: null,
-    });
-    expect(recordStat).toMatchObject({
-      peakUp: 0,
-      peakUpAt: null,
-      peakDown: 0,
-      peakDownAt: null,
-    });
+    // 只有区间内那个点计入，且用的是它自己的速率（1 MB/s × 60s）。
+    expect(stat.trafficUp).toBe(60_000_000);
+    expect(stat.sampleCount).toBe(1);
   });
 
-  it("builds newest-first upload and download samples for the detail table", () => {
-    const metricSamples = buildTodayTrafficMetricSamples(
-      [
-        metricSeries(RATE_UP_METRIC, [
-          ["2026-07-16T00:00:00Z", 10],
-          ["2026-07-16T00:05:00Z", 20],
-        ]),
-        metricSeries(RATE_DOWN_METRIC, [
-          ["2026-07-16T00:00:00Z", 30],
-          ["2026-07-16T00:05:00Z", 40],
-        ]),
-      ],
+  it("caps the integration window so an offline gap cannot invent traffic", () => {
+    const stat = summarizeTodayTrafficRecords(
       "node-a",
+      [
+        record("2026-07-16T00:00:00Z", { net_out: 1_000_000 }),
+        // 掉线 3 小时后恢复：按 10 分钟上限计入，而不是 3 小时。
+        record("2026-07-16T03:00:00Z", { net_out: 1_000_000 }),
+      ],
+      DAY_START,
+      DAY_END,
     );
 
-    expect(metricSamples).toEqual([
-      { timeMs: Date.parse("2026-07-16T00:05:00Z"), up: 20, down: 40 },
-      { timeMs: Date.parse("2026-07-16T00:00:00Z"), up: 10, down: 30 },
+    expect(stat.trafficUp).toBe(600_000_000);
+  });
+
+  it("integrates adjacent in-range samples trapezoidally (averages the two speeds)", () => {
+    // 相邻两点速率不同：2 MB/s → 0，梯形取均值 1 MB/s × 60s = 60 MB；
+    // 旧的矩形口径（取当前点速率）会算成 0×60 = 0。
+    const stat = summarizeTodayTrafficRecords(
+      "node-a",
+      [
+        record("2026-07-16T00:00:00Z", { net_out: 2_000_000 }),
+        record("2026-07-16T00:01:00Z", { net_out: 0 }),
+      ],
+      DAY_START,
+      DAY_END,
+    );
+
+    expect(stat.trafficUp).toBe(60_000_000);
+    expect(stat.peakUp).toBe(2_000_000);
+  });
+
+  it("clamps a lone outlier spike in the total but keeps the raw peak", () => {
+    // 五个 1 MB/s + 一个 50 MB/s 毛刺：中位数 1 MB/s、上界 10 MB/s，毛刺按 10 MB/s 计入总量。
+    // 前四段各 60 MB；末段梯形 (1 + 10)/2 × 60s = 330 MB；合计 570 MB。峰值仍报真实的 50 MB/s。
+    const stat = summarizeTodayTrafficRecords(
+      "node-a",
+      [
+        record("2026-07-16T00:00:00Z", { net_out: 1_000_000 }),
+        record("2026-07-16T00:01:00Z", { net_out: 1_000_000 }),
+        record("2026-07-16T00:02:00Z", { net_out: 1_000_000 }),
+        record("2026-07-16T00:03:00Z", { net_out: 1_000_000 }),
+        record("2026-07-16T00:04:00Z", { net_out: 1_000_000 }),
+        record("2026-07-16T00:05:00Z", { net_out: 50_000_000 }),
+      ],
+      DAY_START,
+      DAY_END,
+    );
+
+    expect(stat.trafficUp).toBe(570_000_000);
+    expect(stat.peakUp).toBe(50_000_000);
+    expect(stat.peakUpAt).toBe(Date.parse("2026-07-16T00:05:00Z"));
+  });
+
+  it("keeps the timestamp of each direction peak", () => {
+    const stat = summarizeTodayTrafficRecords(
+      "node-a",
+      [
+        record("2026-07-16T00:00:00Z", { net_out: 10, net_in: 90 }),
+        record("2026-07-16T00:05:00Z", { net_out: 80, net_in: 20 }),
+      ],
+      DAY_START,
+      DAY_END,
+    );
+
+    expect(stat.peakUp).toBe(80);
+    expect(stat.peakUpAt).toBe(Date.parse("2026-07-16T00:05:00Z"));
+    expect(stat.peakDown).toBe(90);
+    expect(stat.peakDownAt).toBe(Date.parse("2026-07-16T00:00:00Z"));
+  });
+
+  it("reports no samples when the range is empty", () => {
+    const stat = summarizeTodayTrafficRecords("node-a", [], DAY_START, DAY_END);
+
+    expect(stat.hasSamples).toBe(false);
+    expect(stat.trafficUp).toBe(0);
+    expect(stat.trafficDown).toBe(0);
+    expect(stat.peakUpAt).toBeNull();
+  });
+
+  it("ignores samples after the range end", () => {
+    const stat = summarizeTodayTrafficRecords(
+      "node-a",
+      [
+        record("2026-07-16T00:00:00Z", { net_out: 1_000_000 }),
+        record("2026-07-17T00:30:00Z", { net_out: 9_000_000 }),
+      ],
+      DAY_START,
+      DAY_END,
+    );
+
+    expect(stat.peakUp).toBe(1_000_000);
+  });
+});
+
+describe("buildTodayTrafficRecordSamples", () => {
+  it("returns in-range rate samples newest first", () => {
+    const samples = buildTodayTrafficRecordSamples(
+      [
+        record("2026-07-15T23:00:00Z", { net_out: 1, net_in: 2 }),
+        record("2026-07-16T00:00:00Z", { net_out: 3, net_in: 4 }),
+        record("2026-07-16T00:05:00Z", { net_out: 5, net_in: 6 }),
+      ],
+      DAY_START,
+      DAY_END,
+    );
+
+    expect(samples).toEqual([
+      { timeMs: Date.parse("2026-07-16T00:05:00Z"), up: 5, down: 6 },
+      { timeMs: Date.parse("2026-07-16T00:00:00Z"), up: 3, down: 4 },
     ]);
+  });
 
-    const recordSamples = buildTodayTrafficRecordSamples(
-      [
-        record("2026-07-15T23:55:00Z", { net_out: 1, net_in: 2 }),
-        record("2026-07-16T00:05:00Z", { net_out: 3, net_in: 4 }),
-      ],
-      Date.parse("2026-07-16T00:00:00Z"),
-      Date.parse("2026-07-16T01:00:00Z"),
+  it("clamps negative rates to zero", () => {
+    const samples = buildTodayTrafficRecordSamples(
+      [record("2026-07-16T00:00:00Z", { net_out: -5, net_in: -1 })],
+      DAY_START,
+      DAY_END,
     );
-    expect(recordSamples).toEqual([
-      { timeMs: Date.parse("2026-07-16T00:05:00Z"), up: 3, down: 4 },
+
+    expect(samples).toEqual([
+      { timeMs: Date.parse("2026-07-16T00:00:00Z"), up: 0, down: 0 },
     ]);
   });
 });

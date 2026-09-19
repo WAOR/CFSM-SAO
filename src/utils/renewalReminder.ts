@@ -1,10 +1,13 @@
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireDaysRemaining, resolveExpireTimestamp } from "@/utils/format";
 
 const DAY_MS = 86_400_000;
 
-export const RENEWAL_WARNING_DAYS = 7;
+/** 默认提前几天提醒续费；站长可在设置里改（0 = 不提醒，见 renewalReminderDays）。 */
+export const DEFAULT_RENEWAL_REMINDER_DAYS = 7;
+/** 提醒天数上限：再往前就等于常驻提醒了。 */
+export const MAX_RENEWAL_REMINDER_DAYS = 60;
 export const RENEWAL_SNOOZE_DAYS = 1;
 export const RENEWAL_SNOOZE_MS = RENEWAL_SNOOZE_DAYS * DAY_MS;
 
@@ -41,6 +44,8 @@ export interface RenewalReminderPreferences {
 
 export interface RenewalReminderOptions {
   requireOnlineForExpired?: boolean;
+  /** 提前几天开始提醒；缺省用 DEFAULT_RENEWAL_REMINDER_DAYS。0 = 一条都不提醒。 */
+  warningDays?: number;
 }
 
 export const EMPTY_RENEWAL_REMINDER_PREFERENCES: RenewalReminderPreferences = {
@@ -58,6 +63,9 @@ export function getRenewalReminders(
   now = Date.now(),
   options: RenewalReminderOptions = {},
 ): RenewalReminderItem[] {
+  const warningDays = options.warningDays ?? DEFAULT_RENEWAL_REMINDER_DAYS;
+  // 0 = 站长把提醒关了：连已经过期的也不提，否则「关掉」只关了一半。
+  if (warningDays <= 0) return [];
   const reminders: RenewalReminderItem[] = [];
 
   for (const node of nodes) {
@@ -67,7 +75,7 @@ export function getRenewalReminders(
     // 与节点卡、列表和资产页共用同一套向下取整口径，避免同屏出现 2 天/3 天。
     const daysRemaining = getExpireDaysRemaining(expiresAt, now);
     if (daysRemaining == null) continue;
-    if (daysRemaining > RENEWAL_WARNING_DAYS) continue;
+    if (daysRemaining > warningDays) continue;
 
     const expired = daysRemaining < 0;
     // 首页可要求过期节点必须明确在线：状态尚未返回（null/undefined）时先不展示，

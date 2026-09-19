@@ -1,4 +1,4 @@
-import type { ThemeSettings } from "@/types/komari";
+import type { ThemeSettings } from "@/types/cfsm";
 import {
   DEFAULT_BACKGROUND_ALIGNMENT,
   DEFAULT_BACKGROUND_VIDEO_URL,
@@ -16,6 +16,10 @@ import {
   type CostPremiumEntry,
 } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
+import {
+  DEFAULT_RENEWAL_REMINDER_DAYS,
+  MAX_RENEWAL_REMINDER_DAYS,
+} from "@/utils/renewalReminder";
 import { normalizeHomeGroupOrder } from "@/utils/homeNodes";
 import {
   HOME_SORT_NATURAL_DIRECTION,
@@ -25,10 +29,18 @@ import {
   type HomeSortField,
 } from "@/utils/homeSort";
 import {
+  DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS,
+  DEFAULT_HOMEPAGE_PING_TASK_ID,
+  resolveDefaultHomepagePingTaskId,
   normalizeHomepageMultiPingTaskIds,
   normalizeHomepagePingTaskBindings,
   type HomepagePingTaskBindings,
 } from "@/utils/pingTasks";
+import {
+  EMPTY_PING_LINE_OVERRIDES_BY_NODE,
+  normalizePingLineOverridesByNode,
+  type PingLineOverridesByNode,
+} from "@/utils/pingLineOverrides";
 
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
@@ -41,20 +53,31 @@ export interface ResolvedThemeSettings {
   enableAdminButton: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
+  homepageDefaultPingTaskId: number;
   enableHomepageMultiPing: boolean;
   homepageMultiPingTaskIds: number[];
+  homepagePingLineOverrides: PingLineOverridesByNode;
   fakePingForUnbound: boolean;
   showHomeOverview: boolean;
+  /** 顶部总览里的「资产概览」卡（把每月花多少钱亮给所有访客，单独给个开关）。 */
+  showAssetOverview: boolean;
   showGroupTabs: boolean;
   showRegionBar: boolean;
   showCardGroup: boolean;
+  showCardPrice: boolean;
   homeGroupOrder: string[];
+  /** 首页默认选中的分组（空 = 全部）。后端没有这个分组时回退到全部。 */
+  homeDefaultGroup: string;
   enableHomeSort: boolean;
   homeSortField: HomeSortField;
   homeSortDirection: HomeSortDirection;
+  /** 离线节点排最前面；默认 false = 置底。 */
+  offlineNodesFirst: boolean;
   showCostSummary: boolean;
   showCostSummaryFloatingButton: boolean;
   showPriceForGuests: boolean;
+  /** 还有几天到期开始提醒；0 = 不提醒。 */
+  renewalReminderDays: number;
   showOverviewRatings: boolean;
   showTrafficRating: boolean;
   showBandwidthRating: boolean;
@@ -88,20 +111,27 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   enableAdminButton: true,
   showPingChart: true,
   homepagePingBindings: {},
-  enableHomepageMultiPing: false,
-  homepageMultiPingTaskIds: [],
+  homepageDefaultPingTaskId: DEFAULT_HOMEPAGE_PING_TASK_ID,
+  enableHomepageMultiPing: true,
+  homepageMultiPingTaskIds: [...DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS],
+  homepagePingLineOverrides: EMPTY_PING_LINE_OVERRIDES_BY_NODE,
   fakePingForUnbound: false,
   showHomeOverview: true,
+  showAssetOverview: true,
   showGroupTabs: true,
   showRegionBar: true,
   showCardGroup: true,
+  showCardPrice: true,
   homeGroupOrder: [],
+  homeDefaultGroup: "",
   enableHomeSort: true,
   homeSortField: "default",
   homeSortDirection: HOME_SORT_NATURAL_DIRECTION.default,
+  offlineNodesFirst: false,
   showCostSummary: true,
   showCostSummaryFloatingButton: true,
   showPriceForGuests: false,
+  renewalReminderDays: DEFAULT_RENEWAL_REMINDER_DAYS,
   showOverviewRatings: true,
   showTrafficRating: true,
   showBandwidthRating: true,
@@ -128,8 +158,41 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   surfaceOpacity: DEFAULT_SURFACE_OPACITY,
 };
 
+/** 首页默认分组：只收非空字符串，长度掐在合理范围内（分组名来自后端）。 */
+function normalizeHomeDefaultGroup(value: unknown): string {
+  return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 120) : "";
+}
+
+/** 提醒天数：0~60 的整数，0 = 不提醒；写坏了回到默认。 */
+function normalizeRenewalReminderDays(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_RENEWAL_REMINDER_DAYS;
+  return Math.min(MAX_RENEWAL_REMINDER_DAYS, Math.max(0, Math.round(parsed)));
+}
+
 export function isAppearance(value: unknown): value is Appearance {
   return value === "system" || value === "light" || value === "dark";
+}
+
+/**
+ * 后台「外观设置 → 默认外观」（`/api/config` 的 `preferred_theme`：auto / dark / light）→ 主题的外观值。
+ * 缺席或认不出返回 undefined：老后端不下发，交给主题自己的默认（跟随系统）。
+ */
+export function resolvePreferredAppearance(value: unknown): Appearance | undefined {
+  if (value === "dark" || value === "light") return value;
+  if (value === "auto") return "system";
+  return undefined;
+}
+
+/**
+ * 把后台「默认外观」垫在主题设置的最底层：theme_options 或本机设置里写了 `defaultAppearance`
+ * 就压过它。站长在后台改默认外观，没专门给主题配过外观的站点就会跟着走。
+ */
+export function withPreferredAppearance<T extends Record<string, unknown>>(
+  preferred: Appearance | undefined,
+  settings: T,
+): T {
+  return preferred ? ({ defaultAppearance: preferred, ...settings } as T) : settings;
 }
 
 function normalizeAppearance(
@@ -152,8 +215,6 @@ function normalizeNodeViewMode(
   return typeof value === "string" && value.length > 0 ? "compact" : fallback;
 }
 
-// 列表档仅桌面可用(见 useViewMode 的 MOBILE_VIEW_MODES)。移动端即便配置里存了 "list"
-// (历史值/外部写入)也归一化回默认档,避免管理页无选中项、首页又强制回落 compact 的不一致。
 function normalizeMobileNodeViewMode(
   value: unknown,
   fallback: NodeViewMode,
@@ -170,11 +231,6 @@ function normalizePlainText(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-function normalizeBackgroundMediaType(value: unknown): BackgroundMediaType {
-  return value === "video" ? "video" : "image";
-}
-
-// 管理员默认排序:字段非法回落 default;方向非法时回落该字段的自然方向(文本升、数值降)。
 function normalizeHomeSortDefault(
   field: unknown,
   direction: unknown,
@@ -191,9 +247,10 @@ function normalizeHomeSortDefault(
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
-  const homepageMultiPingTaskIds = normalizeHomepageMultiPingTaskIds(
-    settings?.homepageMultiPingTaskIds,
-  );
+  const homepageMultiPingTaskIds =
+    settings?.homepageMultiPingTaskIds == null
+      ? [...DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS]
+      : normalizeHomepageMultiPingTaskIds(settings.homepageMultiPingTaskIds);
   return {
     defaultAppearance: normalizeAppearance(settings?.defaultAppearance),
     desktopNodeViewMode: normalizeNodeViewMode(
@@ -207,22 +264,30 @@ export function normalizeThemeSettings(
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
-    // 保留开关原值，让管理页能呈现并修复不完整配置；首页消费方仅在任务恰好为三项时启用。
-    enableHomepageMultiPing: settings?.enableHomepageMultiPing === true,
+    homepageDefaultPingTaskId: resolveDefaultHomepagePingTaskId(
+      settings?.homepageDefaultPingTaskId,
+    ),
+    enableHomepageMultiPing: enabledUnlessFalse(settings?.enableHomepageMultiPing),
     homepageMultiPingTaskIds,
-    // 默认关闭(需手动开启):给访客展示的是模拟数据,必须由站长显式决定。
+    homepagePingLineOverrides: normalizePingLineOverridesByNode(settings?.homepagePingLineOverrides),
     fakePingForUnbound: settings?.fakePingForUnbound === true,
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
+    showAssetOverview: enabledUnlessFalse(settings?.showAssetOverview),
     showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),
     showRegionBar: enabledUnlessFalse(settings?.showRegionBar),
     showCardGroup: enabledUnlessFalse(settings?.showCardGroup),
+    showCardPrice: enabledUnlessFalse(settings?.showCardPrice),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
+    homeDefaultGroup: normalizeHomeDefaultGroup(settings?.homeDefaultGroup),
     enableHomeSort: enabledUnlessFalse(settings?.enableHomeSort),
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),
-    showCostSummary: enabledUnlessFalse(settings?.showCostSummary),
-    showCostSummaryFloatingButton: enabledUnlessFalse(settings?.showCostSummaryFloatingButton),
-    // 默认关闭(需手动开启):向访客展示价格与资产必须由站长显式决定。
+    offlineNodesFirst: settings?.offlineNodesFirst === true,
+    showCostSummary:
+      enabledUnlessFalse(settings?.showCostSummary) ||
+      settings?.showCostSummaryFloatingButton === true,
+    showCostSummaryFloatingButton: settings?.showCostSummaryFloatingButton !== false,
     showPriceForGuests: settings?.showPriceForGuests === true,
+    renewalReminderDays: normalizeRenewalReminderDays(settings?.renewalReminderDays),
     showOverviewRatings: enabledUnlessFalse(settings?.showOverviewRatings),
     showTrafficRating: enabledUnlessFalse(settings?.showTrafficRating),
     showBandwidthRating: enabledUnlessFalse(settings?.showBandwidthRating),
@@ -233,16 +298,14 @@ export function normalizeThemeSettings(
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),
-    // 默认关闭(需手动开启):连接数是个小众指标,很多 agent 也不上报,所以只在显式启用时才显示。
     showConnections: settings?.showConnections === true,
     showTodayTrafficPopover: enabledUnlessFalse(settings?.showTodayTrafficPopover),
     hiddenNodes: normalizeNodeIdentityList(settings?.hiddenNodes),
     costIgnoredNodes: normalizeCostIgnoredNodes(settings?.costIgnoredNodes),
     costPremiums: normalizeCostPremiums(settings?.costPremiums),
     costRateApiUrl: normalizeCostRateApiUrl(settings?.costRateApiUrl),
-    // 默认开:让已配置背景图的存量站点升级后行为不变;关闭 = 保留 URL 但不加载背景图。
     enableBackgroundImage: enabledUnlessFalse(settings?.enableBackgroundImage),
-    backgroundMediaType: normalizeBackgroundMediaType(settings?.backgroundMediaType),
+    backgroundMediaType: settings?.backgroundMediaType === "video" ? "video" : "image",
     backgroundImage: normalizeBackgroundUrl(settings?.backgroundImage),
     backgroundImageMobile: normalizeBackgroundUrl(settings?.backgroundImageMobile),
     backgroundVideo:

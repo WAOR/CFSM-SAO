@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -19,12 +19,13 @@ import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { HOMEPAGE_PING_BUCKET_COUNT } from "@/hooks/usePingOverview";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
-import { HOMEPAGE_MULTI_PING_TASK_COUNT } from "@/utils/pingTasks";
 import { speedRateColor, speedRateColorFromBytes } from "@/utils/metricTone";
 import { supportsFineHover } from "@/utils/mediaQuery";
 import { formatHealthBucketTooltip } from "./pingBucketText";
+import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick";
 import { MultiPingStatus } from "./MultiPingStatus";
 import {
   formatCompactExpire,
@@ -44,12 +45,12 @@ import type {
   PingOverviewBucket,
   PingOverviewItem,
   TrafficTrendSample,
-} from "@/types/komari";
+} from "@/types/cfsm";
 import type { ByteRateDisplay } from "@/utils/format";
 import type { TrafficDisplay } from "@/utils/traffic";
 
 const TRAFFIC_DOT_COUNT = 16;
-const HEALTH_BAR_COUNT = 18;
+
 type CompactNode = NodeInfo & NodeMetrics;
 type CompactTag = { label: string; color: string };
 type CompactExpire = { value: string; unit: string };
@@ -201,8 +202,9 @@ function HealthBars({
   buckets: PingOverviewBucket[];
   kind: "latency" | "loss";
 }) {
-  const bars = buckets.slice(-HEALTH_BAR_COUNT);
+  const bars = buckets.slice(-HOMEPAGE_PING_BUCKET_COUNT);
   const containerRef = useRef<HTMLDivElement>(null);
+  const touchHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const activeIndex = hoveredIndex ?? selectedIndex;
@@ -216,6 +218,27 @@ function HealthBars({
   const selectIndex = (next: number) => {
     if (bars.length === 0) return;
     setSelectedIndex(Math.max(0, Math.min(bars.length - 1, next)));
+  };
+
+  useEffect(
+    () => () => {
+      if (touchHoldTimerRef.current != null) clearTimeout(touchHoldTimerRef.current);
+    },
+    [],
+  );
+
+  /** 触屏：按在哪儿就选哪根柱子，命中判定挂在容器上（口径见 `touchBucketPick`）。 */
+  const handleTouchPick = (clientX: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next = resolveTouchBucketIndex(clientX, rect, bars.length);
+    if (next == null) return;
+    selectIndex(next);
+    if (touchHoldTimerRef.current != null) clearTimeout(touchHoldTimerRef.current);
+    touchHoldTimerRef.current = setTimeout(() => {
+      touchHoldTimerRef.current = null;
+      setSelectedIndex(null);
+    }, TOUCH_BUCKET_HOLD_MS);
   };
 
   return (
@@ -234,6 +257,16 @@ function HealthBars({
       onBlur={() => {
         setHoveredIndex(null);
         setSelectedIndex(null);
+      }}
+      onPointerDown={(event) => {
+        // 精细指针照旧走 hover / 点选那一套（下面每根柱子自己的 onClick）。
+        if (supportsFineHover(event.pointerType)) return;
+        handleTouchPick(event.clientX);
+      }}
+      onPointerMove={(event) => {
+        // 手指按着横向划过去时跟随；没按着不动它（触屏没有悬停）。
+        if (supportsFineHover(event.pointerType) || event.buttons === 0) return;
+        handleTouchPick(event.clientX);
       }}
       onKeyDown={(event) => {
         const current = selectedIndex ?? bars.length - 1;
@@ -329,7 +362,7 @@ function CompactNodeHeader({
         <div className="compact-node-title-row">
           <Flag region={node.region} size={15} />
           <Link
-            to={`/instance/${encodeURIComponent(node.uuid)}`}
+            to={`/server/${encodeURIComponent(node.uuid)}`}
             className="compact-node-title"
             title={node.name}
           >
@@ -342,7 +375,7 @@ function CompactNodeHeader({
           <NodeTodayTrafficPopover uuid={node.uuid} size={14} />
         )}
         <Link
-          to={`/instance/${encodeURIComponent(node.uuid)}`}
+          to={`/server/${encodeURIComponent(node.uuid)}`}
           className="compact-node-detail-link"
           title={detailLabels.title}
           aria-label={detailLabels.ariaLabel}
@@ -525,13 +558,12 @@ function CompactNodeInfoStrip({
             value={formatCompactExpire(expire)}
             color={expireColor}
           />
-          {renewalPrice && (
-            <CompactInfoRow
-              icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
-              value={renewalPrice}
-              color="var(--status-success)"
-            />
-          )}
+          <CompactInfoRow
+            icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
+            // 后端 price 为空/0/-1 都表示免费，小卡片直接写「免费」而不是留白。
+            value={renewalPrice || "免费"}
+            color={renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
+          />
         </CompactInfoTile>
       )}
       {showConnections && (
@@ -673,7 +705,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
   showTodayTraffic?: boolean;
 }) {
   const model = useNodeCardModel(uuid, {
-    pingBucketCount: HEALTH_BAR_COUNT,
+    pingBucketCount: HOMEPAGE_PING_BUCKET_COUNT,
     includeMultiPing: true,
   });
   const themeSettings = useThemeSettings();
@@ -717,7 +749,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       <CompactNodeHeader
         node={node}
         osName={osName}
-        showTodayTraffic={showTodayTraffic}
+        showTodayTraffic={showTodayTraffic && themeSettings.showTodayTrafficPopover !== false}
       />
       <CompactNodeChips subtitle={subtitle} tags={footerTags} ipv4={node.ipv4} ipv6={node.ipv6} />
       <CompactNodeVitals node={node} loadFraction={loadFraction} />
@@ -734,8 +766,9 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         renewalPrice={renewalPrice}
       />
       <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
-      {homepagePingLines.length === HOMEPAGE_MULTI_PING_TASK_COUNT ? (
+      {homepagePingLines.length > 0 ? (
         <MultiPingStatus
+          uuid={uuid}
           lines={homepagePingLines}
           density="compact"
           className="compact-node-bottom"

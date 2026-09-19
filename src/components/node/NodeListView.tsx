@@ -14,11 +14,11 @@ import { LatencyBars } from "./LatencyBars";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
 import { formatOsLabel, joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
 import { formatHealthBucketTooltip } from "./pingBucketText";
-import type { PingOverviewTaskLoadState } from "@/types/komari";
+import type { PingOverviewTaskLoadState } from "@/types/cfsm";
+import { HOMEPAGE_PING_BUCKET_COUNT } from "@/hooks/usePingOverview";
 
 const GAUGE_SEGMENTS = 14;
-// 列表网络列的延迟柱数:比卡片(24)少,配窄列宽,柱子仍清晰可读。
-const LIST_PING_BUCKETS = 12;
+
 
 function clamp01(value: number) {
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
@@ -229,7 +229,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const colorsVersion = useMetricColorsVersion();
   const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
   const model = useNodeCardModel(uuid, {
-    pingBucketCount: LIST_PING_BUCKETS,
+    pingBucketCount: HOMEPAGE_PING_BUCKET_COUNT,
   });
 
   if (!model.node) {
@@ -281,7 +281,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
 
   return (
     <Link
-      to={`/instance/${encodeURIComponent(uuid)}`}
+      to={`/server/${encodeURIComponent(uuid)}`}
       className={clsx("node-list-row", isOffline && "is-offline")}
       title={detailLabels.title}
       aria-label={rowLabel}
@@ -397,7 +397,7 @@ export function NodeListView({ uuids }: { uuids: string[] }) {
     <div className="node-list-scroll">
       <div className="node-list">
         <div className="node-list-row node-list-head" aria-hidden>
-          <div className="node-list-cell node-list-node">服务器</div>
+          <div className="node-list-cell node-list-node">节点</div>
           <div className="node-list-cell col-os">系统</div>
           <div className="node-list-cell col-metric">CPU</div>
           <div className="node-list-cell col-metric">内存</div>

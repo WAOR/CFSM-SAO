@@ -1,391 +1,48 @@
 import { z } from "zod";
-import { getRpc2Client, RpcResponseError } from "@/services/rpc2Client";
 import {
-  MeSchema,
-  NodeInfoSchema,
-  PublicConfigSchema,
-  AdminClientSchema,
-  LoadRecordSchema,
-  PingRecordSchema,
-  PingTaskSchema,
+  CfsmServerSchema,
+  HistoryRowSchema,
+  ServersResponseSchema,
+  SiteConfigSchema,
+  type CfsmServer,
+  type HistoryRow,
+  type LoadRecordsResponse,
   type Me,
   type NodeInfo,
-  type PublicConfig,
-  type AdminClient,
-  type LoadRecordsResponse,
   type PingRecordsResponse,
-  type PingTask,
   type PingTaskStats,
-} from "@/types/komari";
-import { fetchWithTimeout } from "@/utils/abort";
-import { inferHistoryIntervalSeconds } from "@/utils/historyRange";
+  type PublicConfig,
+  type SysConfig,
+} from "@/types/cfsm";
+import { getJwtToken } from "@/services/cfsm/config";
 import {
-  LOAD_LAST_AGGREGATION,
-  LOAD_METRIC_KEYS,
-  mergeLoadMetricSeries,
-  type LoadMetricSeries,
-} from "@/utils/loadMetrics";
+  ApiRequestError,
+  cfsmGet,
+  cfsmGetAll,
+  cfsmPost,
+  type RequestOptions,
+} from "@/services/cfsm/http";
 import {
-  mergePingMetricSeries,
-  pingTasksFromMetricStats,
-  reconcilePingMetricStats,
-  PING_LATENCY_METRIC,
-  PING_LOSS_METRIC,
-  type PingMetricSeries,
-} from "@/utils/pingMetrics";
-import {
-  fillMetricBoundaryGaps,
-  getMetricBoundaryRepairRange,
-  hasMetricBoundaryGap,
-  type MetricBoundaryAggregation,
-  type MetricBoundarySeries,
-} from "@/utils/metricBoundaryRepair";
-import {
-  RATE_DOWN_METRIC,
-  RATE_UP_METRIC,
-  TODAY_TRAFFIC_AGGREGATION,
-  TODAY_TRAFFIC_METRIC_KEYS,
-  TRAFFIC_DOWN_METRIC,
-  TRAFFIC_UP_METRIC,
-  type TrafficMetricSeries,
-} from "@/utils/trafficStats";
+  CARRIER_TASKS,
+  carrierPingTasks,
+  resolveCarrierNames,
+  historyRowToLoadRecord,
+  historyRowsToPingRecords,
+  historyRowsToPingSamples,
+  inferIntervalSeconds,
+  toNodeInfo,
+} from "@/services/cfsm/mappers";
+import { seedMeasuredHistory } from "@/services/pingLiveStore";
+import { resolvePreferredAppearance } from "@/utils/themeSettings";
 
-const ApiEnvelope = z
-  .object({
-    status: z.string().optional(),
-    message: z.string().optional(),
-    data: z.unknown().optional(),
-  })
-  .passthrough();
+export { ApiRequestError, DatabaseUpgradeRequiredError } from "@/services/cfsm/http";
 
-const RpcRecordsSchema = z
-  .object({
-    count: z.number().default(0),
-    records: z.unknown().optional(),
-    tasks: z.unknown().optional(),
-  })
-  .passthrough();
+/** 后端支持的历史查询时长档位（小时）。 */
+export const HISTORY_HOURS_OPTIONS = [0.167, 0.5, 1, 6, 12, 24, 48, 96, 168] as const;
 
-const MetricPointSchema = z
-  .object({
-    time: z.string(),
-    value: z.number().nullable().default(null),
-    count: z.number().default(0),
-  })
-  .passthrough();
+/** 未登录用户查询超过 24 小时会被拒绝。 */
+export const ANONYMOUS_MAX_HISTORY_HOURS = 24;
 
-const MetricSeriesSchema = z
-  .object({
-    metric_key: z.string(),
-    entity_id: z.string().default(""),
-    tags: z.record(z.string(), z.string()).optional(),
-    tag: z.record(z.string(), z.string()).optional(),
-    interval_seconds: z.number().default(0),
-    points: z.array(MetricPointSchema).default([]),
-  })
-  .passthrough();
-
-const MetricQueryResponseSchema = z
-  .object({
-    start: z.string().optional(),
-    end: z.string().optional(),
-    series: z.array(MetricSeriesSchema).default([]),
-  })
-  .passthrough();
-
-const PingMetricStatSchema = z
-  .object({
-    entity_id: z.string().default(""),
-    task_id: z.union([z.string(), z.number()]),
-    name: z.string().default(""),
-    type: z.string().default("icmp"),
-    interval: z.number().default(60),
-    total: z.number().default(0),
-    valid: z.number().default(0),
-    loss: z.number().default(0),
-    min: z.number().nullable().optional(),
-    max: z.number().nullable().optional(),
-    avg: z.number().nullable().optional(),
-    latest: z.number().nullable().optional(),
-    p50: z.number().nullable().optional(),
-    p99: z.number().nullable().optional(),
-    stddev: z.number().nullable().optional(),
-    p99_p50_ratio: z.number().default(0),
-  })
-  .passthrough();
-
-const PingMetricStatsResponseSchema = z
-  .object({
-    stats: z.array(PingMetricStatSchema).default([]),
-  })
-  .passthrough();
-
-const LOAD_RECORDS_PER_HOUR = 12;
-const PING_RECORDS_PER_HOUR = 240;
-const MAX_RPC_RECORDS = 20_000;
-const OVERVIEW_PING_MAX_COUNT = 4_000;
-const OVERVIEW_METRIC_MAX_POINTS = 24;
-const DETAIL_METRIC_MAX_POINTS = 500;
-const TODAY_TRAFFIC_TOTAL_MAX_POINTS = 12;
-const BACKEND_CAPABILITY_TIMEOUT_MS = 5_000;
-// 普通 HTTP GET(/api/nodes、/api/public、load/ping 兜底)自身没有传输超时,
-// 在这里统一兜底,half-open socket 能快速失败而不是无限挂住调用方。
-const DEFAULT_API_TIMEOUT_MS = 12_000;
-
-interface RpcRecordsPayload {
-  count?: number;
-  records?: unknown;
-  tasks?: unknown;
-}
-
-interface PingOverviewResponse {
-  records: PingRecordsResponse["records"];
-  tasks: PingTask[];
-  rangeStartMs?: number;
-  rangeEndMs?: number;
-  intervalSeconds?: number;
-  stats?: PingTaskStats[];
-}
-
-interface RequestRange {
-  rangeStartMs: number;
-  rangeEndMs: number;
-}
-
-interface ApiCallOptions {
-  signal?: AbortSignal;
-  timeout?: number;
-}
-
-// skipMetricQuery 只有 getLoadRecords 实现(跳过 metric 探测直读 records),
-// 不放进通用选项,避免"写了但不生效"的签名。
-interface LoadRecordsOptions extends ApiCallOptions {
-  skipMetricQuery?: boolean;
-}
-
-export class ApiRequestError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly path: string,
-  ) {
-    super(message);
-    this.name = "ApiRequestError";
-  }
-}
-
-export class MetricApiUnavailableError extends Error {
-  constructor() {
-    super("Metric API is unavailable on this server");
-    this.name = "MetricApiUnavailableError";
-  }
-}
-
-function normalizeRpcLatestStatus(
-  payload: unknown,
-): Record<string, unknown> {
-  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    const maybeRecords = (payload as Record<string, unknown>).records;
-    const wrapped = z.record(z.string(), z.unknown()).safeParse(maybeRecords);
-    if (wrapped.success) {
-      return wrapped.data;
-    }
-  }
-
-  const direct = z.record(z.string(), z.unknown()).safeParse(payload);
-  if (direct.success) {
-    return direct.data;
-  }
-
-  return {};
-}
-
-function getRecordsMaxCount(hours: number, recordsPerHour: number) {
-  const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 1;
-  return Math.min(
-    MAX_RPC_RECORDS,
-    Math.max(recordsPerHour, Math.ceil(safeHours * recordsPerHour)),
-  );
-}
-
-function createRequestRange(hours: number, now = Date.now()): RequestRange {
-  const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 1;
-  return {
-    rangeStartMs: now - safeHours * 60 * 60 * 1000,
-    rangeEndMs: now,
-  };
-}
-
-function getMetricPayloadRange(
-  payload: z.output<typeof MetricQueryResponseSchema>,
-  fallback: RequestRange,
-): RequestRange {
-  const start = Date.parse(payload.start ?? "");
-  const end = Date.parse(payload.end ?? "");
-  return {
-    rangeStartMs: Number.isFinite(start) ? start : fallback.rangeStartMs,
-    rangeEndMs: Number.isFinite(end) ? end : fallback.rangeEndMs,
-  };
-}
-
-async function apiGet<T>(
-  path: string,
-  schema: z.ZodType<T>,
-  options?: { signal?: AbortSignal; timeout?: number },
-): Promise<T> {
-  const resp = await fetchWithTimeout(
-    path,
-    {
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    },
-    options?.timeout ?? DEFAULT_API_TIMEOUT_MS,
-    options?.signal,
-  );
-  if (!resp.ok) {
-    throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
-  }
-  const json = (await resp.json()) as unknown;
-  const envelopeResult = ApiEnvelope.safeParse(json);
-  if (envelopeResult.success) {
-    const envelope = envelopeResult.data;
-    if (envelope.status?.toLowerCase() === "error") {
-      throw new ApiRequestError(
-        envelope.message || `Request ${path} failed`,
-        resp.status,
-        path,
-      );
-    }
-    if (Object.prototype.hasOwnProperty.call(envelope, "data")) {
-      const dataResult = schema.safeParse(envelope.data);
-      if (dataResult.success) return dataResult.data;
-      throw new Error(
-        `Schema mismatch on ${path}: envelope=${dataResult.error.issues[0]?.message ?? ""}`,
-      );
-    }
-  }
-  const rawResult = schema.safeParse(json);
-  if (rawResult.success) return rawResult.data;
-  // 两种解析错误都抛出来:enveloped 接口看 envelope 错误,裸 array/object 接口看 raw
-  // 错误,而这里无法判断接口本该返回哪种结构。
-  throw new Error(
-    `Schema mismatch on ${path}: envelope=${
-      envelopeResult.success ? "" : envelopeResult.error.issues[0]?.message ?? ""
-    }; raw=${rawResult.error.issues[0]?.message ?? ""}`,
-  );
-}
-
-async function rpcCall<T>(
-  method: string,
-  params: Record<string, unknown>,
-  schema: z.ZodType<T>,
-  options?: { timeout?: number; signal?: AbortSignal },
-): Promise<T> {
-  const payload = await getRpc2Client().call(method, params, options);
-  const parsed = schema.safeParse(payload);
-  if (!parsed.success) {
-    throw new Error(
-      `Schema mismatch on rpc:${method}: ${parsed.error.issues[0]?.message ?? ""}`,
-    );
-  }
-  return parsed.data;
-}
-
-// 丢掉单条解析失败的记录,而不是让整个数组抛错。否则一条坏记录会让 RPC normalize
-// 抛错,调用方捕获后兜底到完整 HTTP 请求 —— 一条坏数据就变成每次轮询都 RPC + HTTP
-// 双重拉取。
-function parseArrayLenient<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S>[] {
-  if (!Array.isArray(value)) return [];
-  const out: z.infer<S>[] = [];
-  for (const item of value) {
-    const parsed = schema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
-  }
-  return out;
-}
-
-function extractRpcRecords(payload: RpcRecordsPayload, key?: string): unknown[] {
-  if (Array.isArray(payload.records)) return payload.records;
-  if (!payload.records || typeof payload.records !== "object") return [];
-
-  const recordsByKey = payload.records as Record<string, unknown>;
-  if (key && Array.isArray(recordsByKey[key])) {
-    return recordsByKey[key];
-  }
-
-  return Object.values(recordsByKey).flatMap((value) =>
-    Array.isArray(value) ? value : [],
-  );
-}
-
-function normalizeRpcLoadRecords(
-  uuid: string,
-  payload: RpcRecordsPayload,
-  range?: RequestRange,
-): LoadRecordsResponse {
-  const records = parseArrayLenient(LoadRecordSchema, extractRpcRecords(payload, uuid));
-  const count = payload.count;
-  return {
-    count: typeof count === "number" && Number.isFinite(count) && count > 0 ? count : records.length,
-    records,
-    intervalSeconds: inferHistoryIntervalSeconds(records),
-    ...range,
-  };
-}
-
-function derivePingTasks(records: PingRecordsResponse["records"]): PingTask[] {
-  return Array.from(new Set(records.map((record) => record.task_id)))
-    .sort((a, b) => a - b)
-    .map((id) => ({
-      id,
-      interval: 60,
-      name: `任务 #${id}`,
-      loss: 0,
-      clients: [],
-      type: "icmp",
-      target: "",
-      weight: id,
-    }));
-}
-
-function normalizeRpcPingRecords(
-  uuid: string,
-  payload: RpcRecordsPayload,
-  range?: RequestRange,
-): PingRecordsResponse {
-  const records = parseArrayLenient(PingRecordSchema, extractRpcRecords(payload, uuid));
-  const parsedTasks = z.array(PingTaskSchema).safeParse(payload.tasks);
-  const tasks = parsedTasks.success ? parsedTasks.data : derivePingTasks(records);
-  const count = payload.count;
-  return {
-    count: typeof count === "number" && Number.isFinite(count) && count > 0 ? count : records.length,
-    records,
-    tasks,
-    ...range,
-  };
-}
-
-function normalizeRpcPingOverview(
-  payload: RpcRecordsPayload,
-  range?: RequestRange,
-): PingOverviewResponse {
-  const records = parseArrayLenient(PingRecordSchema, extractRpcRecords(payload));
-  const parsedTasks = z.array(PingTaskSchema).safeParse(payload.tasks);
-  return {
-    records,
-    tasks: parsedTasks.success ? parsedTasks.data : derivePingTasks(records),
-    ...range,
-  };
-}
-
-let metricQueryApiAvailable: boolean | null = null;
-let metricQueryProbeRequest: Promise<boolean> | null = null;
-let pingMetricStatsApiAvailable: boolean | null = null;
-let publicPingTasksCache: PingTask[] | null = null;
-let publicPingTasksCachedAt = 0;
-let publicPingTasksRequest: Promise<PingTask[]> | null = null;
-
-// 降级链全程静默会让「长期走兼容路径」与「一切正常」无法区分,每类降级警告一次。
 const degradeWarned = new Set<string>();
 export function warnDegradedOnce(key: string, message: string) {
   if (degradeWarned.has(key)) return;
@@ -393,816 +50,631 @@ export function warnDegradedOnce(key: string, message: string) {
   console.warn(`[LuminaPlus] ${message}`);
 }
 
-function isMissingMetricMethod(error: unknown) {
-  // JSON-RPC 标准的 Method not found 是 -32601；文本匹配只兜底非标准实现。
-  if (error instanceof RpcResponseError && error.code === -32601) return true;
-  if (!(error instanceof Error)) return false;
-  return /method.*(?:not found|unknown|registered)|(?:not found|unknown).*method/i.test(
-    error.message,
-  );
+/** serverId → 拥有它的后端地址。多站部署时详情/历史必须打到正确的站点。 */
+const serverBaseIndex = new Map<string, string>();
+
+export function getServerApiBase(serverId: string): string | undefined {
+  return serverBaseIndex.get(serverId);
 }
 
-function requestDeadline(timeout?: number) {
-  return typeof timeout === "number" && Number.isFinite(timeout)
-    ? Date.now() + Math.max(0, timeout)
-    : null;
+/**
+ * 只记快照最终采用的那份归属（同一 ID 多站重复时是第一个站）。按各站原始列表逐个写的话，
+ * 后面的站会把前面的覆盖掉：卡片和 WS 走第一个站，详情和历史却打到另一个站。
+ */
+function rememberServerBases(baseByServerId: ReadonlyMap<string, string>) {
+  for (const [serverId, base] of baseByServerId) serverBaseIndex.set(serverId, base);
 }
 
-function remainingRequestTimeout(deadline: number | null) {
-  return deadline == null ? undefined : Math.max(0, deadline - Date.now());
-}
-
-function waitForSharedRequest<T>(
-  request: Promise<T>,
-  signal?: AbortSignal,
-  timeout?: number,
-): Promise<T> {
-  if (signal?.aborted) {
-    return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-  }
-  if (timeout !== undefined && timeout <= 0) {
-    return Promise.reject(new DOMException("Request timed out", "TimeoutError"));
-  }
-  if (!signal && timeout === undefined) return request;
-
-  return new Promise<T>((resolve, reject) => {
-    let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
-    const cleanup = () => {
-      if (timer !== undefined) globalThis.clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-    };
-    const onAbort = () => {
-      cleanup();
-      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
-    };
-
-    signal?.addEventListener("abort", onAbort, { once: true });
-    if (timeout !== undefined) {
-      timer = globalThis.setTimeout(() => {
-        cleanup();
-        reject(new DOMException("Request timed out", "TimeoutError"));
-      }, timeout);
+/** 把后端时长参数收敛到受支持的档位，避免 400。 */
+export function normalizeHistoryHours(hours: number): number {
+  if (!Number.isFinite(hours) || hours <= 0) return 24;
+  let closest = HISTORY_HOURS_OPTIONS[0] as number;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const option of HISTORY_HOURS_OPTIONS) {
+    const delta = Math.abs(option - hours);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      closest = option;
     }
-    request.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error) => {
-        cleanup();
-        reject(error);
-      },
-    );
-  });
-}
-
-async function probeMetricQueryApi() {
-  try {
-    // 空参数只触发参数校验，不读取指标数据；除 Method not found 外的 RPC 错误均说明方法存在。
-    await getRpc2Client().call("public:queryMetrics", {}, {
-      timeout: BACKEND_CAPABILITY_TIMEOUT_MS,
-    });
-    return true;
-  } catch (error) {
-    if (isMissingMetricMethod(error)) return false;
-    if (error instanceof RpcResponseError) return true;
-    throw error;
   }
+  return closest;
 }
 
-function loadMetricQueryCapability() {
-  if (metricQueryApiAvailable != null) return Promise.resolve(metricQueryApiAvailable);
-  if (metricQueryProbeRequest) return metricQueryProbeRequest;
+/* ------------------------------------------------------------------ *
+ * 站点配置
+ * ------------------------------------------------------------------ */
 
-  metricQueryProbeRequest = probeMetricQueryApi()
-    .then((available) => {
-      metricQueryApiAvailable = available;
-      return available;
-    })
-    .catch((error) => {
-      // 能力探测失败不等于后端没有该接口；当前调用走兼容路径，后续请求仍可重试探测。
-      warnDegradedOnce(
-        "metric-capability-probe",
-        error instanceof Error
-          ? `Metric API 能力探测失败,已使用兼容路径: ${error.message}`
-          : "Metric API 能力探测失败,已使用兼容路径",
-      );
-      return false;
-    })
-    .finally(() => {
-      metricQueryProbeRequest = null;
-    });
-  return metricQueryProbeRequest;
+export async function getSiteConfig(options?: RequestOptions) {
+  return cfsmGet("/api/config", SiteConfigSchema, options);
 }
 
-function waitForMetricQueryCapability(options?: ApiCallOptions) {
-  return waitForSharedRequest(
-    loadMetricQueryCapability(),
-    options?.signal,
-    options?.timeout,
-  );
-}
+/**
+ * 刚「保存到后端」之后多久之内，读 `/api/config` 时以自己写进去的 theme_options 为准。
+ *
+ * 后端的站点设置在每个 Worker isolate 里各缓存 120 秒（`SITE_SETTINGS_CACHE_TTL_MS`），保存只清得掉
+ * 处理这次写入的那一个。接下来两分钟里的读取可能落到别的 isolate、拿回旧的一份：设置页变回「有未保存的
+ * 改动」，首页退回旧设置 —— 而本机覆盖在保存成功时已经丢了，这台设备就看不到刚发布的配置了。
+ * 多留 30 秒余量。
+ */
+const THEME_OPTIONS_WRITE_TRUST_MS = 150_000;
+let recentThemeOptionsWrite: { at: number; themeOptions: Record<string, unknown> } | null = null;
 
-async function queryPingMetricStatsPayload(
-  params: Record<string, unknown>,
-  options?: ApiCallOptions,
-): Promise<z.output<typeof PingMetricStatsResponseSchema> | null> {
-  const deadline = requestDeadline(options?.timeout);
-  const metricQueryAvailable = await waitForMetricQueryCapability({
-    signal: options?.signal,
-    timeout: remainingRequestTimeout(deadline),
-  });
-  if (!metricQueryAvailable || pingMetricStatsApiAvailable === false) return null;
-
-  try {
-    return (await rpcCall(
-      "public:getPingMetricStats",
-      params,
-      PingMetricStatsResponseSchema,
-      { signal: options?.signal, timeout: remainingRequestTimeout(deadline) },
-    )) as z.output<typeof PingMetricStatsResponseSchema>;
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    if (isMissingMetricMethod(error)) pingMetricStatsApiAvailable = false;
-    warnDegradedOnce("ping-stats", "Ping 统计接口失败,已由 records 本地兜底计算");
-    return null;
+function resolveThemeOptions(fetched: Record<string, unknown>): Record<string, unknown> {
+  if (!recentThemeOptionsWrite) return fetched;
+  if (Date.now() - recentThemeOptionsWrite.at > THEME_OPTIONS_WRITE_TRUST_MS) {
+    recentThemeOptionsWrite = null;
+    return fetched;
   }
+  return recentThemeOptionsWrite.themeOptions;
 }
 
-async function queryMetricPayload(
-  params: Record<string, unknown>,
-  signal?: AbortSignal,
-  timeout?: number,
-): Promise<z.output<typeof MetricQueryResponseSchema>> {
-  const deadline = requestDeadline(timeout);
-  const available = await waitForMetricQueryCapability({
-    signal,
-    timeout: remainingRequestTimeout(deadline),
-  });
-  if (!available) {
-    throw new MetricApiUnavailableError();
-  }
-
-  try {
-    const payload = await rpcCall(
-      "public:queryMetrics",
-      params,
-      MetricQueryResponseSchema,
-      { signal, timeout: remainingRequestTimeout(deadline) },
-    );
-    return payload as z.output<typeof MetricQueryResponseSchema>;
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    if (isMissingMetricMethod(error)) {
-      metricQueryApiAvailable = false;
-      throw new MetricApiUnavailableError();
-    }
-    throw error;
-  }
+/** 测试用。 */
+export function resetRecentThemeOptionsWrite(): void {
+  recentThemeOptionsWrite = null;
 }
 
-function loadPublicPingTasks() {
-  if (publicPingTasksCache && Date.now() - publicPingTasksCachedAt < 60_000) {
-    return Promise.resolve(publicPingTasksCache);
-  }
-  if (publicPingTasksRequest) return publicPingTasksRequest;
+/** `POST /api/theme_options` 的响应体（`{ success, theme_options, message }`）。 */
+const ThemeOptionsSaveSchema = z
+  .object({
+    success: z.boolean().default(true),
+    theme_options: z.record(z.string(), z.unknown()).default({}),
+    message: z.string().catch(""),
+  })
+  .passthrough();
 
-  publicPingTasksRequest = rpcCall(
-    "public:getPublicPingTasks",
-    {},
-    z.array(PingTaskSchema),
-  )
-    .then((tasks) => {
-      const parsed = tasks as PingTask[];
-      if (parsed.length > 0) {
-        publicPingTasksCache = parsed;
-        publicPingTasksCachedAt = Date.now();
-      } else {
-        publicPingTasksCache = null;
-        publicPingTasksCachedAt = 0;
-      }
-      return parsed;
-    })
-    .finally(() => {
-      publicPingTasksRequest = null;
-    });
-  return publicPingTasksRequest;
-}
-
-export function prewarmPingOverviewDependencies() {
-  void loadMetricQueryCapability().catch(() => undefined);
-  void loadPublicPingTasks().catch(() => undefined);
-}
-
-function normalizePingMetricStats(
-  payload: z.output<typeof PingMetricStatsResponseSchema>,
-): PingTaskStats[] {
-  const out: PingTaskStats[] = [];
-  for (const item of payload.stats) {
-    const taskId = Number.parseInt(String(item.task_id), 10);
-    if (!Number.isFinite(taskId) || taskId <= 0 || !item.entity_id) continue;
-    out.push({
-      client: item.entity_id,
-      taskId,
-      name: item.name,
-      type: item.type,
-      interval: item.interval,
-      total: item.total,
-      valid: item.valid,
-      loss: item.loss,
-      min: item.min ?? null,
-      max: item.max ?? null,
-      avg: item.avg ?? null,
-      latest: item.latest ?? null,
-      p50: item.p50 ?? null,
-      p99: item.p99 ?? null,
-      stddev: item.stddev ?? null,
-      p99P50Ratio: item.p99_p50_ratio,
-    });
-  }
-  return out;
-}
-
-type MetricPayloadSeries = z.output<typeof MetricSeriesSchema>;
-
-function rawMetricPoints(item: MetricPayloadSeries) {
-  return item.points.map((point) => ({
-    ...point,
-    // 支持混合查询的后端可在边界小窗口同时返回 raw 与 rollup；
-    // rollup 的 count 是真实样本数，不能强制改成 1。旧后端 raw 点未返回 count 时才回退为 1。
-    count: point.count > 0 ? point.count : point.value == null ? 0 : 1,
-  }));
-}
-
-async function repairMetricBoundary<T extends MetricBoundarySeries>(
-  aggregateSeries: T[],
-  metricPayload: z.output<typeof MetricQueryResponseSchema>,
-  requestRange: RequestRange,
-  rawParams: Record<string, unknown>,
-  mapRawSeries: (item: MetricPayloadSeries, intervalSeconds: number) => T,
-  aggregationByMetric: Partial<Record<string, MetricBoundaryAggregation>> = {},
-  signal?: AbortSignal,
-  timeout?: number,
+/**
+ * 把第三方主题配置写到站点级（后端 `appearance_options.theme_options`）。
+ *
+ * 后端 2.1.1 专门给第三方主题开的写入口：只更新 theme_options，不碰 site_options，也不覆盖
+ * 站点标题 / 背景图 / CSP / 自定义脚本等其它外观设置。仅登录站长可用（需 Bearer JWT，
+ * 站点开了全局验证时还需 Turnstile 凭证，两者都由 http 层从 localStorage 复用）。这条替代了
+ * 「复制 JSON → 手动粘到后台『外观设置 → 主题自定义配置』」的老路；访客配置仍只进 localStorage。
+ *
+ * body 里的 `themeOptions` 必须是非数组对象，否则后端返回 `400 invalidThemeOptionsFormat`
+ * —— 调用方传的是 `buildSiteThemeOptions` 拼的快照，天然满足。成功后一段时间内读 config 以这份为准，
+ * 见 {@link THEME_OPTIONS_WRITE_TRUST_MS}。
+ */
+export async function saveThemeOptions(
+  themeOptions: Record<string, unknown>,
+  options?: RequestOptions,
 ) {
-  const payloadRange = getMetricPayloadRange(metricPayload, requestRange);
-  const repairRange = getMetricBoundaryRepairRange(
-    payloadRange.rangeStartMs,
-    payloadRange.rangeEndMs,
-  );
-  if (!repairRange || !hasMetricBoundaryGap(aggregateSeries, repairRange)) {
-    return aggregateSeries;
-  }
-
-  const deadline = requestDeadline(timeout);
-  try {
-    const rawPayload = await queryMetricPayload(
-      {
-        ...rawParams,
-        start: new Date(repairRange.startMs).toISOString(),
-        end: new Date(repairRange.endMs).toISOString(),
-        downsample: false,
-        fill_empty: false,
-      },
-      signal,
-      remainingRequestTimeout(deadline),
-    );
-    const fallbackInterval = Math.max(
-      0,
-      ...aggregateSeries.map((item) => item.intervalSeconds ?? 0),
-    );
-    const rawSeries = rawPayload.series.map((item) =>
-      mapRawSeries(item, fallbackInterval),
-    );
-    return fillMetricBoundaryGaps(
-      aggregateSeries,
-      rawSeries,
-      aggregationByMetric,
-    ).series;
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    warnDegradedOnce("boundary-repair", "边界补点查询失败,保留聚合序列(尾部可能缺最新桶)");
-    return aggregateSeries;
-  }
-}
-
-async function getLoadMetricData(
-  uuid: string,
-  hours: number,
-  signal?: AbortSignal,
-  timeout?: number,
-): Promise<LoadRecordsResponse> {
-  const requestRange = createRequestRange(hours);
-  const metricPayload = await queryMetricPayload(
-    {
-      hours,
-      entity_ids: [uuid],
-      metric_keys: LOAD_METRIC_KEYS,
-      max_points: DETAIL_METRIC_MAX_POINTS,
-      aggregation: "avg",
-      aggregation_by_metric: LOAD_LAST_AGGREGATION,
-      fill_empty: false,
-    },
-    signal,
-    timeout,
-  );
-  const series: LoadMetricSeries[] = metricPayload.series.map((item) => ({
-    metricKey: item.metric_key,
-    client: item.entity_id,
-    intervalSeconds: item.interval_seconds,
-    points: item.points,
-  }));
-  const records = mergeLoadMetricSeries(series);
-  const intervalSeconds = Math.max(
-    0,
-    ...metricPayload.series.map((item) => item.interval_seconds),
-  );
-  return {
-    count: records.length,
-    records,
-    ...getMetricPayloadRange(metricPayload, requestRange),
-    intervalSeconds: intervalSeconds > 0 ? intervalSeconds : undefined,
-  };
-}
-
-async function getPingMetricData({
-  hours,
-  entityIds,
-  taskId,
-  maxPoints,
-  includeStats = false,
-  repairBoundary = false,
-  signal,
-  timeout,
-}: {
-  hours: number;
-  entityIds?: string[];
-  taskId?: number;
-  maxPoints: number;
-  includeStats?: boolean;
-  repairBoundary?: boolean;
-  signal?: AbortSignal;
-  timeout?: number;
-}): Promise<PingRecordsResponse> {
-  const deadline = requestDeadline(timeout);
-  const metricQueryAvailable = await waitForMetricQueryCapability({
-    signal,
-    timeout: remainingRequestTimeout(deadline),
-  });
-  if (!metricQueryAvailable) {
-    throw new MetricApiUnavailableError();
-  }
-
-  const requestRange = createRequestRange(hours);
-  const commonParams = {
-    hours,
-    ...(entityIds?.length ? { entity_ids: entityIds } : {}),
-    ...(taskId != null ? { task_id: taskId } : {}),
-    max_points: maxPoints,
-  };
-
-  const statsRequest = includeStats
-    ? queryPingMetricStatsPayload(commonParams, {
-        signal,
-        timeout: remainingRequestTimeout(deadline),
-      })
-    : Promise.resolve(null);
-  const [metricPayload, statsPayload, publicTasks] = await Promise.all([
-    queryMetricPayload(
-      {
-        ...commonParams,
-        metric_keys: [PING_LATENCY_METRIC, PING_LOSS_METRIC],
-        ...(taskId != null ? { tags: { task_id: String(taskId) } } : {}),
-        aggregation: "avg",
-        fill_empty: false,
-      },
-      signal,
-      remainingRequestTimeout(deadline),
-    ),
-    statsRequest,
-    loadPublicPingTasks().catch(() => {
-      warnDegradedOnce("public-ping-tasks", "公开 Ping 任务列表获取失败,任务名将按 records 推导");
-      return null;
-    }),
-  ]);
-  let series: PingMetricSeries[] = metricPayload.series.map((item) => ({
-    metricKey: item.metric_key,
-    client: item.entity_id,
-    tags: item.tags ?? item.tag ?? {},
-    intervalSeconds: item.interval_seconds,
-    points: item.points,
-  }));
-  if (repairBoundary && entityIds?.length) {
-    series = await repairMetricBoundary(
-      series,
-      metricPayload,
-      requestRange,
-      {
-        entity_ids: entityIds,
-        metric_keys: [PING_LATENCY_METRIC, PING_LOSS_METRIC],
-        ...(taskId != null ? { tags: { task_id: String(taskId) } } : {}),
-      },
-      (item, intervalSeconds) => ({
-        metricKey: item.metric_key,
-        client: item.entity_id,
-        tags: item.tags ?? item.tag ?? {},
-        intervalSeconds,
-        points: rawMetricPoints(item),
-      }),
-      {},
-      signal,
-      remainingRequestTimeout(deadline),
-    );
-  }
-  const records = mergePingMetricSeries(series);
-  const stats = reconcilePingMetricStats(
-    statsPayload ? normalizePingMetricStats(statsPayload) : [],
-    records,
-  );
-  const intervalSeconds = Math.max(
-    0,
-    ...metricPayload.series.map((item) => item.interval_seconds),
-  );
-  const observedTaskIds = new Set([
-    ...records.map((record) => record.task_id),
-    ...stats.map((stat) => stat.taskId),
-  ]);
-  const statByTask = new Map(stats.map((stat) => [stat.taskId, stat] as const));
-  const tasks = publicTasks
-    ?.filter((task) => observedTaskIds.has(task.id))
-    .map((task) => ({
-      ...task,
-      loss: statByTask.get(task.id)?.loss ?? task.loss,
-    }));
-  const statsTasks = pingTasksFromMetricStats(stats);
-  return {
-    count: records.length,
-    records,
-    ...getMetricPayloadRange(metricPayload, requestRange),
-    intervalSeconds: intervalSeconds > 0 ? intervalSeconds : undefined,
-    tasks:
-      tasks && tasks.length > 0
-        ? tasks
-        : statsTasks.length > 0
-          ? statsTasks
-          : derivePingTasks(records),
-    stats,
-  };
-}
-
-export async function getMe(options?: ApiCallOptions): Promise<Me> {
-  // 必须 cast:zod `.passthrough()` schema 经 apiGet 推断出的是 input 类型(默认字段
-  // 变可选),这里要重新收窄回来。
-  return (await apiGet("/api/me", MeSchema, options)) as Me;
-}
-
-export async function getPublic(options?: ApiCallOptions): Promise<PublicConfig> {
-  return (await apiGet("/api/public", PublicConfigSchema, options)) as PublicConfig;
-}
-
-export async function getNodesLatestStatus(
-  uuids?: string[],
-  options?: { timeout?: number; signal?: AbortSignal },
-): Promise<Record<string, unknown>> {
-  const payload = await rpcCall(
-    "common:getNodesLatestStatus",
-    uuids && uuids.length > 0 ? { uuids } : {},
-    z.unknown(),
+  const result = await cfsmPost(
+    "/api/theme_options",
+    { theme_options: themeOptions },
+    ThemeOptionsSaveSchema,
     options,
   );
-  return normalizeRpcLatestStatus(payload);
+  // 后端回的是它实际存下的那份；万一没回（空对象）就按提交的算。
+  const saved = Object.keys(result.theme_options).length > 0 ? result.theme_options : themeOptions;
+  recentThemeOptionsWrite = { at: Date.now(), themeOptions: saved };
+  return { ...result, theme_options: saved };
 }
 
-export async function getNodes(options?: ApiCallOptions): Promise<NodeInfo[]> {
-  // 走 common:getNodes（RPC2）：它按 SendIpAddrToGuest 设置下发 ipv4/ipv6（管理员全量 /
-  // 访客打码），所以前端能显示 V4/V6；/api/nodes 则永远抹掉 IP，拿不到。
-  try {
-    const map = await rpcCall(
-      "common:getNodes",
-      {},
-      z.record(z.string(), NodeInfoSchema),
-      options,
-    );
-    return Object.values(map) as NodeInfo[];
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    // RPC 不可用时兜底回旧的 HTTP 接口（拿不到 IP，但节点列表照常加载）。
-    return (await apiGet("/api/nodes", z.array(NodeInfoSchema), options)) as NodeInfo[];
+/**
+ * 站点配置的展示模型。CF-Server-Monitor 没有站点简介字段，描述留空。
+ */
+export async function getPublic(options?: RequestOptions): Promise<PublicConfig> {
+  const config = await getSiteConfig(options);
+  return {
+    sitename: config.site_title,
+    description: "",
+    version: config.version,
+    latestVersion: config.last_workers_version,
+    private_site: !config.is_public,
+    turnstile_enabled: config.turnstile_enabled,
+    turnstile_site_key: config.turnstile_site_key,
+    verified: config.verified,
+    // 站点级的主题设置（本机覆盖叠在它上面）。刚保存过就先信自己写进去的，见 THEME_OPTIONS_WRITE_TRUST_MS。
+    theme_settings: resolveThemeOptions(config.theme_options),
+    latencyWindow: config.latency_window,
+    frontendWsTimeoutMinutes: config.frontend_ws_timeout_minutes,
+    preferredAppearance: resolvePreferredAppearance(config.preferred_theme),
+    // 线路名可由站长在后端改；老后端不下发这几个字段，逐条回退到主题默认名。
+    // 后四条（2.8.5 Beta4 新增）的键名风格和前四条不一样，是 node_N_name。
+    carrierNames: resolveCarrierNames({
+      ct: config.custom_ct_name,
+      cu: config.custom_cu_name,
+      cm: config.custom_cm_name,
+      bd: config.custom_bd_name,
+      node_1: config.node_1_name,
+      node_2: config.node_2_name,
+      node_3: config.node_3_name,
+      node_4: config.node_4_name,
+    }),
+    sys: {
+      show_price: true,
+      show_expire: true,
+      show_tf: true,
+      show_time: true,
+      long_history_points: config.long_history_points,
+    } as SysConfig,
+  };
+}
+
+/**
+ * CF-Server-Monitor 没有 `/api/me`：登录态由 `/api/config` 的 `authorization` 决定，
+ * 令牌本身存在 localStorage 里由 `/admin` 登录时写入。
+ */
+export async function getMe(options?: RequestOptions): Promise<Me> {
+  if (!getJwtToken()) {
+    return { logged_in: false, username: "", uuid: "" };
   }
+  const config = await getSiteConfig(options);
+  return {
+    logged_in: config.authorization,
+    username: config.authorization ? "admin" : "",
+    uuid: "",
+  };
 }
 
-export async function getAdminClients(options?: ApiCallOptions): Promise<AdminClient[]> {
-  return (await apiGet("/api/admin/client/list", z.array(AdminClientSchema), options)) as AdminClient[];
+/* ------------------------------------------------------------------ *
+ * 服务器列表
+ * ------------------------------------------------------------------ */
+
+export interface ServersSnapshot {
+  servers: CfsmServer[];
+  /** serverId → 所属后端，供 WebSocket 与详情请求分流。 */
+  baseByServerId: Map<string, string>;
+  sysConfig: SysConfig;
+  regionStats: Record<string, number>;
+  stats: AggregatedStats;
+  /** 有后端没返回数据（全部失败时直接抛错，走不到这里）。 */
+  partial: boolean;
+  /** 这次没返回数据的后端（多站部署）。它们名下的节点不在 `servers` 里，但不代表被删了。 */
+  failedBases: string[];
+}
+
+export interface AggregatedStats {
+  total: number;
+  online: number;
+  offline: number;
+  globalSpeedIn: number;
+  globalSpeedOut: number;
+  globalNetTx: number;
+  globalNetRx: number;
+}
+
+const STATS_KEYS = [
+  "total",
+  "online",
+  "offline",
+  "globalSpeedIn",
+  "globalSpeedOut",
+  "globalNetTx",
+  "globalNetRx",
+] as const;
+
+function emptyStats(): AggregatedStats {
+  return {
+    total: 0,
+    online: 0,
+    offline: 0,
+    globalSpeedIn: 0,
+    globalSpeedOut: 0,
+    globalNetTx: 0,
+    globalNetRx: 0,
+  };
+}
+
+/**
+ * 拉取全部后端的服务器列表并合并。多站部署下单站失败不阻塞其它站，
+ * 但全部失败时抛出第一个错误，让上层进入错误态而不是渲染空列表。
+ */
+export async function getServersSnapshot(
+  options?: Omit<RequestOptions, "base">,
+): Promise<ServersSnapshot> {
+  const results = await cfsmGetAll("/api/servers", ServersResponseSchema, options);
+
+  const servers: CfsmServer[] = [];
+  const baseByServerId = new Map<string, string>();
+  const regionStats: Record<string, number> = {};
+  const stats = emptyStats();
+  const failedBases: string[] = [];
+  let sysConfig: SysConfig | null = null;
+  let succeeded = 0;
+  let firstError: unknown = null;
+
+  for (const result of results) {
+    if (!result.data) {
+      firstError ??= result.error;
+      failedBases.push(result.base);
+      continue;
+    }
+    succeeded += 1;
+
+    const seen = new Set<string>();
+    for (const server of result.data.servers) {
+      // 同一 ID 在多站同时出现时以第一个站为准，避免重复卡片。
+      if (!server.id || seen.has(server.id) || baseByServerId.has(server.id)) continue;
+      seen.add(server.id);
+      baseByServerId.set(server.id, result.base);
+      servers.push(server);
+    }
+
+    for (const [region, count] of Object.entries(result.data.regionStats)) {
+      regionStats[region] = (regionStats[region] ?? 0) + Number(count ?? 0);
+    }
+    for (const key of STATS_KEYS) {
+      stats[key] += Number(result.data.stats[key] ?? 0);
+    }
+    // 站点开关取第一个成功站点的配置。
+    sysConfig ??= result.data.sysConfig;
+  }
+
+  if (succeeded === 0) {
+    throw firstError instanceof Error
+      ? firstError
+      : new Error("All API bases failed to return /api/servers");
+  }
+  rememberServerBases(baseByServerId);
+
+  return {
+    servers,
+    baseByServerId,
+    sysConfig: sysConfig ?? ({} as SysConfig),
+    regionStats,
+    stats,
+    partial: failedBases.length > 0,
+    failedBases,
+  };
+}
+
+/**
+ * 一次性的节点静态信息列表。设置页等只需要 meta 的场景用它，
+ * 而不是启动常驻实时 store。
+ */
+export async function getNodes(
+  options?: Omit<RequestOptions, "base">,
+): Promise<NodeInfo[]> {
+  const snapshot = await getServersSnapshot(options);
+  return snapshot.servers
+    .map(toNodeInfo)
+    .sort((left, right) => left.weight - right.weight);
+}
+
+/** 单台服务器详情。带 `latestReportUpdates`，主题目前只用其中的服务器字段。 */
+export async function getServerDetail(
+  serverId: string,
+  options?: RequestOptions,
+): Promise<CfsmServer> {
+  return cfsmGet(
+    `/api/server?${new URLSearchParams({ id: serverId })}`,
+    CfsmServerSchema,
+    { ...options, base: options?.base ?? getServerApiBase(serverId) },
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * 历史指标
+ * ------------------------------------------------------------------ */
+
+const HistoryResponseSchema = z.array(HistoryRowSchema).catch([]);
+
+async function requestHistoryRows(
+  serverId: string,
+  hours: number,
+  options?: RequestOptions,
+): Promise<HistoryRow[]> {
+  const params = new URLSearchParams({
+    id: serverId,
+    hours: String(hours),
+  });
+  const rows = await cfsmGet(`/api/history/all?${params}`, HistoryResponseSchema, {
+    ...options,
+    base: options?.base ?? getServerApiBase(serverId),
+  });
+  // 后端按时间倒序或正序都可能，图表要求升序。
+  return [...rows].sort((left, right) => left.timestamp - right.timestamp);
+}
+
+/**
+ * 历史查询的短期缓存。
+ *
+ * CF-Server-Monitor 没有批量历史接口，一台节点一次请求；而首页 Ping 概览会为各条线路
+ * 分别取数据。缓存让同一节点同一时长的并发/连续请求只打一次后端。
+ */
+const HISTORY_CACHE_TTL_MS = 20_000;
+
+interface HistoryCacheEntry {
+  fetchedAt: number;
+  rows: HistoryRow[];
+}
+
+const historyCache = new Map<string, HistoryCacheEntry>();
+const historyInFlight = new Map<string, Promise<HistoryRow[]>>();
+
+function historyCacheKey(serverId: string, hours: number) {
+  return `${serverId}@${hours}`;
+}
+
+export function clearHistoryCache(): void {
+  historyCache.clear();
+  historyInFlight.clear();
+}
+
+/**
+ * 详情页查回来的历史，顺手回灌首页延迟条的缓冲区。
+ *
+ * 首页自己不许查历史（逐节点查会让后端 D1 读行翻几十倍，见 README 的硬约束），但用户主动
+ * 点开详情页时这份数据已经在手上了 —— 白扔可惜：`/api/servers` 的窗口是向后填充出来的，
+ * 而这里是原始采样，看过的节点首页那一小时就能用真数据。缓冲区只留一小时，更早的会被丢掉。
+ */
+function backfillPingBuffer(serverId: string, rows: HistoryRow[]): void {
+  if (rows.length === 0) return;
+  seedMeasuredHistory(serverId, historyRowsToPingSamples(rows));
+}
+
+async function fetchHistoryRows(
+  serverId: string,
+  hours: number,
+  options?: RequestOptions & { cache?: boolean },
+): Promise<HistoryRow[]> {
+  const normalizedHours = normalizeHistoryHours(hours);
+  if (options?.cache === false) {
+    const rows = await requestHistoryRows(serverId, normalizedHours, options);
+    backfillPingBuffer(serverId, rows);
+    return rows;
+  }
+
+  const key = historyCacheKey(serverId, normalizedHours);
+  const cached = historyCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < HISTORY_CACHE_TTL_MS) {
+    return cached.rows;
+  }
+
+  const inFlight = historyInFlight.get(key);
+  // 复用在途请求时不能沿用调用方的 signal，否则一个组件卸载会取消所有等待者。
+  if (inFlight) return inFlight;
+
+  const request = requestHistoryRows(serverId, normalizedHours, {
+    ...options,
+    signal: undefined,
+  })
+    .then((rows) => {
+      historyCache.set(key, { fetchedAt: Date.now(), rows });
+      backfillPingBuffer(serverId, rows);
+      return rows;
+    })
+    .finally(() => {
+      historyInFlight.delete(key);
+    });
+  historyInFlight.set(key, request);
+  return request;
+}
+
+/** 手动刷新首页延迟条时的并发上限：节点多的站点别一次把请求全打出去。 */
+const PING_HISTORY_REFRESH_CONCURRENCY = 4;
+/** 手动刷新只拉一小时：首页延迟条本来就只画一小时，多拉的行是白读。 */
+const PING_HISTORY_REFRESH_HOURS = 1;
+
+export interface PingHistoryRefreshResult {
+  requested: number;
+  succeeded: number;
+  failed: number;
+}
+
+/**
+ * 手动刷新首页延迟条：逐台拉一小时历史回灌本地缓冲。
+ *
+ * **这是首页唯一允许发起 `/api/history/all` 的入口，且只能由用户点击触发。**
+ * 自动轮询仍然禁止 —— 读行量差 60 倍：按线上实测（7 台、上报间隔 30/60 秒）点一次约 780 行，
+ * 而每分钟自动拉一次是每小时 4.7 万行。后端对 1 小时档有 60 秒服务端缓存（响应带 `X-Cache`），
+ * 连点几下不会真的重复读库。
+ *
+ * 效果等同于「把每台节点的详情页都点开一遍」：走的是同一个 `fetchHistoryRows` →
+ * `backfillPingBuffer` 通道，不是另一套取数逻辑。
+ *
+ * 绕开前端那 20 秒缓存（`cache: false`）—— 用户按刷新就是想要新的，拿缓存糊弄没有意义。
+ */
+export async function refreshPingHistory(
+  serverIds: readonly string[],
+  options?: RequestOptions,
+): Promise<PingHistoryRefreshResult> {
+  const ids = [...new Set(serverIds.filter((id) => typeof id === "string" && id.length > 0))];
+  if (ids.length === 0) return { requested: 0, succeeded: 0, failed: 0 };
+
+  let cursor = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const index = cursor;
+      cursor += 1;
+      const serverId = ids[index];
+      if (serverId === undefined) return;
+      try {
+        await fetchHistoryRows(serverId, PING_HISTORY_REFRESH_HOURS, {
+          ...options,
+          cache: false,
+        });
+        succeeded += 1;
+      } catch {
+        // 单台失败不该拖垮整批：某台节点历史查不到（刚加入、分区 id 没建好）时，
+        // 其余节点照常回灌。
+        failed += 1;
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(PING_HISTORY_REFRESH_CONCURRENCY, ids.length) },
+      () => worker(),
+    ),
+  );
+
+  return { requested: ids.length, succeeded, failed };
 }
 
 export async function getLoadRecords(
   uuid: string,
   hours = 6,
-  options?: LoadRecordsOptions,
+  options?: RequestOptions,
 ): Promise<LoadRecordsResponse> {
-  const requestRange = createRequestRange(hours);
-  if (!options?.skipMetricQuery) {
-    try {
-      return await getLoadMetricData(uuid, hours, options?.signal, options?.timeout);
-    } catch (error) {
-      if (options?.signal?.aborted) throw error;
-      // 旧版后端没有 public metric API，或新接口暂时失败时回退兼容记录接口。
-      warnDegradedOnce(
-        "load-records",
-        error instanceof MetricApiUnavailableError
-          ? "检测到旧版后端,负载数据已使用兼容 records 接口"
-          : "负载 metrics 查询异常,已回退兼容 records 接口",
-      );
-    }
-  }
-
-  try {
-    const maxCount = getRecordsMaxCount(hours, LOAD_RECORDS_PER_HOUR);
-    const payload = await rpcCall(
-      "common:getRecords",
-      {
-        uuid,
-        hours,
-        type: "load",
-        maxCount,
-      },
-      RpcRecordsSchema,
-      { signal: options?.signal, timeout: options?.timeout },
-    );
-    return normalizeRpcLoadRecords(uuid, payload, requestRange);
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    const legacy = (await apiGet(
-      `/api/records/load?${new URLSearchParams({ uuid, hours: String(hours) })}`,
-      z.object({
-        count: z.number().default(0),
-        records: z.array(LoadRecordSchema).default([]),
-      }),
-      { signal: options?.signal, timeout: options?.timeout },
-    )) as LoadRecordsResponse;
-    return {
-      ...legacy,
-      ...requestRange,
-      intervalSeconds: inferHistoryIntervalSeconds(legacy.records),
-    };
-  }
-}
-
-export interface TodayTrafficMetricResponse {
-  series: TrafficMetricSeries[];
-  rangeStartMs: number;
-  rangeEndMs: number;
-  intervalSeconds?: number;
-}
-
-/**
- * 查询浏览器本地“今天”的流量增量与上下行采样峰值。服务端按 5 分钟左右聚合，
- * 流量使用 sum、速率使用 max；前端随后再汇总到每台节点，避免拉取全天原始点。
- */
-export async function getTodayTrafficMetrics(
-  entityIds: string[],
-  startMs: number,
-  endMs: number,
-  options?: ApiCallOptions,
-): Promise<TodayTrafficMetricResponse> {
-  if (entityIds.length === 0) {
-    return { series: [], rangeStartMs: startMs, rangeEndMs: endMs };
-  }
-
-  const fiveMinutesMs = 5 * 60 * 1000;
-  const deadline = requestDeadline(options?.timeout);
-  const maxPoints = Math.max(1, Math.ceil((endMs - startMs) / fiveMinutesMs));
-  const totalMaxPoints = Math.min(TODAY_TRAFFIC_TOTAL_MAX_POINTS, maxPoints);
-  const requestRange = { rangeStartMs: startMs, rangeEndMs: endMs };
-  const metricPayload = await queryMetricPayload(
-    {
-      start: new Date(startMs).toISOString(),
-      end: new Date(endMs).toISOString(),
-      entity_ids: entityIds,
-      metric_keys: TODAY_TRAFFIC_METRIC_KEYS,
-      max_points: maxPoints,
-      max_points_by_metric: {
-        [TRAFFIC_UP_METRIC]: totalMaxPoints,
-        [TRAFFIC_DOWN_METRIC]: totalMaxPoints,
-        [RATE_UP_METRIC]: maxPoints,
-        [RATE_DOWN_METRIC]: maxPoints,
-      },
-      aggregation_by_metric: TODAY_TRAFFIC_AGGREGATION,
-      fill_empty: false,
-    },
-    options?.signal,
-    remainingRequestTimeout(deadline),
-  );
-  let series: TrafficMetricSeries[] = metricPayload.series.map((item) => ({
-    metricKey: item.metric_key,
-    client: item.entity_id,
-    intervalSeconds: item.interval_seconds,
-    points: item.points,
-  }));
-  series = await repairMetricBoundary(
-    series,
-    metricPayload,
-    requestRange,
-    {
-      entity_ids: entityIds,
-      metric_keys: TODAY_TRAFFIC_METRIC_KEYS,
-    },
-    (item, intervalSeconds) => ({
-      metricKey: item.metric_key,
-      client: item.entity_id,
-      intervalSeconds,
-      points: rawMetricPoints(item),
-    }),
-    TODAY_TRAFFIC_AGGREGATION,
-    options?.signal,
-    remainingRequestTimeout(deadline),
-  );
-  const intervalSeconds = Math.max(0, ...series.map((item) => item.intervalSeconds ?? 0));
+  const rows = await fetchHistoryRows(uuid, hours, options);
+  const records = rows.map((row) => historyRowToLoadRecord(row, uuid));
+  const times = records.map((record) => record.time);
+  const rangeEndMs = Date.now();
   return {
-    series,
-    ...getMetricPayloadRange(metricPayload, requestRange),
-    intervalSeconds: intervalSeconds > 0 ? intervalSeconds : undefined,
+    count: records.length,
+    records,
+    rangeStartMs: rangeEndMs - normalizeHistoryHours(hours) * 60 * 60 * 1000,
+    rangeEndMs,
+    intervalSeconds: inferIntervalSeconds(times),
   };
 }
 
+/**
+ * Ping 历史。CF-Server-Monitor 的探测线路由后端固定（八条，见 CARRIER_TASKS），
+ * 数据与负载共用同一张历史表，因此这里复用同一个请求形状。
+ */
 export async function getPingRecords(
   uuid: string,
   hours = 6,
-  options?: ApiCallOptions,
+  options?: RequestOptions,
 ): Promise<PingRecordsResponse> {
-  const requestRange = createRequestRange(hours);
-  try {
-    // includeStats:records 与 stats 并行走同一次调用链,省掉实例页单独的 stats 往返;
-    // stats 子请求失败会被内部吞掉,由 records 本地兜底,不影响图表主路径。
-    return await getPingMetricData({
-      hours,
-      entityIds: [uuid],
-      maxPoints: DETAIL_METRIC_MAX_POINTS,
-      includeStats: true,
-      signal: options?.signal,
-      timeout: options?.timeout,
-    });
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    // 旧版后端没有 public metric API，或新版接口暂时失败时回退兼容记录接口。
-    warnDegradedOnce(
-      "ping-records",
-      error instanceof MetricApiUnavailableError
-        ? "检测到旧版后端,Ping 数据已使用兼容 records 接口"
-        : "Ping metrics 查询异常,已回退兼容 records 接口",
-    );
+  const rows = await fetchHistoryRows(uuid, hours, options);
+  const records = historyRowsToPingRecords(rows, uuid);
+  const rangeEndMs = Date.now();
+  const observed = new Set(records.map((record) => record.task_id));
+  const tasks = carrierPingTasks().filter((task) => observed.has(task.id));
+
+  return {
+    count: records.length,
+    records,
+    tasks: tasks.length > 0 ? tasks : carrierPingTasks(),
+    intervalSeconds: inferIntervalSeconds(rows.map((row) => row.timestamp)),
+    rangeStartMs: rangeEndMs - normalizeHistoryHours(hours) * 60 * 60 * 1000,
+    rangeEndMs,
+    stats: buildPingStats(records, uuid),
+  };
+}
+
+function buildPingStats(
+  records: PingRecordsResponse["records"],
+  client: string,
+): PingTaskStats[] {
+  const byTask = new Map<number, number[]>();
+  const lossByTask = new Map<number, { lost: number; total: number }>();
+
+  for (const record of records) {
+    // 整轮超时的记录（值是 PING_TIMEOUT_VALUE，负数）只算丢包、不进延迟统计：详情页线路按钮上
+    // 「当前」读的是这里的 latest，混进来就会显示「-1.0 ms」，最小值和均值也跟着被拉低。
+    // 线路本身照样留着（全超时的线路也要显示丢包率），所以先建条目再决定要不要放值。
+    const values = byTask.get(record.task_id) ?? [];
+    if (record.value >= 0) values.push(record.value);
+    byTask.set(record.task_id, values);
+
+    const loss = lossByTask.get(record.task_id) ?? { lost: 0, total: 0 };
+    loss.total += 1;
+    if (typeof record.loss === "number" && record.loss > 0) {
+      loss.lost += record.loss / 100;
+    }
+    lossByTask.set(record.task_id, loss);
   }
 
-  try {
-    const maxCount = getRecordsMaxCount(hours, PING_RECORDS_PER_HOUR);
-    const payload = await rpcCall(
-      "common:getRecords",
-      {
-        uuid,
-        hours,
-        type: "ping",
-        maxCount,
-      },
-      RpcRecordsSchema,
-      options,
-    );
-    return normalizeRpcPingRecords(uuid, payload, requestRange);
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    const legacy = (await apiGet(
-      `/api/records/ping?${new URLSearchParams({ uuid, hours: String(hours) })}`,
-      z.object({
-        count: z.number().default(0),
-        records: z.array(PingRecordSchema).default([]),
-        tasks: z.array(PingTaskSchema).default([]),
-      }),
-      options,
-    )) as PingRecordsResponse;
+  return CARRIER_TASKS.filter((task) => byTask.has(task.id)).map((task) => {
+    const values = [...(byTask.get(task.id) ?? [])].sort((a, b) => a - b);
+    const loss = lossByTask.get(task.id) ?? { lost: 0, total: 0 };
+    const sum = values.reduce((acc, value) => acc + value, 0);
+    const avg = values.length > 0 ? sum / values.length : null;
+    const p50 = percentile(values, 0.5);
+    const p99 = percentile(values, 0.99);
+    const variance =
+      values.length > 1 && avg != null
+        ? values.reduce((acc, value) => acc + (value - avg) ** 2, 0) / (values.length - 1)
+        : 0;
+
     return {
-      ...legacy,
-      ...requestRange,
+      client,
+      taskId: task.id,
+      name: task.name,
+      type: "icmp",
+      interval: 60,
+      total: loss.total,
+      valid: values.length,
+      loss: loss.total > 0 ? (loss.lost / loss.total) * 100 : 0,
+      min: values[0] ?? null,
+      max: values[values.length - 1] ?? null,
+      avg,
+      latest: values.length > 0 ? (byTask.get(task.id)!.at(-1) ?? null) : null,
+      p50,
+      p99,
+      stddev: Math.sqrt(variance),
+      p99P50Ratio: p50 && p99 ? p99 / p50 : 0,
     };
-  }
+  });
 }
 
-export async function getAdminPingTasks(options?: ApiCallOptions): Promise<PingTask[]> {
-  return (await apiGet("/api/admin/ping", z.array(PingTaskSchema), options)) as PingTask[];
-}
-
-export async function saveThemeSettings(
-  theme: string,
-  settings: Record<string, unknown>,
-): Promise<void> {
-  const resp = await fetchWithTimeout(
-    `/api/admin/theme/settings?theme=${encodeURIComponent(theme)}`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(settings),
-    },
-    DEFAULT_API_TIMEOUT_MS,
+function percentile(sortedValues: number[], fraction: number): number | null {
+  if (sortedValues.length === 0) return null;
+  const index = Math.min(
+    sortedValues.length - 1,
+    Math.max(0, Math.round(fraction * (sortedValues.length - 1))),
   );
-
-  if (!resp.ok) {
-    let message = `Request /api/admin/theme/settings failed: ${resp.status}`;
-    try {
-      const json = (await resp.json()) as { message?: string };
-      if (json?.message) {
-        message = json.message;
-      }
-    } catch {
-      // body 不是 JSON 时保留兜底错误信息。
-    }
-    throw new ApiRequestError(message, resp.status, "/api/admin/theme/settings");
-  }
+  return sortedValues[index] ?? null;
 }
 
-export async function getPingOverviewStats(
-  hours: number,
-  taskIds: number[],
-  options?: ApiCallOptions & { entityIds?: string[] },
-): Promise<PingTaskStats[]> {
-  const normalizedTaskIds = Array.from(
-    new Set(taskIds.filter((taskId) => Number.isInteger(taskId) && taskId > 0)),
-  ).sort((left, right) => left - right);
-  if (normalizedTaskIds.length === 0) return [];
+/** 今日流量：由历史里的上/下行速率按采样间隔积分近似得到。 */
+export interface TodayTrafficEstimate {
+  client: string;
+  up: number;
+  down: number;
+  peakUp: number;
+  peakDown: number;
+  rangeStartMs: number;
+  rangeEndMs: number;
+  samples: number;
+}
 
-  const payload = await queryPingMetricStatsPayload(
-    {
-      hours,
-      task_ids: normalizedTaskIds,
-      ...(options?.entityIds?.length ? { entity_ids: options.entityIds } : {}),
-      max_points: OVERVIEW_METRIC_MAX_POINTS,
-    },
-    { signal: options?.signal, timeout: options?.timeout },
+export async function getTodayTrafficEstimate(
+  uuid: string,
+  startMs: number,
+  endMs: number,
+  options?: RequestOptions,
+): Promise<TodayTrafficEstimate> {
+  const spanHours = Math.max(0.167, (endMs - startMs) / 3_600_000);
+  const rows = await fetchHistoryRows(uuid, spanHours, options);
+  const inRange = rows.filter((row) => {
+    const time = row.timestamp;
+    return time >= startMs && time <= endMs;
+  });
+
+  let up = 0;
+  let down = 0;
+  let peakUp = 0;
+  let peakDown = 0;
+  for (let i = 0; i < inRange.length; i++) {
+    const row = inRange[i]!;
+    const previous = inRange[i - 1];
+    // 首个样本没有前驱，按 0 计入，避免把整段窗口的流量算在它头上。
+    const deltaSeconds = previous ? Math.max(0, (row.timestamp - previous.timestamp) / 1000) : 0;
+    up += row.net_out_speed * deltaSeconds;
+    down += row.net_in_speed * deltaSeconds;
+    peakUp = Math.max(peakUp, row.net_out_speed);
+    peakDown = Math.max(peakDown, row.net_in_speed);
+  }
+
+  return {
+    client: uuid,
+    up,
+    down,
+    peakUp,
+    peakDown,
+    rangeStartMs: startMs,
+    rangeEndMs: endMs,
+    samples: inRange.length,
+  };
+}
+
+/** 兼容旧调用点：主题设置改为本地保存，不再写回后端。 */
+export function saveThemeSettings(): Promise<void> {
+  return Promise.reject(
+    new ApiRequestError(
+      "第三方主题不能写入后端设置，请在 /admin#admin 中修改",
+      403,
+      "/admin#admin",
+    ),
   );
-  return payload ? normalizePingMetricStats(payload) : [];
-}
-
-export async function getPingOverview(
-  hours = 1,
-  taskId?: number,
-  options?: { signal?: AbortSignal; entityIds?: string[]; includeStats?: boolean },
-): Promise<PingOverviewResponse> {
-  const requestRange = createRequestRange(hours);
-  try {
-    return await getPingMetricData({
-      hours,
-      entityIds: options?.entityIds,
-      taskId,
-      maxPoints: OVERVIEW_METRIC_MAX_POINTS,
-      includeStats: options?.includeStats ?? true,
-      repairBoundary: true,
-      signal: options?.signal,
-    });
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    // 旧版后端没有 public metric API 时继续走原有记录接口。
-    warnDegradedOnce(
-      "ping-overview",
-      error instanceof MetricApiUnavailableError
-        ? "检测到旧版后端,Ping 概览已使用兼容 records 接口"
-        : "Ping overview metrics 查询异常,已回退兼容 records 接口",
-    );
-  }
-
-  try {
-    const payload = await rpcCall(
-      "common:getRecords",
-      {
-        hours,
-        type: "ping",
-        ...(taskId != null ? { task_id: taskId } : {}),
-        maxCount: OVERVIEW_PING_MAX_COUNT,
-      },
-      RpcRecordsSchema,
-      { signal: options?.signal },
-    );
-    return normalizeRpcPingOverview(payload, requestRange);
-  } catch {
-    // 先判取消再判参数,避免把 abort 误报成缺 task_id。
-    if (options?.signal?.aborted) {
-      throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
-    }
-    if (taskId == null) {
-      throw new Error("Ping overview fallback requires a concrete task_id");
-    }
-
-    const data = await apiGet(
-      `/api/records/ping?${new URLSearchParams({ task_id: String(taskId), hours: String(hours) })}`,
-      z.object({
-        records: z.array(PingRecordSchema).default([]),
-        tasks: z.array(PingTaskSchema).default([]),
-      }),
-      { signal: options?.signal },
-    );
-    return {
-      records: data.records,
-      tasks: data.tasks,
-      ...requestRange,
-    } as PingOverviewResponse;
-  }
 }

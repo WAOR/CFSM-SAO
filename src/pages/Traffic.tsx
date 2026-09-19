@@ -8,7 +8,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 import { useVisibleNodes } from "@/hooks/useVisibleNodes";
 import { formatByteRateLabel, formatBytes } from "@/utils/format";
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 import type { TodayTrafficSample, TodayTrafficStat } from "@/utils/trafficStats";
 
 const DAY_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
@@ -199,7 +199,7 @@ export function Traffic() {
       </div>
 
       {nodes.length === 0 ? (
-        <div className="flex h-[40vh] flex-col items-center justify-center gap-2 text-(--text-tertiary)">
+        <div className="flex h-[40vh] flex-col items-center justify-center gap-2 text-[var(--text-tertiary)]">
           <span className="text-[15px]">暂无节点数据</span>
           <span className="text-[12px]">等待后端推送或前往管理后台添加</span>
         </div>
@@ -274,7 +274,7 @@ export function Traffic() {
                       <tr data-empty={!stat.hasSamples || undefined}>
                         <td>
                           <Link
-                            to={`/instance/${encodeURIComponent(node.uuid)}`}
+                            to={`/server/${encodeURIComponent(node.uuid)}`}
                             className="assets-node-link"
                             title={node.name}
                           >
@@ -330,7 +330,7 @@ export function Traffic() {
               return (
                 <article className="traffic-node-card" key={node.uuid} data-empty={!stat.hasSamples || undefined}>
                   <header className="traffic-node-card-head">
-                    <Link to={`/instance/${encodeURIComponent(node.uuid)}`} className="assets-node-link">
+                    <Link to={`/server/${encodeURIComponent(node.uuid)}`} className="assets-node-link">
                       <Flag region={node.region} size={12} />
                       <span>{node.name}</span>
                     </Link>

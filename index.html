@@ -3,24 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      纯静态部署（GitHub Pages 等）时把后端地址填进来，多个用英文逗号分隔；
+      由 Worker 托管时留空即可，前端会用同源地址。
+      `npm run build:github-page` 会用 .env 里的 API_BASE 自动写入这里。
+    -->
+    <meta name="apiBase" content="" />
     <meta
       name="keywords"
-      content="Komari-Theme-SAO, SAO, server monitor, real-time server status, server performance dashboard, monitoring tool" />
+      content="CFSM-Theme-SAO, CF-Server-Monitor, SAO, server monitor, real-time server status, server performance dashboard" />
     <meta name="theme-color" content="#f4f5f7" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Komari-Theme-SAO" />
+    <meta name="apple-mobile-web-app-title" content="CFSM-Theme-SAO" />
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon.ico" />
-    <meta property="og:title" content="Komari-Theme-SAO" />
-    <meta property="og:description" content="A Komari monitor theme." />
+    <meta property="og:title" content="CFSM-Theme-SAO" />
+    <meta property="og:description" content="A Sword Art Online theme for CF-Server-Monitor." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Komari-Theme-SAO" />
-    <meta name="twitter:description" content="A Komari monitor theme." />
-    <title>Komari-Theme-SAO</title>
-    <meta name="description" content="A Komari monitor theme." />
+    <meta name="twitter:title" content="CFSM-Theme-SAO" />
+    <meta name="twitter:description" content="A Sword Art Online theme for CF-Server-Monitor." />
+    <title>CF-Server-Monitor</title>
+    <meta name="description" content="A Sword Art Online theme for CF-Server-Monitor." />
     <script>
       (() => {
         try {

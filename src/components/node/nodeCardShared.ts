@@ -2,7 +2,7 @@
 
 import { formatUptimeDays, trimFixed } from "@/utils/format";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
-import type { PingOverviewBucket } from "@/types/komari";
+import type { PingOverviewBucket } from "@/types/cfsm";
 
 /** 卡片标签行的完整 tag 列表 tooltip(几种卡片布局共用同一文案)。 */
 export function joinTagTitle(tags: { label: string }[]) {
@@ -16,9 +16,9 @@ export function formatCompactPercent(value: number) {
   return `${trimFixed(value, 1)}%`;
 }
 
-/** 卡片到期文案:"余 X天";无到期时 "余 --"。 */
+/** 卡片到期文案:"余 X天";没填到期日期按「永久」显示。 */
 export function formatCompactExpire({ value, unit }: { value: string; unit: string }) {
-  if (value === "—") return "余 --";
+  if (value === "—") return "永久";
   return unit ? `余 ${value}${unit}` : value;
 }
 
@@ -119,6 +119,15 @@ export function healthBarSlotModel(
   bucket: PingOverviewBucket,
   kind: "latency" | "loss",
 ): HealthBarSlotModel {
+  // 掉线段不是「没采到」，是节点没了：延迟和丢包都涂满红，两排颜色一致。
+  if (bucket.offline) {
+    return {
+      active: true,
+      heightFraction: HEALTH_LOSS_BAR_HEIGHT,
+      color: lossHeatColor(100),
+      alpha: 0.94,
+    };
+  }
   if (kind === "latency") {
     const value = bucket.value;
     if (value != null && Number.isFinite(value) && value >= 0) {

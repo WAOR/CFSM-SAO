@@ -1,4 +1,4 @@
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 
 // 隐藏与计费忽略共用大小写无关的节点身份匹配。
 

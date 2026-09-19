@@ -5,7 +5,7 @@ import {
   invertHomepagePingTaskBindings,
   type HomepagePingTaskBindings,
 } from "@/utils/pingTasks";
-import type { PingOverviewItem } from "@/types/komari";
+import type { PingOverviewItem } from "@/types/cfsm";
 
 export function useFakePingFallback(
   uuid: string,

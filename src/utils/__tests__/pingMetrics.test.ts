@@ -1,179 +1,68 @@
 import { describe, expect, it } from "vitest";
-import type { PingTaskStats } from "@/types/komari";
 import {
-  mergePingMetricSeries,
-  pingTasksFromMetricStats,
-  reconcilePingMetricStats,
+  bucketPingLoss,
+  formatPingTooltipValue,
   resolvePingSampleCounts,
-  resolvePingChartInterval,
-  PING_LATENCY_METRIC,
-  PING_LOSS_METRIC,
-  type PingMetricSeries,
 } from "@/utils/pingMetrics";
 
-const CLIENT = "node-a";
-const TIME = "2026-07-13T02:00:00Z";
-
-function series(
-  metricKey: string,
-  value: number | null,
-  count: number,
-): PingMetricSeries {
-  return {
-    metricKey,
-    client: CLIENT,
-    tags: { task_id: "7" },
-    points: [{ time: TIME, value, count }],
-  };
-}
-
-describe("mergePingMetricSeries", () => {
-  it("restores the successful-sample latency average from rollup loss metadata", () => {
-    // 原始值 50/60/70/80/-1：metric latency 的全样本均值为 51.8，loss=20%。
-    const records = mergePingMetricSeries([
-      series(PING_LATENCY_METRIC, 51.8, 5),
-      series(PING_LOSS_METRIC, 0.2, 5),
-    ]);
-
-    expect(records).toHaveLength(1);
-    expect(records[0]).toMatchObject({
-      client: CLIENT,
-      task_id: 7,
-      time: TIME,
-      count: 5,
-      loss: 20,
-    });
-    expect(records[0].value).toBeCloseTo(65, 8);
+describe("formatPingTooltipValue", () => {
+  it("hides a zero loss and keeps the latency alone", () => {
+    expect(formatPingTooltipValue(42.35, 0)).toBe("42.4 ms");
+    expect(formatPingTooltipValue(42.35, null)).toBe("42.4 ms");
   });
 
-  it("keeps an all-loss bucket as a real gap but drops fill_empty buckets", () => {
-    const allLost = mergePingMetricSeries([
-      series(PING_LATENCY_METRIC, null, 2),
-      series(PING_LOSS_METRIC, 1, 2),
-    ]);
-    expect(allLost).toHaveLength(1);
-    expect(allLost[0]).toMatchObject({ value: -1, count: 2, loss: 100 });
+  it("puts the loss first so the latency stays in the right-aligned column", () => {
+    expect(formatPingTooltipValue(42, 12.4)).toBe("丢包 12% · 42.0 ms");
+    // 不足 1% 取整会变成 0%，看起来像没丢包，所以保留一位小数。
+    expect(formatPingTooltipValue(42, 0.4)).toBe("丢包 0.4% · 42.0 ms");
+  });
 
-    const empty = mergePingMetricSeries([
-      series(PING_LATENCY_METRIC, null, 0),
-      series(PING_LOSS_METRIC, null, 0),
-    ]);
-    expect(empty).toEqual([]);
+  it("reports loss alone when the sample timed out", () => {
+    expect(formatPingTooltipValue(null, 100)).toBe("丢包 100%");
+    expect(formatPingTooltipValue(null, 0)).toBe("—");
+    expect(formatPingTooltipValue(null, null)).toBe("—");
   });
 });
 
-describe("resolvePingChartInterval", () => {
-  it("uses the 7-day rollup interval instead of splitting points by the raw task cadence", () => {
-    expect(resolvePingChartInterval(15 * 60, 60)).toBe(15 * 60);
-    expect(resolvePingChartInterval(undefined, 60)).toBe(60);
+describe("bucketPingLoss", () => {
+  it("averages by sample count instead of taking the bucket peak", () => {
+    // 同一格里 3 次成功 + 1 次全丢 = 25%，而不是被那次 100% 染红整格。
+    const loss = bucketPingLoss(
+      [
+        { time: 100, lost: 0, total: 1 },
+        { time: 101, lost: 0, total: 1 },
+        { time: 102, lost: 1, total: 1 },
+        { time: 103, lost: 0, total: 1 },
+      ],
+      [100],
+    );
+    expect(loss).toEqual([25]);
   });
-});
 
-describe("resolvePingSampleCounts", () => {
-  it("uses aggregate count and loss percentage instead of treating a bucket as one sample", () => {
-    expect(resolvePingSampleCounts({ value: 45, count: 20, loss: 25 })).toEqual({
-      total: 20,
-      lost: 5,
-      valid: 15,
-    });
+  it("keeps buckets without samples as null so gaps stay distinguishable from 0%", () => {
+    const loss = bucketPingLoss([{ time: 0, lost: 0, total: 1 }], [0, 60, 120]);
+    expect(loss).toEqual([0, null, null]);
   });
 
-  it("falls back safely for malformed metadata and keeps legacy loss records", () => {
-    expect(resolvePingSampleCounts({ value: 12, count: Number.NaN, loss: Number.NaN })).toEqual({
-      total: 1,
-      lost: 0,
-      valid: 1,
-    });
-    expect(resolvePingSampleCounts({ value: -1 })).toEqual({
-      total: 1,
-      lost: 1,
-      valid: 0,
-    });
+  it("assigns each sample to the nearest target time", () => {
+    const loss = bucketPingLoss(
+      [
+        { time: 25, lost: 1, total: 1 },
+        { time: 95, lost: 0, total: 1 },
+      ],
+      [0, 100],
+    );
+    expect(loss).toEqual([100, 0]);
   });
-});
 
-describe("reconcilePingMetricStats", () => {
-  it("recomputes count, loss and average from repaired aggregate records", () => {
-    const base: PingTaskStats = {
-      client: CLIENT,
-      taskId: 7,
-      name: "广州探测",
-      type: "icmp",
-      interval: 60,
-      total: 2,
-      valid: 2,
-      loss: 0,
-      min: 20,
-      max: 80,
-      avg: 30,
-      latest: 35,
-      p50: 36,
-      p99: 79,
-      stddev: 5,
-      p99P50Ratio: 1.1,
-    };
-
-    const [reconciled] = reconcilePingMetricStats([base], [
-      {
-        client: CLIENT,
-        task_id: 7,
-        time: TIME,
-        value: 40,
-        count: 4,
-        loss: 25,
-      },
-      {
-        client: CLIENT,
-        task_id: 7,
-        time: "2026-07-13T02:01:00Z",
-        value: 70,
-        count: 2,
-        loss: 50,
-      },
-    ]);
-
-    expect(reconciled).toMatchObject({
-      total: 6,
-      valid: 4,
-      avg: 47.5,
-      latest: 35,
-      p99: 79,
-    });
-    expect(reconciled.loss).toBeCloseTo(100 / 3, 10);
+  it("returns all-null for an empty input", () => {
+    expect(bucketPingLoss([], [0, 60])).toEqual([null, null]);
+    expect(bucketPingLoss([{ time: 0, lost: 0, total: 1 }], [])).toEqual([]);
   });
-});
 
-describe("pingTasksFromMetricStats", () => {
-  it("deduplicates per-client stats into one task and preserves assigned clients", () => {
-    const base: PingTaskStats = {
-      client: CLIENT,
-      taskId: 7,
-      name: "广州探测",
-      type: "icmp",
-      interval: 60,
-      total: 10,
-      valid: 9,
-      loss: 10,
-      min: 20,
-      max: 80,
-      avg: 40,
-      latest: 35,
-      p50: 36,
-      p99: 79,
-      stddev: 5,
-      p99P50Ratio: 1.1,
-    };
-
-    const tasks = pingTasksFromMetricStats([
-      base,
-      { ...base, client: "node-b", loss: 0 },
-    ]);
-    expect(tasks).toHaveLength(1);
-    expect(tasks[0]).toMatchObject({
-      id: 7,
-      name: "广州探测",
-      interval: 60,
-      clients: [CLIENT, "node-b"],
-    });
+  it("carries partial loss percentages through unrounded", () => {
+    // resolvePingSampleCounts 把「一次采样丢 33%」保留成小数，聚合后不该被抹成 0 或 100。
+    const counts = resolvePingSampleCounts({ value: 42, count: 1, loss: 33 });
+    expect(bucketPingLoss([{ time: 0, ...counts }], [0])).toEqual([33]);
   });
 });

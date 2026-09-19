@@ -1,31 +1,15 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Grid3x3,
-  LayoutGrid,
-  List,
-  Monitor,
-  Palette,
-  Rows3,
-  Settings,
-  SlidersHorizontal,
-  Sun,
-  Moon,
-} from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Grid3x3, LayoutGrid, List, Monitor, Palette, RefreshCw, Rows3, Settings, SlidersHorizontal, Sun, Moon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-import { usePriceVisibility } from "@/hooks/usePriceVisibility";
+import type { PingHistoryRefreshState } from "@/hooks/usePingHistoryRefresh";
+import { getAdminUrl } from "@/services/cfsm/config";
 import type { NodeViewMode } from "@/utils/themeSettings";
 import { clsx } from "clsx";
-import type { Appearance } from "@/utils/themeSettings";
 
 const MetricColorPicker = lazy(() =>
   import("./MetricColorPicker").then((module) => ({ default: module.MetricColorPicker })),
@@ -40,53 +24,90 @@ const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: str
   list: { icon: List, label: "列表视图" },
 };
 
-const NEXT_APPEARANCE: Record<Appearance, Appearance> = {
-  system: "light",
-  light: "dark",
-  dark: "system",
-};
+/**
+ * 刷新按钮的悬浮说明。
+ *
+ * 这个按钮会逐台发 `/api/history/all`，成本不该藏着 —— 标题里把节点数写出来，
+ * 点之前就知道要打多少个请求。
+ */
+function buildRefreshTitle({
+  status,
+  nodeCount,
+  lastResult,
+  lastRefreshedAt,
+}: PingHistoryRefreshState): string {
+  if (status === "loading") return `正在拉取 ${nodeCount} 台节点最近 1 小时的延迟历史…`;
+  if (status === "warn") return "30 分钟内已经刷新过；确实要再拉一次就再点一下";
+  if (status === "error") {
+    return lastResult && lastResult.succeeded > 0
+      ? `部分节点刷新失败（${lastResult.failed}/${lastResult.requested}），点击重试`
+      : "刷新失败，点击重试";
+  }
 
-const APPEARANCE_META: Record<
-  Appearance,
-  { icon: typeof Sun; label: string; nextLabel: string }
-> = {
-  light: { icon: Sun, label: "浅色", nextLabel: "深色" },
-  dark: { icon: Moon, label: "深色", nextLabel: "跟随系统" },
-  system: { icon: Monitor, label: "跟随系统", nextLabel: "浅色" },
-};
+  const base = `刷新延迟数据：拉取 ${nodeCount} 台节点最近 1 小时的真实采样`;
+  if (lastRefreshedAt == null) return base;
+
+  const at = new Date(lastRefreshedAt).toLocaleTimeString("zh-CN", { hour12: false });
+  const partial =
+    lastResult && lastResult.failed > 0 ? `，${lastResult.failed} 台失败` : "";
+  return `${base}\n上次刷新 ${at}${partial}`;
+}
+
+/** 刷新结束后短暂显示的结果条文案；返回 null 表示这会儿不该显示。 */
+function buildRefreshToast({
+  status,
+  lastResult,
+  minutesSinceLastRefresh,
+}: PingHistoryRefreshState): string | null {
+  if (status === "warn") {
+    const ago =
+      minutesSinceLastRefresh == null || minutesSinceLastRefresh < 1
+        ? "刚刚"
+        : `${minutesSinceLastRefresh} 分钟前`;
+    return `${ago}才刷新过，数据没长多少 · 再点一次仍会刷新`;
+  }
+  if (status === "done") {
+    if (!lastResult) return "延迟数据已更新";
+    return lastResult.failed > 0
+      ? `已更新 ${lastResult.succeeded} 台 · ${lastResult.failed} 台失败`
+      : `延迟数据已更新 · ${lastResult.succeeded} 台`;
+  }
+  if (status === "error") return "刷新失败，点按钮重试";
+  return null;
+}
+
+const APPEARANCE_OPTIONS = [
+  { value: "light", icon: Sun, label: "浅色" },
+  { value: "system", icon: Monitor, label: "跟随系统" },
+  { value: "dark", icon: Moon, label: "深色" },
+] as const;
 
 export function FloatingControls({
   onExpandedChange,
+  pingRefresh,
 }: {
   onExpandedChange?: (expanded: boolean) => void;
+  /** 由首页持有：刷新按钮和数据自检弹窗共用同一份状态，见 `Home.tsx`。 */
+  pingRefresh: PingHistoryRefreshState;
 }) {
   const { appearance, setAppearance } = usePreferences();
   const { mode, nextMode, toggleMode } = useViewMode();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
-  const { isPriceVisible, togglePriceVisibility } = usePriceVisibility();
   const { failureStreak } = useNodeStoreStatus();
   const [collapsed, setCollapsed] = useState(true);
   const [colorsOpen, setColorsOpen] = useState(false);
   const [colorsMounted, setColorsMounted] = useState(false);
   const settingsReady = themeSettings.isReady;
   const showAdmin = settingsReady && themeSettings.enableAdminButton;
-  // 主题管理入口与配色取色器都仅对登录管理员开放（配色存后端、全局生效）。
-  const loggedIn = Boolean(me?.logged_in);
-  const showThemeManage = loggedIn;
-  const showColorPicker = loggedIn;
-  const showPriceToggle = loggedIn;
+  // 主题设置与配色都只保存在本机浏览器（第三方主题不能写后端配置），
+  // 因此对所有访客开放，各自调各自的。
+  const showThemeManage = settingsReady;
+  const showColorPicker = settingsReady;
   const showSyncWarning = failureStreak >= 2;
   const hiddenTabIndex = collapsed ? -1 : undefined;
   const ToggleIcon = collapsed ? ChevronLeft : ChevronRight;
   const ViewIcon = VIEW_MODE_META[nextMode].icon;
-  const currentAppearance = APPEARANCE_META[appearance] ?? APPEARANCE_META.system;
-  const AppearanceIcon = currentAppearance.icon;
-
-  const cycleAppearance = () => {
-    setAppearance(NEXT_APPEARANCE[appearance] ?? "system");
-  };
-
   // 只要不在最宽松的大卡默认态,就视为"已切换"，按钮保持高亮。
   const isReducedView = mode !== "large";
   useEffect(() => {
@@ -94,24 +115,10 @@ export function FloatingControls({
     return () => onExpandedChange?.(false);
   }, [onExpandedChange]);
 
-  // 仅监听用户主动的滚轮/触摸滑动手势（wheel / touchmove），100% 免疫任何 DOM 尺寸变化或重排引发的 scroll 事件
-  useEffect(() => {
-    if (collapsed) return;
-
-    const handleUserScroll = () => {
-      setCollapsed(true);
-      setColorsOpen(false);
-      onExpandedChange?.(false);
-    };
-
-    window.addEventListener("wheel", handleUserScroll, { passive: true });
-    window.addEventListener("touchmove", handleUserScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener("wheel", handleUserScroll);
-      window.removeEventListener("touchmove", handleUserScroll);
-    };
-  }, [collapsed, onExpandedChange]);
+  const refreshTitle = buildRefreshTitle(pingRefresh);
+  const refreshToast = buildRefreshToast(pingRefresh);
+  const refreshDone = pingRefresh.status === "done";
+  const refreshWarn = pingRefresh.status === "warn";
 
   const toggleControls = () => {
     // 收起快捷栏时同时结束子面板状态，避免下次展开时调色盘自动复现。
@@ -134,19 +141,29 @@ export function FloatingControls({
           <div className="floating-controls-actions" aria-hidden={collapsed}>
             {settingsReady && (
               <>
-                <button
-                  type="button"
-                  onClick={cycleAppearance}
-                  aria-label={`外观: ${currentAppearance.label} (点击切换为${currentAppearance.nextLabel})`}
-                  title={`外观: ${currentAppearance.label} (点击切换为${currentAppearance.nextLabel})`}
-                  tabIndex={hiddenTabIndex}
-                  className={clsx(
-                    "control-button grid h-9 w-9 place-items-center",
-                    appearance !== "system" && "control-toggle is-active",
-                  )}
+                <div
+                  className="control-group floating-controls-appearance"
+                  role="group"
+                  aria-label="外观选择"
                 >
-                  <AppearanceIcon size={16} />
-                </button>
+                  {APPEARANCE_OPTIONS.map(({ value, icon: Icon, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setAppearance(value)}
+                      aria-label={label}
+                      aria-pressed={appearance === value}
+                      title={label}
+                      tabIndex={hiddenTabIndex}
+                      className={clsx(
+                        "control-button grid h-9 w-9 place-items-center",
+                        appearance === value && "control-toggle is-active",
+                      )}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={toggleMode}
@@ -161,22 +178,6 @@ export function FloatingControls({
                 >
                   <ViewIcon size={16} />
                 </button>
-                {showPriceToggle && (
-                  <button
-                    type="button"
-                    onClick={togglePriceVisibility}
-                    aria-label={isPriceVisible ? "隐藏价格与资产" : "显示价格与资产"}
-                    aria-pressed={!isPriceVisible}
-                    title={isPriceVisible ? "临时隐藏价格与资产" : "临时显示价格与资产"}
-                    tabIndex={hiddenTabIndex}
-                    className={clsx(
-                      "control-button grid h-9 w-9 place-items-center",
-                      !isPriceVisible && "control-toggle is-active",
-                    )}
-                  >
-                    {isPriceVisible ? <Eye size={16} /> : <EyeOff size={16} />}
-                  </button>
-                )}
                 {showColorPicker && (
                   <button
                     type="button"
@@ -211,7 +212,7 @@ export function FloatingControls({
             )}
             {showAdmin && (
               <a
-                href="/admin"
+                href={getAdminUrl()}
                 aria-label={me?.logged_in ? "管理" : "后台登录"}
                 title={me?.logged_in ? "管理" : "后台登录"}
                 tabIndex={hiddenTabIndex}
@@ -221,6 +222,35 @@ export function FloatingControls({
               </a>
             )}
           </div>
+          <button
+            type="button"
+            className={clsx(
+              "control-button floating-controls-refresh grid h-9 w-9 place-items-center",
+              refreshDone && "is-refresh-done",
+              refreshWarn && "is-refresh-warn",
+              pingRefresh.status === "error" && "is-refresh-error",
+            )}
+            aria-label="刷新延迟数据"
+            aria-busy={pingRefresh.status === "loading"}
+            title={refreshTitle}
+            disabled={pingRefresh.nodeCount === 0 || pingRefresh.status === "loading"}
+            onClick={() => pingRefresh.refresh()}
+          >
+            {refreshDone ? (
+              <Check size={16} />
+            ) : refreshWarn ? (
+              <AlertTriangle size={16} />
+            ) : (
+              <RefreshCw
+                size={16}
+                className={
+                  pingRefresh.status === "loading"
+                    ? "floating-controls-refresh-spin"
+                    : undefined
+                }
+              />
+            )}
+          </button>
           <button
             type="button"
             className="control-button floating-controls-trigger grid h-9 w-9 place-items-center"
@@ -240,8 +270,20 @@ export function FloatingControls({
             <MetricColorPicker hidden={collapsed || !colorsOpen} />
           </Suspense>
         )}
-        {showSyncWarning && !collapsed && !colorsOpen && (
-          <div className="floating-controls-sync-warning pointer-events-none flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--status-offline)_32%,transparent)] bg-[color-mix(in_srgb,var(--surface-a)_90%,transparent)] px-3 py-1 text-[11px] font-medium text-(--status-offline) shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur">
+        {refreshToast && !colorsOpen && (
+          <div
+            className={clsx(
+              "floating-controls-refresh-toast pointer-events-none flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur",
+              refreshDone ? "is-done" : refreshWarn ? "is-warn" : "is-error",
+            )}
+            role="status"
+          >
+            {refreshDone ? <Check size={12} /> : <AlertTriangle size={12} />}
+            <span>{refreshToast}</span>
+          </div>
+        )}
+        {showSyncWarning && !collapsed && !colorsOpen && !refreshToast && (
+          <div className="floating-controls-sync-warning pointer-events-none flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--status-offline)_32%,transparent)] bg-[color-mix(in_srgb,var(--surface-a)_90%,transparent)] px-3 py-1 text-[11px] font-medium text-[var(--status-offline)] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur">
             <AlertTriangle size={12} />
             <span>实时状态同步异常，当前展示的是最近缓存</span>
           </div>

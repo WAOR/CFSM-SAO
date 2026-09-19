@@ -29,6 +29,28 @@ function node(overrides: Partial<RenewalReminderSource> = {}): RenewalReminderSo
   };
 }
 
+describe("提醒窗口可配（renewalReminderDays）", () => {
+  it("按传入的天数取，0 = 一条都不提醒", () => {
+    const nodes = [
+      node({ uuid: "d3", expired_at: inDays(3) }),
+      node({ uuid: "d10", expired_at: inDays(10) }),
+      node({ uuid: "d30", expired_at: inDays(30) }),
+    ];
+    expect(getRenewalReminders(nodes, NOW).map((r) => r.uuid)).toEqual(["d3"]);
+    expect(getRenewalReminders(nodes, NOW, { warningDays: 30 }).map((r) => r.uuid)).toEqual([
+      "d3",
+      "d10",
+      "d30",
+    ]);
+    expect(getRenewalReminders(nodes, NOW, { warningDays: 0 })).toEqual([]);
+  });
+
+  it("已过期的节点在 0 天窗口下也不提醒", () => {
+    const nodes = [node({ uuid: "gone", expired_at: inDays(-2), online: true })];
+    expect(getRenewalReminders(nodes, NOW, { warningDays: 0 })).toEqual([]);
+  });
+});
+
 describe("renewal reminders", () => {
   it("keeps only nodes due within 7 days and sorts the most urgent first", () => {
     const reminders = getRenewalReminders(

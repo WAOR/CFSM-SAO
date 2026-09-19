@@ -10,11 +10,15 @@ import {
   buildLoadTimeRangeOptions,
   buildPingTimeRangeOptions,
 } from "@/components/instance/chartShared";
-import { usePublicConfig } from "@/hooks/usePublicConfig";
-import { useNodeMeta, useNodeStoreStatus } from "@/hooks/useNode";
+import { useAuth } from "@/hooks/useAuth";
+import { useNodeMeta, useNodeStoreStatus, useRealtimeFocus } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { ANONYMOUS_MAX_HISTORY_HOURS } from "@/services/api";
 
-const DEFAULT_PING_HOURS = 4;
+// 1 小时：详情页每打开一次就是一趟 /api/history/all 全量行，默认档位越短后端读的行越少。
+const DEFAULT_PING_HOURS = 1;
+/** `/api/history/all` 的 hours 上限。 */
+const MAX_HISTORY_HOURS = 168;
 type TimeRangeOption = ReturnType<typeof buildLoadTimeRangeOptions>[number];
 
 function RangeSelector({
@@ -45,27 +49,29 @@ function RangeSelector({
 
 export function Instance() {
   const { uuid } = useParams<{ uuid: string }>();
-  const { data: config } = usePublicConfig();
+  const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
   const meta = useNodeMeta(uuid ?? "");
   const storeStatus = useNodeStoreStatus(Boolean(uuid));
+  // 详情页只订阅这一台的实时推送（后端文档：详情页不要订阅全量再在前端过滤）。
+  useRealtimeFocus(uuid);
   const [chartType, setChartType] = useState<"load" | "ping">("load");
   const [loadHours, setLoadHours] = useState(0);
   const [pingHours, setPingHours] = useState(DEFAULT_PING_HOURS);
   const chartControlsRef = useRef<HTMLDivElement | null>(null);
 
-  const metricRetentionHours =
-    config?.metric_retention_days && config.metric_retention_days > 0
-      ? config.metric_retention_days * 24
-      : null;
+  // 后端最长支持 7 天；未登录访客查询超过 24 小时会被拒绝，所以直接不显示更长的档位。
+  const maxHistoryHours = me?.logged_in
+    ? MAX_HISTORY_HOURS
+    : ANONYMOUS_MAX_HISTORY_HOURS;
 
   const loadRanges = useMemo(
-    () => buildLoadTimeRangeOptions(metricRetentionHours ?? config?.record_preserve_time),
-    [config?.record_preserve_time, metricRetentionHours],
+    () => buildLoadTimeRangeOptions(maxHistoryHours),
+    [maxHistoryHours],
   );
   const pingRanges = useMemo(
-    () => buildPingTimeRangeOptions(metricRetentionHours ?? config?.ping_record_preserve_time),
-    [config?.ping_record_preserve_time, metricRetentionHours],
+    () => buildPingTimeRangeOptions(maxHistoryHours),
+    [maxHistoryHours],
   );
   const showPingChart = themeSettings.isReady && themeSettings.showPingChart;
 
@@ -119,10 +125,10 @@ export function Instance() {
         <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
           {message ? (
             <>
-              <div className="text-[15px] font-semibold text-(--text-primary)">
+              <div className="text-[15px] font-semibold text-[var(--text-primary)]">
                 {storeStatus.hydrated ? "实例不存在" : "暂时无法加载实例"}
               </div>
-              <p className="text-[13px] text-(--text-secondary)">{message}</p>
+              <p className="text-[13px] text-[var(--text-secondary)]">{message}</p>
             </>
           ) : (
             <Spinner size={24} label="正在加载实例" />

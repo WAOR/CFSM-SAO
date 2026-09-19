@@ -74,19 +74,17 @@ interface TimeRangeOption {
 
 // load 和 ping 共用同一套历史区间预设；唯一区别是是否在前面加 "实时" 选项，这由
 // buildHistoryRangeOptions 的 includeRealtime 标志处理，而非改预设列表本身。
+// 取值必须落在 CF-Server-Monitor `/api/history/all` 支持的档位上（最长 7 天）。
 const TIME_RANGE_OPTIONS: TimeRangeOption[] = [
   { label: "1 小时", value: 1 },
-  { label: "4 小时", value: 4 },
+  { label: "6 小时", value: 6 },
+  { label: "12 小时", value: 12 },
   { label: "1 天", value: 24 },
+  { label: "2 天", value: 48 },
   { label: "7 天", value: 168 },
-  { label: "30 天", value: 720 },
 ];
 
-// Ping 详情只保留高分辨率仍有观察价值的四档。metric store 虽可保留更久，
-// 但 30/90 天会退化到小时级 rollup，不再放进详情页快捷范围。
-const PING_TIME_RANGE_OPTIONS: TimeRangeOption[] = TIME_RANGE_OPTIONS.filter(
-  (option) => option.value <= 168,
-);
+const PING_TIME_RANGE_OPTIONS: TimeRangeOption[] = [...TIME_RANGE_OPTIONS];
 
 function formatRangeLabel(hours: number) {
   if (hours % 24 === 0) {
@@ -232,6 +230,43 @@ function getChartTooltipPosition({
   return { left, top };
 }
 
+/**
+ * 触屏上的游标拖动。
+ *
+ * uPlot 只绑鼠标事件，手指划过画布不会触发 mousemove（浏览器只在点按抬起后补一次
+ * 合成事件），所以移动端的辅助线是钉死的、拖不动。这里把 touch 事件直接翻成
+ * `setCursor`。配套的 `.u-over { touch-action: pan-y }` 让纵向滑动照常滚页面，
+ * 横向拖动才归我们；接管期间 `preventDefault` 防止浏览器再把它当成滚动。
+ *
+ * 抬手不清游标：手指一离开就把数值收走，等于没法读。停在原处直到下一次触摸。
+ */
+function bindTouchCursor(u: uPlot): () => void {
+  const over = u.over;
+  const apply = (touch: Touch) => {
+    const rect = over.getBoundingClientRect();
+    u.setCursor({
+      left: clamp(touch.clientX - rect.left, 0, rect.width),
+      top: clamp(touch.clientY - rect.top, 0, rect.height),
+    });
+  };
+  const onStart = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (touch) apply(touch);
+  };
+  const onMove = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    if (event.cancelable) event.preventDefault();
+    apply(touch);
+  };
+  over.addEventListener("touchstart", onStart, { passive: true });
+  over.addEventListener("touchmove", onMove, { passive: false });
+  return () => {
+    over.removeEventListener("touchstart", onStart);
+    over.removeEventListener("touchmove", onMove);
+  };
+}
+
 export function buildChartTooltipHooks({
   dataRef,
   rangeHours,
@@ -251,6 +286,7 @@ export function buildChartTooltipHooks({
 } {
   let frame: number | null = null;
   let view: Window | null = null;
+  let unbindTouch: (() => void) | null = null;
   const cancelScheduled = () => {
     if (frame != null) view?.cancelAnimationFrame(frame);
     frame = null;
@@ -297,10 +333,13 @@ export function buildChartTooltipHooks({
     onInit: (u) => {
       view = u.root.ownerDocument.defaultView;
       u.root.addEventListener("mouseleave", hide);
+      unbindTouch = bindTouchCursor(u);
     },
     onDestroy: (u) => {
       cancelScheduled();
       u.root.removeEventListener("mouseleave", hide);
+      unbindTouch?.();
+      unbindTouch = null;
       view = null;
     },
     onSetCursor: (u) => {

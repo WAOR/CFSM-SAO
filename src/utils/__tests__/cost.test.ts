@@ -11,7 +11,7 @@ import {
   normalizeCostRateApiUrl,
   DEFAULT_COST_RATE_API_URL,
 } from "@/utils/cost";
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 
 const RATES = { USD: 1, CNY: 7 };
 const RATES_X = { USD: 1, EUR: 0.9, CNY: 7 };
@@ -116,6 +116,35 @@ describe("calculateCostSummary", () => {
     );
     expect(noteCount(summary, "已忽略")).toBe(1);
     expect(paidCount(summary)).toBe(0);
+  });
+
+  it("amortises a three-year cycle over three years, not one", () => {
+    // 后端的 three_years 之前认不出来，退回年付：月均和剩余价值都会虚高三倍。
+    const summary = calculateCostSummary(
+      [node({ price: 3600, currency: "¥", billing_cycle: "three_years", expired_at: inDays(1095) })],
+      [],
+      RATES,
+    );
+
+    expect(summary.details[0]!.billingCycleDays).toBe(1095);
+    expect(summary.monthlyCny).toBeCloseTo(100, 1);
+    expect(summary.remainingCny).toBeCloseTo(3600, 0);
+  });
+
+  it("still totals CNY nodes when the exchange rate api is unavailable", () => {
+    // 汇率接口挂掉不该让整张资产卡显示 "—"：人民币定价根本不需要换算。
+    const summary = calculateCostSummary(
+      [
+        node({ uuid: "a", price: 100, currency: "¥", billing_cycle: 30 }),
+        node({ uuid: "b", price: 10, currency: "$", billing_cycle: 30 }),
+      ],
+      [],
+      {},
+    );
+
+    expect(summary.monthlyCny).toBeCloseTo(100, 5);
+    expect(paidCount(summary)).toBe(1);
+    expect(noteCount(summary, "汇率缺失")).toBe(1);
   });
 
   it("converts currency into CNY for the total", () => {
@@ -472,12 +501,12 @@ describe("cost helpers", () => {
 
     const futureUrl = "https://cache.test/future";
     entries.set(
-      `komaritheme:cost-rates:${futureUrl}`,
+      `cfsm-luminaplus:cost-rates:${futureUrl}`,
       JSON.stringify({ rates: { CNY: 999 }, time: Date.now() + 60_000 }),
     );
     const malformedUrl = "https://cache.test/malformed";
     entries.set(
-      `komaritheme:cost-rates:${malformedUrl}`,
+      `cfsm-luminaplus:cost-rates:${malformedUrl}`,
       JSON.stringify({ rates: "invalid", time: Date.now() }),
     );
 
@@ -492,7 +521,7 @@ describe("cost helpers", () => {
 
   it("can bypass a fresh exchange-rate cache for manual refresh", async () => {
     const url = "https://cache.test/manual";
-    const key = `komaritheme:cost-rates:${url}`;
+    const key = `cfsm-luminaplus:cost-rates:${url}`;
     const entries = new Map([
       [key, JSON.stringify({ rates: { USD: 1, CNY: 6 }, time: Date.now() })],
     ]);
@@ -518,7 +547,7 @@ describe("cost helpers", () => {
 
   it("does not replace a cancelled request with stale cached rates", async () => {
     const url = "https://cache.test/cancelled";
-    const key = `komaritheme:cost-rates:${url}`;
+    const key = `cfsm-luminaplus:cost-rates:${url}`;
     const entries = new Map([
       [
         key,

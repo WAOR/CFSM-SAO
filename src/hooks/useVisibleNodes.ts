@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAllNodeMeta } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 
 let cachedMeta: NodeInfo[] | null = null;
 let cachedHidden: string[] | null = null;

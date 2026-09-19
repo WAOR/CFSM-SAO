@@ -1,42 +1,101 @@
-import { useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useMinuteClock } from "@/hooks/useClock";
-import { useVisibleNodeUuids } from "@/hooks/useNode";
-import { useHiddenNodeUuids } from "@/hooks/useVisibleNodes";
+import { useCarrierNames } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
-  getPingOverview,
-  getPingOverviewStats,
-  prewarmPingOverviewDependencies,
-} from "@/services/api";
+  getPingHistorySnapshot,
+  subscribePingHistory,
+  PING_WINDOW_MS,
+  SAMPLE_TTL_MS,
+  type PingLiveSample,
+} from "@/services/pingLiveStore";
+import {
+  getAllPingLineOverrides,
+  getPingLineOverrides,
+  subscribePingLineOverrides,
+} from "@/services/pingLineOverrideStore";
+import {
+  CARRIER_TASKS,
+  CARRIER_TASK_BY_ID,
+  DEFAULT_CARRIER_NAMES,
+  carrierTaskName,
+  inferIntervalSeconds,
+} from "@/services/cfsm/mappers";
+import { CARRIER_KEYS, CARRIER_LOSS_KEYS } from "@/types/cfsm";
 import type {
+  CarrierNames,
+  CarrierPingSnapshot,
   HomepagePingLine,
   PingOverviewBucket,
   PingOverviewItem,
-  PingOverviewTaskLoadState,
-  PingRecord,
-  PingTaskStats,
-} from "@/types/komari";
-import { withTimeoutSignal } from "@/utils/abort";
+} from "@/types/cfsm";
+import {
+  nodePingLineOverrides,
+  resolveNodePingLineTaskIds,
+  type PingLineOverrides,
+  type PingLineOverridesByNode,
+} from "@/utils/pingLineOverrides";
 import { resolvePingSampleCounts } from "@/utils/pingMetrics";
 import {
-  HOMEPAGE_MULTI_PING_TASK_COUNT,
-  resolveHomepagePingSelections,
-  type HomepagePingTaskBindings,
+  invertHomepagePingTaskBindings,
+  resolveDefaultHomepagePingTaskId,
+  isHomepageMultiPingConfigured,
 } from "@/utils/pingTasks";
 import type { NodeViewMode } from "@/utils/themeSettings";
 
-const DEFAULT_PING_REFRESH_INTERVAL = 60_000;
-const MIN_PING_REFRESH_INTERVAL = 10_000;
-const MAX_PING_REFRESH_INTERVAL = 300_000;
-// 首页延迟图表最多显示 24 个 bucket。metric API 返回的是聚合区间而不是瞬时点，
-// 绘制时要把较粗的后端区间投影到它覆盖的可视 bucket，同时保持卡片密度一致。
-const MAX_VISIBLE_HOMEPAGE_PING_BUCKETS = 24;
+/**
+ * 首页延迟数据。
+ *
+ * 数据来自 `@/services/pingLiveStore` 的实时缓冲区（由 `/api/servers` 与 WebSocket 推送
+ * 累积），不查历史接口 —— 逐节点查 `/api/history/all` 会让后端 D1 读行翻几十倍。
+ * 实例详情页的 Ping 图表仍然读历史，那是用户主动打开、单节点一次的请求。
+ */
+
+// 首页延迟图表显示 20 个 bucket：与后端窗口的 20 个槽位一一对应，一格正好一个后端采样点，
+// 不因为除不尽而把相邻槽位混进同一格。后端返回 20 条这个数没变（2026-08-24 起把窗口跨度从
+// 1 小时拉到 2 小时，只是每格代表的时长从 3 分钟变 6 分钟，格数照旧）。
+// **四种视图（大卡/小卡/迷你卡/列表）统一用这个数**，别再各挑各的格数 —— 格数一旦
+// 和后端槽位对不上，同一台节点在不同视图里的柱子就会错位。
+export const HOMEPAGE_PING_BUCKET_COUNT = 20;
+/**
+ * 柱状图跨度的下限。窗口跨度不写死、跟着后端数据的时间范围走（见 {@link buildPingBuckets}），
+ * 但一台刚加进来只有几分钟数据的节点不该被画成几格宽 —— 低于这个下限就按下限画，多出来的
+ * 左侧照旧留空（和从前一小时固定窗口时「数据没铺满就左边空」是一个观感）。
+ */
+const MIN_PING_WINDOW_MS = 30 * 60 * 1000;
+/** 柱状图跨度的上限：与缓冲区保留期对齐，能到手的最老样本本就不会比它更旧。 */
+const MAX_PING_WINDOW_MS = SAMPLE_TTL_MS;
+/** 样本间隔推不出来时的兜底，用于把样本投影到 bucket。 */
+const DEFAULT_SAMPLE_INTERVAL_MS = 60_000;
+/** 后端窗口是 2 分钟一个槽位，本地实测最密时探测间隔（约 60 秒）一个；限制在这个区间内。 */
+const MIN_SAMPLE_INTERVAL_MS = 20_000;
+const MAX_SAMPLE_INTERVAL_MS = 300_000;
+/**
+ * 一个样本最多向后延续多久的**下限**：超过就认为数据真的断了，让图表留空。
+ *
+ * 实际上限还要跟着格宽走（见 {@link buildPingBuckets} 里的 `holdCapMs`）：窗口拉到 2 小时后
+ * 一格约 6 分钟，若上限死守 5 分钟就短于后端相邻两点的间距，会把本该相连的点断开、每格之间
+ * 空一条缝。所以取「两格」和这个下限里的大者。
+ */
+const MAX_SAMPLE_HOLD_MS = 300_000;
+
+/**
+ * 样本间隔由数据自己决定：后端一小时窗口是 120 秒一个点，本地实测跟着探测节奏走（约 60 秒）。
+ * 写死一个值会让其中一种来源的柱子落位偏移。
+ */
+function resolveSampleIntervalMs(samples: readonly PingLiveSample[]): number {
+  const seconds = inferIntervalSeconds(samples.map((sample) => sample.time));
+  if (!seconds) return DEFAULT_SAMPLE_INTERVAL_MS;
+  return Math.min(
+    MAX_SAMPLE_INTERVAL_MS,
+    Math.max(MIN_SAMPLE_INTERVAL_MS, seconds * 1000),
+  );
+}
 
 const EMPTY_PING: PingOverviewItem = {
   client: "",
   isAssigned: false,
-  loadState: "pending",
+  loadState: "ready",
   lastValue: null,
   samples: [],
   max: 1,
@@ -44,8 +103,7 @@ const EMPTY_PING: PingOverviewItem = {
 };
 const EMPTY_PING_LINES: HomepagePingLine[] = [];
 const EMPTY_PING_BUCKETS: PingOverviewBucket[] = [];
-const EMPTY_TASK_IDS: number[] = [];
-const EMPTY_BINDINGS: HomepagePingTaskBindings = {};
+const EMPTY_SAMPLES: readonly PingLiveSample[] = [];
 
 type HomepagePingRequestMode = "single" | "multi";
 
@@ -56,1244 +114,376 @@ export function resolveHomepagePingRequestMode(
 ): HomepagePingRequestMode {
   return (viewMode === "large" || viewMode === "compact") &&
     multiPingEnabled &&
-    multiTaskIds.length === HOMEPAGE_MULTI_PING_TASK_COUNT
+    isHomepageMultiPingConfigured(multiTaskIds)
     ? "multi"
     : "single";
 }
 
-export interface PingOverviewMapResult {
-  assignmentKey: string;
-  intervalMs: number;
-  singleItems: Map<string, PingOverviewItem>;
-  multiLines: Map<string, HomepagePingLine[]>;
-  successfulTaskIds: number[];
-  failedTaskIds: number[];
-  pendingTaskIds: number[];
-  /** 进度提交时仅包含本次被任务状态/数据更新影响的节点。 */
-  changedUuids?: string[];
-}
+// 丢包字段名的唯一来源在 types/cfsm 的 CARRIER_LOSS_KEYS，加线路不用来这里补一遍。
+const LOSS_KEY_BY_CARRIER = CARRIER_LOSS_KEYS;
 
-export type PingOverviewLoadState = "idle" | "loading" | "ready" | "error";
+/**
+ * 把缓冲区里的样本转成某条线路的展示模型。
+ *
+ * 返回值按 (samples, taskId) 缓存，`useSyncExternalStore` 要求 getSnapshot 引用稳定。
+ */
+const itemCache = new WeakMap<object, Map<number, PingOverviewItem>>();
 
-export interface PingOverviewStatusSnapshot {
-  status: PingOverviewLoadState;
-  isRefreshing: boolean;
-}
-
-const EMPTY_PING_STATUS: PingOverviewStatusSnapshot = {
-  status: "idle",
-  isRefreshing: false,
-};
-
-type Listener = () => void;
-
-function toTimestamp(value: string | number) {
-  if (typeof value === "number") {
-    return value > 1_000_000_000_000 ? value : value * 1000;
-  }
-  const parsed = Date.parse(String(value));
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function normalizeRefreshInterval(seconds: number | null | undefined) {
-  if (!Number.isFinite(seconds) || !seconds || seconds <= 0) {
-    return DEFAULT_PING_REFRESH_INTERVAL;
-  }
-
-  return Math.min(
-    MAX_PING_REFRESH_INTERVAL,
-    Math.max(MIN_PING_REFRESH_INTERVAL, seconds * 1000),
-  );
-}
-
-function normalizeVisibleUuids(uuids: string[]) {
-  return Array.from(new Set(uuids.filter(Boolean))).sort((left, right) =>
-    left.localeCompare(right),
-  );
-}
-
-function stringifyBindings(bindings: HomepagePingTaskBindings) {
-  return JSON.stringify(
-    Object.entries(bindings)
-      .map(([taskId, clients]) => [taskId, [...clients].sort((left, right) => left.localeCompare(right))])
-      .sort(([left], [right]) => Number(left) - Number(right)),
-  );
-}
-
-function equalSamples(
-  a: PingOverviewItem["samples"],
-  b: PingOverviewItem["samples"],
-) {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (
-      a[i]?.time !== b[i]?.time ||
-      a[i]?.value !== b[i]?.value ||
-      a[i]?.count !== b[i]?.count ||
-      a[i]?.loss !== b[i]?.loss
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function equalPingItem(a: PingOverviewItem | undefined, b: PingOverviewItem | undefined) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return (
-    a.client === b.client &&
-    a.isAssigned === b.isAssigned &&
-    a.loadState === b.loadState &&
-    a.lastValue === b.lastValue &&
-    a.metricIntervalMs === b.metricIntervalMs &&
-    a.max === b.max &&
-    a.loss === b.loss &&
-    equalSamples(a.samples, b.samples)
-  );
-}
-
-function equalPingLine(a: HomepagePingLine | undefined, b: HomepagePingLine | undefined) {
-  return (
-    a?.taskId === b?.taskId &&
-    a?.taskName === b?.taskName &&
-    equalPingItem(a, b)
-  );
-}
-
-export function buildPingOverviewItems(
-  taskId: number,
-  records: PingRecord[],
-  metricStats: PingTaskStats[] = [],
-  metricIntervalSeconds?: number,
-) {
-  const metricIntervalMs =
-    typeof metricIntervalSeconds === "number" &&
-    Number.isFinite(metricIntervalSeconds) &&
-    metricIntervalSeconds > 0
-      ? metricIntervalSeconds * 1000
-      : undefined;
-  const selectedRecords = records.filter((record) => record.task_id === taskId);
-  const grouped = new Map<string, Array<(typeof selectedRecords)[number]>>();
-  const lossStatsByClient = new Map<string, { total: number; lost: number }>();
-
-  for (const record of selectedRecords) {
-    if (!record.client) continue;
-    const current = grouped.get(record.client);
-    if (current) current.push(record);
-    else grouped.set(record.client, [record]);
-
-    const stats = lossStatsByClient.get(record.client) ?? { total: 0, lost: 0 };
-    const counts = resolvePingSampleCounts(record);
-    stats.total += counts.total;
-    stats.lost += counts.lost;
-    lossStatsByClient.set(record.client, stats);
-  }
-
-  const result = new Map<string, PingOverviewItem>();
-  const statsByClient = new Map(
-    metricStats
-      .filter((stat) => stat.taskId === taskId)
-      .map((stat) => [stat.client, stat] as const),
-  );
-  const clients = new Set([...grouped.keys(), ...statsByClient.keys()]);
-
-  for (const client of clients) {
-    const clientRecords = grouped.get(client) ?? [];
-    const sorted = [...clientRecords].sort(
-      (left, right) => toTimestamp(left.time) - toTimestamp(right.time),
-    );
-    const latestRecord = sorted[sorted.length - 1];
-    const samples: PingOverviewItem["samples"] = [];
-    let max = 1;
-
-    for (let i = 0; i < sorted.length; i++) {
-      const record = sorted[i];
-      const value = record.value;
-      const time = toTimestamp(record.time);
-      if (time > 0) {
-        samples.push({
-          time,
-          value,
-          count: "count" in record && typeof record.count === "number" ? record.count : undefined,
-          loss: "loss" in record && typeof record.loss === "number" ? record.loss : undefined,
-        });
-      }
-      if (value > max) {
-        max = value;
-      }
-    }
-
-    const lossStats = lossStatsByClient.get(client);
-    const serverStats = statsByClient.get(client);
-    result.set(client, {
-      client,
-      isAssigned: true,
-      lastValue:
-        serverStats?.latest ??
-        (latestRecord && latestRecord.value >= 0 ? latestRecord.value : null),
-      metricIntervalMs,
-      samples,
-      max: serverStats?.max ?? max,
-      loss:
-        serverStats?.loss ??
-        (lossStats?.total ? (lossStats.lost / lossStats.total) * 100 : null),
-    });
-  }
-
-  return result;
-}
-
-function buildAssignmentKey(selectedTaskIdsByClient: Map<string, number[]>) {
-  return Array.from(selectedTaskIdsByClient.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([uuid, taskIds]) => `${uuid}:${taskIds.join(",")}`)
-    .join("|");
-}
-
-function resolvePingAssignmentKey(
-  clientUuids: string[],
-  bindings: HomepagePingTaskBindings,
-  multiTaskIds: number[],
-) {
-  const normalizedUuids = normalizeVisibleUuids(clientUuids);
-  const {
-    singleTaskIdsByClient,
-    multiTaskIdsByClient,
-    requestedTaskIdsByClient,
-  } = resolveHomepagePingSelections(normalizedUuids, bindings, multiTaskIds);
-  const selectedTaskIds = new Set(
-    Array.from(requestedTaskIdsByClient.values()).flat(),
-  );
-  if (selectedTaskIds.size === 0) return "";
-  return [
-    `single:${buildAssignmentKey(singleTaskIdsByClient)}`,
-    `multi:${buildAssignmentKey(multiTaskIdsByClient)}`,
-  ].join("|");
-}
-
-// 限制 RPC 与兼容接口组成的整条回退链，避免一次刷新长期占住轮询。
-const PING_REQUEST_TIMEOUT_MS = 35_000;
-const PING_CACHE_STORAGE_KEY = "komari:lumina-plus:homepage-ping:v1";
-const PING_CACHE_TTL_MS = 5 * 60_000;
-
-interface PingOverviewCachePayload {
-  version: 1;
-  savedAt: number;
-  assignmentKey: string;
-  intervalMs: number;
-  singleItems: Array<[string, PingOverviewItem]>;
-  multiLines: Array<[string, HomepagePingLine[]]>;
-}
-
-export interface PersistablePingOverviewData {
-  singleItems: Array<[string, PingOverviewItem]>;
-  multiLines: Array<[string, HomepagePingLine[]]>;
-}
-
-interface PreviousPingOverview {
-  assignmentKey: string;
-  singleItems: ReadonlyMap<string, PingOverviewItem>;
-  multiLines: ReadonlyMap<string, HomepagePingLine[]>;
-}
-
-function assignedEmptyPing(
+export function buildPingOverviewItem(
   client: string,
-  loadState: PingOverviewTaskLoadState = "pending",
+  taskId: number,
+  samples: readonly PingLiveSample[],
+  sampleIntervalMs?: number,
 ): PingOverviewItem {
-  return {
-    client,
-    isAssigned: true,
-    loadState,
-    lastValue: null,
-    samples: [],
-    max: 1,
-    loss: null,
-  };
-}
-
-function assignedEmptyLine(
-  client: string,
-  taskId: number,
-  taskName = `任务 #${taskId}`,
-  loadState: PingOverviewTaskLoadState = "pending",
-): HomepagePingLine {
-  return {
-    taskId,
-    taskName,
-    ...assignedEmptyPing(client, loadState),
-  };
-}
-
-function mergePingOverviewStats(
-  taskId: number,
-  entityIds: string[],
-  localStats: PingTaskStats[] | undefined,
-  batchedStats: PingTaskStats[],
-) {
-  const allowedClients = new Set(entityIds);
-  const merged = new Map<string, PingTaskStats>();
-  for (const stat of localStats ?? []) {
-    if (stat.taskId === taskId && allowedClients.has(stat.client)) {
-      merged.set(stat.client, stat);
-    }
-  }
-  // 批量接口包含更完整的分位数与标准差，应覆盖 records 本地推导出的同节点统计。
-  for (const stat of batchedStats) {
-    if (stat.taskId === taskId && allowedClients.has(stat.client)) {
-      merged.set(stat.client, stat);
-    }
-  }
-  return [...merged.values()];
-}
-
-export async function buildPingOverviewMap(
-  hours: number,
-  clientUuids: string[],
-  bindings: HomepagePingTaskBindings,
-  multiTaskIds: number[],
-  signal?: AbortSignal,
-  previous?: PreviousPingOverview,
-  loadOverview: typeof getPingOverview = getPingOverview,
-  loadStats?: typeof getPingOverviewStats,
-  onProgress?: (result: PingOverviewMapResult) => void,
-): Promise<PingOverviewMapResult> {
-  const normalizedUuids = normalizeVisibleUuids(clientUuids);
-  if (normalizedUuids.length === 0) {
-    return {
-      assignmentKey: "",
-      intervalMs: DEFAULT_PING_REFRESH_INTERVAL,
-      singleItems: new Map<string, PingOverviewItem>(),
-      multiLines: new Map<string, HomepagePingLine[]>(),
-      successfulTaskIds: [],
-      failedTaskIds: [],
-      pendingTaskIds: [],
-    };
+  const task = CARRIER_TASK_BY_ID.get(taskId);
+  if (!task || samples.length === 0) {
+    return { ...EMPTY_PING, client };
   }
 
-  const {
-    singleTaskIdsByClient,
-    multiTaskIdsByClient,
-    requestedTaskIdsByClient,
-  } = resolveHomepagePingSelections(
-    normalizedUuids,
-    bindings,
-    multiTaskIds,
-  );
-  const selectedTaskIds = Array.from(
-    new Set(Array.from(requestedTaskIdsByClient.values()).flat()),
-  ).sort((left, right) => left - right);
-  const assignmentKey = [
-    `single:${buildAssignmentKey(singleTaskIdsByClient)}`,
-    `multi:${buildAssignmentKey(multiTaskIdsByClient)}`,
-  ].join("|");
+  const carrier = task.key;
+  const lossKey = LOSS_KEY_BY_CARRIER[carrier];
+  const out: PingOverviewItem["samples"] = [];
+  const emptyTimes: number[] = [];
+  let max = 1;
+  let lastValue: number | null = null;
+  // 丢包率取整段窗口的加权平均，和柱状图同源（缓冲区本身就只保留一小时）。
+  // 取最后一个样本会让「6 个包丢 1 个」这种单次抖动直接顶成 16%，而柱子还是全绿。
+  let lostSum = 0;
+  let lossWeight = 0;
 
-  if (selectedTaskIds.length === 0) {
-    return {
-      assignmentKey: "",
-      intervalMs: DEFAULT_PING_REFRESH_INTERVAL,
-      singleItems: new Map<string, PingOverviewItem>(),
-      multiLines: new Map<string, HomepagePingLine[]>(),
-      successfulTaskIds: [],
-      failedTaskIds: [],
-      pendingTaskIds: [],
-    };
-  }
-
-  type LoadedPingOverviewTask = {
-    taskId: number;
-    entityIds: string[];
-    overview: Awaited<ReturnType<typeof getPingOverview>>;
-  };
-
-  const itemsByTask = new Map<number, Map<string, PingOverviewItem>>();
-  const taskNames = new Map<number, string>();
-  const successfulTaskIds = new Set<number>();
-  const failedTaskIds = new Set<number>();
-  const taskStates = new Map<number, PingOverviewTaskLoadState>(
-    selectedTaskIds.map((taskId) => [taskId, "pending"]),
-  );
-  const refreshIntervals = new Map<number, number>();
-  const loadedByTask = new Map<number, LoadedPingOverviewTask>();
-  let batchedStats: PingTaskStats[] = [];
-
-  // 结果 Map 只初始化一次。后续任务完成时通过反向索引更新受影响的节点，
-  // 避免每个任务都重新遍历全部节点并重建占位对象。
-  const singleItems = new Map<string, PingOverviewItem>();
-  const multiLines = new Map<string, HomepagePingLine[]>();
-  const singleUuidsByTask = new Map<number, string[]>();
-  const multiUuidsByTask = new Map<number, string[]>();
-  const changedUuids = new Set<string>();
-  const hasPrevious = previous?.assignmentKey === assignmentKey;
-
-  const addTaskUuid = (index: Map<number, string[]>, taskId: number, uuid: string) => {
-    const uuids = index.get(taskId);
-    if (uuids) uuids.push(uuid);
-    else index.set(taskId, [uuid]);
-  };
-
-  for (const [uuid, taskIds] of singleTaskIdsByClient) {
-    const taskId = taskIds[0];
-    if (taskId == null) continue;
-    addTaskUuid(singleUuidsByTask, taskId, uuid);
-    const previousItem = hasPrevious ? previous?.singleItems.get(uuid) : undefined;
-    const taskState = taskStates.get(taskId) ?? "pending";
-    const displayState = taskState === "pending" && previousItem
-      ? (previousItem.loadState ?? "ready")
-      : taskState;
-    singleItems.set(
-      uuid,
-      previousItem ? { ...previousItem, loadState: displayState } : assignedEmptyPing(uuid, displayState),
-    );
-    changedUuids.add(uuid);
-  }
-
-  for (const [uuid, taskIds] of multiTaskIdsByClient) {
-    const previousLines = hasPrevious ? previous?.multiLines.get(uuid) : undefined;
-    const lines = taskIds.map((taskId) => {
-      addTaskUuid(multiUuidsByTask, taskId, uuid);
-      const previousLine = previousLines?.find((line) => line.taskId === taskId);
-      const taskState = taskStates.get(taskId) ?? "pending";
-      const displayState = taskState === "pending" && previousLine
-        ? (previousLine.loadState ?? "ready")
-        : taskState;
-      return previousLine
-        ? { ...previousLine, loadState: displayState }
-        : assignedEmptyLine(uuid, taskId, undefined, displayState);
-    });
-    multiLines.set(uuid, lines);
-    changedUuids.add(uuid);
-  }
-
-  const updateSingleItem = (uuid: string, taskId: number) => {
-    const current = singleItems.get(uuid);
-    if (!current) return;
-    const taskState = taskStates.get(taskId) ?? "pending";
-    const displayState = taskState === "pending" ? (current.loadState ?? "ready") : taskState;
-    const next = successfulTaskIds.has(taskId)
-      ? {
-          ...(itemsByTask.get(taskId)?.get(uuid) ?? assignedEmptyPing(uuid, "ready")),
-          loadState: "ready" as const,
-        }
-      : { ...current, loadState: displayState };
-    if (!equalPingItem(current, next)) {
-      singleItems.set(uuid, next);
-      changedUuids.add(uuid);
-    }
-  };
-
-  const updateMultiLine = (uuid: string, taskId: number) => {
-    const taskIds = multiTaskIdsByClient.get(uuid);
-    const lines = multiLines.get(uuid);
-    if (!taskIds || !lines) return;
-    const index = taskIds.indexOf(taskId);
-    if (index < 0) return;
-    const current = lines[index];
-    if (!current) return;
-    const taskState = taskStates.get(taskId) ?? "pending";
-    const displayState = taskState === "pending" ? (current.loadState ?? "ready") : taskState;
-    const next = successfulTaskIds.has(taskId)
-      ? {
-          taskId,
-          taskName: taskNames.get(taskId) ?? current.taskName ?? `任务 #${taskId}`,
-          ...(itemsByTask.get(taskId)?.get(uuid) ?? assignedEmptyPing(uuid, "ready")),
-          loadState: "ready" as const,
-        }
-      : { ...current, loadState: displayState };
-    if (equalPingLine(current, next)) return;
-    const nextLines = [...lines];
-    nextLines[index] = next;
-    multiLines.set(uuid, nextLines);
-    changedUuids.add(uuid);
-  };
-
-  const updateTaskOutputs = (taskId: number) => {
-    for (const uuid of singleUuidsByTask.get(taskId) ?? []) updateSingleItem(uuid, taskId);
-    for (const uuid of multiUuidsByTask.get(taskId) ?? []) updateMultiLine(uuid, taskId);
-  };
-
-  const buildResult = (changed?: readonly string[]): PingOverviewMapResult => ({
-    assignmentKey,
-    intervalMs:
-      refreshIntervals.size > 0
-        ? Math.min(...refreshIntervals.values())
-        : DEFAULT_PING_REFRESH_INTERVAL,
-    singleItems,
-    multiLines,
-    successfulTaskIds: [...successfulTaskIds].sort((left, right) => left - right),
-    failedTaskIds: [...failedTaskIds].sort((left, right) => left - right),
-    pendingTaskIds: selectedTaskIds.filter((taskId) => taskStates.get(taskId) === "pending"),
-    changedUuids: changed ? [...changed] : undefined,
-  });
-
-  const emitProgress = () => {
-    if (!onProgress) return;
-    const touched = [...changedUuids];
-    changedUuids.clear();
-    try {
-      onProgress(buildResult(touched));
-    } catch {
-      // 进度订阅者不应改变 overview 请求的最终结果。
-    }
-  };
-
-  const applyOverview = (loaded: LoadedPingOverviewTask) => {
-    loadedByTask.set(loaded.taskId, loaded);
-    successfulTaskIds.add(loaded.taskId);
-    failedTaskIds.delete(loaded.taskId);
-    taskStates.set(loaded.taskId, "ready");
-    const {
-      taskId,
-      entityIds,
-      overview: { records, tasks, stats, intervalSeconds },
-    } = loaded;
-    const effectiveStats = mergePingOverviewStats(
-      taskId,
-      entityIds,
-      stats,
-      batchedStats,
-    );
-    const taskName =
-      tasks.find((task) => task.id === taskId)?.name ||
-      effectiveStats.find((stat) => stat.taskId === taskId)?.name;
-    if (taskName) taskNames.set(taskId, taskName);
-    itemsByTask.set(
-      taskId,
-      buildPingOverviewItems(taskId, records, effectiveStats, intervalSeconds),
-    );
-
-    const taskInterval =
-      tasks.find((task) => task.id === taskId)?.interval ??
-      effectiveStats.find((stat) => stat.taskId === taskId)?.interval;
-    refreshIntervals.set(taskId, normalizeRefreshInterval(taskInterval));
-    updateTaskOutputs(taskId);
-  };
-
-  const rebuildLoadedItems = () => {
-    for (const loaded of loadedByTask.values()) applyOverview(loaded);
-  };
-
-  const batchStatsLoader =
-    loadStats ?? (loadOverview === getPingOverview ? getPingOverviewStats : null);
-  const batchStatsRequest = batchStatsLoader
-    ? withTimeoutSignal(
-        (requestSignal) =>
-          batchStatsLoader(hours, selectedTaskIds, {
-            signal: requestSignal,
-            entityIds: normalizedUuids,
-          }),
-        PING_REQUEST_TIMEOUT_MS,
-        signal,
-      )
-        .then((stats) => {
-          batchedStats = stats;
-          rebuildLoadedItems();
-          emitProgress();
-          return stats;
-        })
-        .catch(() => [] as PingTaskStats[])
-    : Promise.resolve([] as PingTaskStats[]);
-
-  // 先提交每个任务的 pending 状态，让首帧和后续轮询都能保留固定的柱状区域；
-  // 之后每个任务完成或失败时再按任务更新状态。
-  emitProgress();
-
-  const overviewRequest = Promise.all(
-    selectedTaskIds.map(async (taskId) => {
-      try {
-        const loaded = await withTimeoutSignal(
-          async (requestSignal) => {
-            const entityIds = normalizedUuids.filter(
-              (uuid) => requestedTaskIdsByClient.get(uuid)?.includes(taskId),
-            );
-            return {
-              taskId,
-              entityIds,
-              overview: await loadOverview(hours, taskId, {
-                signal: requestSignal,
-                entityIds,
-                includeStats: batchStatsLoader == null,
-              }),
-            };
-          },
-          PING_REQUEST_TIMEOUT_MS,
-          signal,
-        );
-        applyOverview(loaded);
-        emitProgress();
-        return { status: "fulfilled" as const, value: loaded };
-      } catch (reason) {
-        failedTaskIds.add(taskId);
-        successfulTaskIds.delete(taskId);
-        taskStates.set(taskId, "error");
-        updateTaskOutputs(taskId);
-        emitProgress();
-        return { status: "rejected" as const, reason };
-      }
-    }),
-  );
-
-  await Promise.all([batchStatsRequest, overviewRequest]);
-  return buildResult();
-}
-
-interface PingOverviewStoreState {
-  assignmentKey: string;
-  intervalMs: number;
-  singleItems: Map<string, PingOverviewItem>;
-  multiLines: Map<string, HomepagePingLine[]>;
-}
-
-let pingOverviewState: PingOverviewStoreState = {
-  assignmentKey: "",
-  intervalMs: DEFAULT_PING_REFRESH_INTERVAL,
-  singleItems: new Map(),
-  multiLines: new Map(),
-};
-let pingOverviewStatus: PingOverviewStatusSnapshot = EMPTY_PING_STATUS;
-let scheduledVisibleUuids: string[] = [];
-let scheduledVisibleKey = "";
-let scheduledBindings: HomepagePingTaskBindings = {};
-let scheduledMultiTaskIds: number[] = [];
-let scheduledSelectionKey = `${stringifyBindings({})}|multi:`;
-let pingRefreshInFlight = false;
-let pingRefreshTimer: number | null = null;
-let pingAbortController: AbortController | null = null;
-let activeConsumers = 0;
-// HMR dispose 后置真:阻止 in-flight 请求的 finally 恢复逻辑在旧模块实例上复活轮询。
-let pingPollingDisposed = false;
-const pingListeners = new Map<string, Set<Listener>>();
-
-function setPingOverviewStatus(
-  status: PingOverviewLoadState,
-  isRefreshing: boolean,
-) {
-  if (
-    pingOverviewStatus.status === status &&
-    pingOverviewStatus.isRefreshing === isRefreshing
-  ) {
-    return;
-  }
-  pingOverviewStatus = { status, isRefreshing };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseCachedPingItem(value: unknown): PingOverviewItem | null {
-  if (!isRecord(value)) return null;
-  if (typeof value.client !== "string" || value.client.length === 0) return null;
-  if (value.isAssigned !== true) return null;
-  if (!Array.isArray(value.samples)) return null;
-  const samples = value.samples.map((sample) => {
-    if (!isRecord(sample)) return null;
-    if (
-      typeof sample.time !== "number" ||
-      !Number.isFinite(sample.time) ||
-      typeof sample.value !== "number" ||
-      !Number.isFinite(sample.value)
-    ) {
-      return null;
-    }
-    return {
-      time: sample.time,
-      value: sample.value,
-      ...(typeof sample.count === "number" && Number.isFinite(sample.count)
-        ? { count: sample.count }
-        : {}),
-      ...(typeof sample.loss === "number" && Number.isFinite(sample.loss)
-        ? { loss: sample.loss }
-        : {}),
-    };
-  });
-  if (samples.some((sample) => sample == null)) return null;
-
-  const lastValue =
-    value.lastValue == null
-      ? null
-      : typeof value.lastValue === "number" && Number.isFinite(value.lastValue)
-        ? value.lastValue
-        : undefined;
-  const loss =
-    value.loss == null
-      ? null
-      : typeof value.loss === "number" && Number.isFinite(value.loss)
-        ? value.loss
-        : undefined;
-  if (lastValue === undefined || loss === undefined) return null;
-
-  return {
-    client: value.client,
-    isAssigned: true,
-    loadState: "ready",
-    lastValue,
-    ...(typeof value.metricIntervalMs === "number" &&
-    Number.isFinite(value.metricIntervalMs) &&
-    value.metricIntervalMs > 0
-      ? { metricIntervalMs: value.metricIntervalMs }
-      : {}),
-    samples: samples as PingOverviewItem["samples"],
-    max:
-      typeof value.max === "number" && Number.isFinite(value.max) && value.max >= 0
-        ? value.max
-        : 1,
-    loss,
-  };
-}
-
-function readPingOverviewCache(
-  assignmentKey: string,
-): Omit<PingOverviewCachePayload, "version" | "savedAt" | "assignmentKey"> | null {
-  if (!assignmentKey || typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(PING_CACHE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return null;
-    if (
-      parsed.version !== 1 ||
-      parsed.assignmentKey !== assignmentKey ||
-      typeof parsed.savedAt !== "number" ||
-      !Number.isFinite(parsed.savedAt) ||
-      Date.now() - parsed.savedAt > PING_CACHE_TTL_MS ||
-      !Array.isArray(parsed.singleItems) ||
-      !Array.isArray(parsed.multiLines)
-    ) {
-      return null;
-    }
-
-    const singleItems: Array<[string, PingOverviewItem]> = [];
-    for (const entry of parsed.singleItems) {
-      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string") {
-        return null;
-      }
-      const item = parseCachedPingItem(entry[1]);
-      if (!item || item.client !== entry[0]) return null;
-      singleItems.push([entry[0], item]);
-    }
-
-    const multiLines: Array<[string, HomepagePingLine[]]> = [];
-    for (const entry of parsed.multiLines) {
-      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string") {
-        return null;
-      }
-      if (!Array.isArray(entry[1])) return null;
-      const lines: HomepagePingLine[] = [];
-      for (const line of entry[1]) {
-        if (
-          !isRecord(line) ||
-          typeof line.taskId !== "number" ||
-          !Number.isSafeInteger(line.taskId) ||
-          line.taskId <= 0
-        ) {
-          return null;
-        }
-        if (typeof line.taskName !== "string") return null;
-        const item = parseCachedPingItem(line);
-        if (!item || item.client !== entry[0]) return null;
-        lines.push({ taskId: line.taskId, taskName: line.taskName, ...item });
-      }
-      multiLines.push([entry[0], lines]);
-    }
-
-    return {
-      intervalMs:
-        typeof parsed.intervalMs === "number" &&
-        Number.isFinite(parsed.intervalMs) &&
-        parsed.intervalMs > 0
-          ? parsed.intervalMs
-          : DEFAULT_PING_REFRESH_INTERVAL,
-      singleItems,
-      multiLines,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function selectPersistablePingOverview(
-  result: PingOverviewMapResult,
-): PersistablePingOverviewData | null {
-  // 全部失败时保留旧缓存，避免把空占位写成“成功”并刷新旧数据的寿命。
-  if (!result.assignmentKey || result.successfulTaskIds.length === 0) {
-    return null;
-  }
-
-  // 失败任务可能仍在内存里显示上一轮数据，但不能把它们带回缓存；否则下一次刷新
-  // 会把失败的旧值当成新鲜数据。每个成功任务的数据独立写入同一个 assignment 缓存。
-  const singleItems = Array.from(result.singleItems.entries()).filter(
-    ([, item]) => item.loadState === "ready",
-  );
-  const multiLines = Array.from(result.multiLines.entries())
-    .map(([uuid, lines]) => [
-      uuid,
-      lines.filter((line) => line.loadState === "ready"),
-    ] as [string, HomepagePingLine[]])
-    .filter(([, lines]) => lines.length > 0);
-
-  return { singleItems, multiLines };
-}
-
-function persistPingOverviewCache(result: PingOverviewMapResult) {
-  if (!result.assignmentKey || typeof window === "undefined") return;
-  try {
-    const persistable = selectPersistablePingOverview(result);
-    if (!persistable) return;
-    const payload: PingOverviewCachePayload = {
-      version: 1,
-      savedAt: Date.now(),
-      assignmentKey: result.assignmentKey,
-      intervalMs: result.intervalMs,
-      ...persistable,
-    };
-    window.sessionStorage.setItem(PING_CACHE_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // 隐私模式或存储配额不足时继续使用内存数据。
-  }
-}
-
-function schedulePingRefresh(intervalMs: number) {
-  if (pingRefreshTimer != null) {
-    window.clearTimeout(pingRefreshTimer);
-    pingRefreshTimer = null;
-  }
-  // 没有组件消费 overview 时就停止轮询。等有消费者再次挂载时，
-  // 由 ensurePingOverviewStarted 重新启动整条链路。
-  if (pingPollingDisposed || activeConsumers <= 0) return;
-  pingRefreshTimer = window.setTimeout(() => {
-    pingRefreshTimer = null;
-    void refreshPingOverview();
-  }, intervalMs);
-}
-
-function stopPingPolling() {
-  if (pingRefreshTimer != null) {
-    window.clearTimeout(pingRefreshTimer);
-    pingRefreshTimer = null;
-  }
-  // 中止进行中的 refresh（如果有），让它的请求和带宽在 teardown 时立刻释放；
-  // refreshPingOverview 会把已 abort 的 signal 当成非当前，跳过 commit/重新调度。
-  if (pingAbortController) {
-    pingAbortController.abort();
-    pingAbortController = null;
-  }
-}
-
-function commitPingOverview(
-  assignmentKey: string,
-  intervalMs: number,
-  singleItems: Map<string, PingOverviewItem>,
-  multiLines: Map<string, HomepagePingLine[]>,
-  options: {
-    status?: PingOverviewLoadState;
-    isRefreshing?: boolean;
-    changedUuids?: readonly string[];
-  } = {},
-) {
-  const touched = new Set<string>();
-  const prevSingleItems = pingOverviewState.singleItems;
-  const prevMultiLines = pingOverviewState.multiLines;
-  const assignmentChanged = pingOverviewState.assignmentKey !== assignmentKey;
-  const keys = options.changedUuids
-    ? new Set(options.changedUuids)
-    : new Set<string>([
-        ...prevSingleItems.keys(),
-        ...singleItems.keys(),
-        ...prevMultiLines.keys(),
-        ...multiLines.keys(),
-      ]);
-  const keysToCompare = assignmentChanged
-    ? new Set<string>([
-        ...keys,
-        ...prevSingleItems.keys(),
-        ...singleItems.keys(),
-        ...prevMultiLines.keys(),
-        ...multiLines.keys(),
-      ])
-    : keys;
-  let nextSingleItems = prevSingleItems;
-  let nextMultiLines = prevMultiLines;
-  let singleCloned = false;
-  let multiCloned = false;
-
-  for (const key of keysToCompare) {
-    const prev = prevSingleItems.get(key);
-    const next = singleItems.get(key);
-    if (!next) {
-      if (prev) {
-        if (!singleCloned) {
-          nextSingleItems = new Map(prevSingleItems);
-          singleCloned = true;
-        }
-        nextSingleItems.delete(key);
-        touched.add(key);
-      }
-    } else if (!equalPingItem(prev, next)) {
-      if (!singleCloned) {
-        nextSingleItems = new Map(prevSingleItems);
-        singleCloned = true;
-      }
-      nextSingleItems.set(key, next);
-      touched.add(key);
-    }
-
-    const prevLines = prevMultiLines.get(key);
-    const nextLines = multiLines.get(key);
-    if (!nextLines) {
-      if (prevLines) {
-        if (!multiCloned) {
-          nextMultiLines = new Map(prevMultiLines);
-          multiCloned = true;
-        }
-        nextMultiLines.delete(key);
-        touched.add(key);
-      }
+  for (const sample of samples) {
+    const value = sample.ping[carrier];
+    if (value == null) {
+      // 这一刻确实测过、但这条线路没有值，记下来防止相邻样本把它填平。
+      emptyTimes.push(sample.time);
       continue;
     }
-    const stable = nextLines.map((line, index) =>
-      equalPingLine(prevLines?.[index], line) ? (prevLines?.[index] ?? line) : line,
-    );
-    const unchanged =
-      prevLines?.length === stable.length &&
-      stable.every((line, index) => line === prevLines[index]);
-    if (!unchanged || !prevLines) {
-      if (!multiCloned) {
-        nextMultiLines = new Map(prevMultiLines);
-        multiCloned = true;
-      }
-      nextMultiLines.set(key, stable);
-      touched.add(key);
+    const sampleLoss = sample.ping[lossKey];
+    out.push({
+      time: sample.time,
+      value,
+      // 权重由合并时定：后端窗口的点比本地样本疏几倍，要抵几份，否则丢包的加权平均
+      // 会往密的那一段偏（见 pingLiveStore 的 mergeWindowWithLocal）。
+      count: sample.weight ?? 1,
+      loss: sampleLoss,
+    });
+    if (value > max) max = value;
+    if (value >= 0) lastValue = value;
+    // 后端没给丢包值时不参与平均，否则会把「不知道」显示成 0%。
+    if (typeof sampleLoss === "number" || value < 0) {
+      // 权重同上：两个来源疏密不同，按条数平均会偏向密的那一段。
+      const counts = resolvePingSampleCounts({
+        value,
+        count: sample.weight ?? 1,
+        loss: sampleLoss,
+      });
+      lostSum += counts.lost;
+      lossWeight += counts.total;
     }
   }
 
-  const nextStatus =
-    options.status ?? (options.isRefreshing ? "loading" : "ready");
-  const nextIsRefreshing = options.isRefreshing ?? false;
-  const dataUnchanged =
-    pingOverviewState.assignmentKey === assignmentKey &&
-    pingOverviewState.intervalMs === intervalMs &&
-    touched.size === 0 &&
-    nextSingleItems.size === prevSingleItems.size &&
-    nextMultiLines.size === prevMultiLines.size;
-  const statusUnchanged =
-    pingOverviewStatus.status === nextStatus &&
-    pingOverviewStatus.isRefreshing === nextIsRefreshing;
-
-  if (dataUnchanged && statusUnchanged) {
-    return;
-  }
-
-  if (!dataUnchanged) {
-    pingOverviewState = {
-      assignmentKey,
-      intervalMs,
-      singleItems: nextSingleItems,
-      multiLines: nextMultiLines,
-    };
-  }
-
-  setPingOverviewStatus(nextStatus, nextIsRefreshing);
-
-  for (const key of touched) {
-    const listeners = pingListeners.get(key);
-    if (!listeners) continue;
-    for (const listener of listeners) listener();
-  }
-}
-
-async function refreshPingOverview() {
-  if (pingPollingDisposed || pingRefreshInFlight) return;
-
-  pingRefreshInFlight = true;
-  const hasCachedOverview =
-    pingOverviewStatus.status === "ready" &&
-    (pingOverviewState.singleItems.size > 0 || pingOverviewState.multiLines.size > 0);
-  setPingOverviewStatus(hasCachedOverview ? "ready" : "loading", true);
-  const visibleKey = scheduledVisibleKey;
-  const selectionKey = scheduledSelectionKey;
-  const controller = new AbortController();
-  pingAbortController = controller;
-  const { signal } = controller;
-  // 判断当前请求是否仍然有效（没被 stopPingPolling 中止，
-  // 且 visible/binding 分配在执行期间没有被改掉）。
-  const isCurrent = () =>
-    !signal.aborted &&
-    visibleKey === scheduledVisibleKey &&
-    selectionKey === scheduledSelectionKey;
-
-  try {
-    if (scheduledVisibleUuids.length === 0) {
-      commitPingOverview(
-        "",
-        DEFAULT_PING_REFRESH_INTERVAL,
-        new Map(),
-        new Map(),
-      );
-      return;
-    }
-
-    const next = await buildPingOverviewMap(
-      1,
-      scheduledVisibleUuids,
-      scheduledBindings,
-      scheduledMultiTaskIds,
-      signal,
-      pingOverviewState,
-      getPingOverview,
-      undefined,
-      (progress) => {
-        if (!isCurrent()) return;
-        commitPingOverview(
-          progress.assignmentKey,
-          progress.intervalMs,
-          progress.singleItems,
-          progress.multiLines,
-          {
-            status: hasCachedOverview ? "ready" : "loading",
-            isRefreshing: true,
-            changedUuids: progress.changedUuids,
-          },
-        );
-      },
-    );
-    if (isCurrent()) {
-      const hasRequestedTasks = next.assignmentKey.length > 0;
-      const nextStatus: PingOverviewLoadState = !hasRequestedTasks
-        ? "ready"
-        : next.successfulTaskIds.length > 0
-          ? "ready"
-          : "error";
-      commitPingOverview(
-        next.assignmentKey,
-        next.intervalMs,
-        next.singleItems,
-        next.multiLines,
-        {
-          status: nextStatus,
-          isRefreshing: false,
-        },
-      );
-      persistPingOverviewCache(next);
-      schedulePingRefresh(
-        next.successfulTaskIds.length > 0
-          ? next.intervalMs
-          : DEFAULT_PING_REFRESH_INTERVAL,
-      );
-    }
-  } catch {
-    if (isCurrent()) {
-      setPingOverviewStatus(
-        hasCachedOverview ? "ready" : "error",
-        false,
-      );
-      schedulePingRefresh(DEFAULT_PING_REFRESH_INTERVAL);
-    }
-  } finally {
-    pingRefreshInFlight = false;
-    if (pingAbortController === controller) pingAbortController = null;
-    // 只要消费者还想轮询但队列里没有任务，就恢复轮询。这覆盖了执行中途 assignment
-    // 变化（上面那次跑会跳过 commit）以及 abort/重新挂载竞态（如 StrictMode:
-    // mount→stop(abort)→mount），后者里被 abort 的那次不能负责重新调度。成功或失败
-    // 的一次已经设过 timer，所以稳态下这里是 no-op。
-    if (
-      activeConsumers > 0 &&
-      scheduledVisibleUuids.length > 0 &&
-      pingRefreshTimer == null
-    ) {
-      void refreshPingOverview();
-    }
-  }
-}
-
-function ensurePingOverviewStarted(
-  visibleUuids: string[],
-  bindings: HomepagePingTaskBindings,
-  multiTaskIds: number[],
-) {
-  const normalizedVisibleUuids = normalizeVisibleUuids(visibleUuids);
-  const visibleKey = normalizedVisibleUuids.join("|");
-  const selectionKey = `${stringifyBindings(bindings)}|multi:${multiTaskIds.join(",")}`;
-
-  if (
-    scheduledVisibleKey !== visibleKey ||
-    scheduledSelectionKey !== selectionKey
-  ) {
-    scheduledVisibleUuids = normalizedVisibleUuids;
-    scheduledVisibleKey = visibleKey;
-    scheduledBindings = bindings;
-    scheduledMultiTaskIds = multiTaskIds;
-    scheduledSelectionKey = selectionKey;
-
-    pingAbortController?.abort();
-
-    if (pingRefreshTimer != null) {
-      window.clearTimeout(pingRefreshTimer);
-      pingRefreshTimer = null;
-    }
-    const assignmentKey = resolvePingAssignmentKey(
-      normalizedVisibleUuids,
-      bindings,
-      multiTaskIds,
-    );
-    const cached = readPingOverviewCache(assignmentKey);
-    commitPingOverview(
-      assignmentKey,
-      cached?.intervalMs ?? DEFAULT_PING_REFRESH_INTERVAL,
-      cached ? new Map(cached.singleItems) : new Map(),
-      cached ? new Map(cached.multiLines) : new Map(),
-      {
-        status: cached ? "ready" : "loading",
-        isRefreshing: true,
-      },
-    );
-    void refreshPingOverview();
-    return;
-  }
-
-  // 只要没有待处理请求、也没有已调度的 tick 就重启——这同时覆盖首次挂载
-  // 和轮询被停止后的恢复。
-  if (
-    normalizedVisibleUuids.length > 0 &&
-    !pingRefreshInFlight &&
-    pingRefreshTimer == null
-  ) {
-    void refreshPingOverview();
-  }
-}
-
-function subscribeToPingItem(uuid: string, listener: Listener) {
-  let listeners = pingListeners.get(uuid);
-  if (!listeners) {
-    listeners = new Set();
-    pingListeners.set(uuid, listeners);
-  }
-  listeners.add(listener);
-
-  return () => {
-    listeners?.delete(listener);
-    if (listeners && listeners.size === 0) {
-      pingListeners.delete(uuid);
-    }
+  return {
+    // 该线路没有任何实测值时不算"已分配"：卡片不画空柱子，
+    // 也让"模拟延迟"设置有机会接管。
+    client,
+    isAssigned: out.length > 0,
+    loadState: "ready",
+    lastValue,
+    metricIntervalMs: sampleIntervalMs ?? resolveSampleIntervalMs(samples),
+    samples: out,
+    emptyTimes,
+    max,
+    loss: lossWeight > 0 ? (lostSum / lossWeight) * 100 : null,
   };
 }
 
-function getPingSnapshot(uuid: string) {
-  return pingOverviewState.singleItems.get(uuid) ?? EMPTY_PING;
-}
-
-function getPingLinesSnapshot(uuid: string) {
-  return pingOverviewState.multiLines.get(uuid) ?? EMPTY_PING_LINES;
-}
-
-export function useHomepagePingOverview(viewMode: NodeViewMode) {
-  const { data: me } = useAuth();
-  const visibleUuids = useVisibleNodeUuids(me?.logged_in === true);
-  const themeSettings = useThemeSettings();
-
-  // 主题级隐藏节点首页已不渲染,这里也从 overview 拉取里剔除——否则仍会为其绑定的
-  // ping 任务发请求、做聚合,纯属无效网络/计算开销。
-  const hiddenUuids = useHiddenNodeUuids();
-  const effectiveUuids = useMemo(
-    () =>
-      hiddenUuids.size > 0
-        ? visibleUuids.filter((uuid) => !hiddenUuids.has(uuid))
-        : visibleUuids,
-    [visibleUuids, hiddenUuids],
-  );
-  const requestMode = resolveHomepagePingRequestMode(
-    viewMode,
-    themeSettings.enableHomepageMultiPing,
-    themeSettings.homepageMultiPingTaskIds,
-  );
-  const requestedBindings =
-    requestMode === "single"
-      ? themeSettings.homepagePingBindings
-      : EMPTY_BINDINGS;
-  const requestedMultiTaskIds =
-    requestMode === "multi"
-      ? themeSettings.homepageMultiPingTaskIds
-      : EMPTY_TASK_IDS;
-  const hasRequestedVisiblePing =
-    resolvePingAssignmentKey(
-      effectiveUuids,
-      requestedBindings,
-      requestedMultiTaskIds,
-    ).length > 0;
-
-  useLayoutEffect(() => {
-    if (!themeSettings.isReady) return;
-    // 空首页或全部节点被隐藏时不应触发 capability probe / 公开任务列表请求。
-    if (hasRequestedVisiblePing) {
-      prewarmPingOverviewDependencies();
-    }
-    activeConsumers += 1;
-    ensurePingOverviewStarted(
-      effectiveUuids,
-      requestedBindings,
-      requestedMultiTaskIds,
-    );
-    return () => {
-      activeConsumers -= 1;
-      if (activeConsumers <= 0) {
-        activeConsumers = 0;
-        stopPingPolling();
-      }
-    };
-  }, [
-    effectiveUuids,
-    requestMode,
-    requestedBindings,
-    requestedMultiTaskIds,
-    hasRequestedVisiblePing,
-    themeSettings.isReady,
-  ]);
-}
-
-export function useNodePingOverview(
-  uuid: string,
-  enabled = true,
+function getCachedItem(
+  client: string,
+  taskId: number,
+  samples: readonly PingLiveSample[],
+  sampleIntervalMs?: number,
 ): PingOverviewItem {
+  if (samples.length === 0) {
+    return buildPingOverviewItem(client, taskId, samples, sampleIntervalMs);
+  }
+  let byTask = itemCache.get(samples);
+  if (!byTask) {
+    byTask = new Map();
+    itemCache.set(samples, byTask);
+  }
+  const cached = byTask.get(taskId);
+  if (cached) return cached;
+
+  const item = buildPingOverviewItem(client, taskId, samples, sampleIntervalMs);
+  byTask.set(taskId, item);
+  return item;
+}
+
+const lineCache = new WeakMap<object, Map<string, HomepagePingLine[]>>();
+
+function getCachedLines(
+  client: string,
+  taskIds: readonly number[],
+  samples: readonly PingLiveSample[],
+  sampleIntervalMs?: number,
+  names: CarrierNames = DEFAULT_CARRIER_NAMES,
+): HomepagePingLine[] {
+  if (taskIds.length === 0) return EMPTY_PING_LINES;
+  // 线路名进缓存键：站长改过名 / config 晚到时换的是另一份 names 对象，
+  // 不进键的话缓存会把旧名字一直顶回去。
+  const key = `${taskIds.join(",")}@${carrierNamesKey(names)}`;
+  if (samples.length === 0) {
+    return taskIds.map((taskId) => ({
+      ...buildPingOverviewItem(client, taskId, samples, sampleIntervalMs),
+      taskId,
+      taskName: carrierTaskName(taskId, names),
+    }));
+  }
+
+  let byKey = lineCache.get(samples);
+  if (!byKey) {
+    byKey = new Map();
+    lineCache.set(samples, byKey);
+  }
+  const cached = byKey.get(key);
+  if (cached) return cached;
+
+  const lines = taskIds.map((taskId) => ({
+    ...getCachedItem(client, taskId, samples, sampleIntervalMs),
+    taskId,
+    taskName: carrierTaskName(taskId, names),
+  }));
+  byKey.set(key, lines);
+  return lines;
+}
+
+/**
+ * 默认名走同一个常量，键里只写个短标记，免得每次渲染都拼一遍名字。
+ * 改过名时按线路表逐条拼、不手写字段：手写时只拼了前四条，站长只改 Node 1~4 的名字，缓存就一直顶回旧名字。
+ */
+function carrierNamesKey(names: CarrierNames): string {
+  return names === DEFAULT_CARRIER_NAMES
+    ? "default"
+    : CARRIER_KEYS.map((key) => names[key]).join("|");
+}
+
+function usePingSamples(uuid: string, enabled: boolean): readonly PingLiveSample[] {
   const subscribe = useCallback(
-    (cb: Listener) =>
-      uuid && enabled ? subscribeToPingItem(uuid, cb) : () => undefined,
+    (callback: () => void) =>
+      uuid && enabled ? subscribePingHistory(uuid, callback) : () => undefined,
     [enabled, uuid],
   );
   const getSnapshot = useCallback(
-    () => (uuid && enabled ? getPingSnapshot(uuid) : EMPTY_PING),
+    () => (uuid && enabled ? getPingHistorySnapshot(uuid) : EMPTY_SAMPLES),
     [enabled, uuid],
   );
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/**
+ * 柱子按后端窗口画（口径与 `/api/servers` 一致），但旁边那个「当前延迟」数字仍取 WS 的实时值。
+ *
+ * 窗口末点最多滞后一格（2 分钟），快照本身还比 WS 旧十几到几十秒 —— 只看数字会觉得卡住不动。
+ * 丢包率不这么办：它是整段窗口的加权平均，取最后一次采样会把「6 个包丢 1 个」直接顶成 16%，
+ * 而柱子还是全绿。
+ */
+export function withLiveLatency(
+  item: PingOverviewItem,
+  live: CarrierPingSnapshot | null,
+  taskId: number,
+): PingOverviewItem {
+  if (!live || !item.isAssigned) return item;
+  const carrier = CARRIER_TASK_BY_ID.get(taskId)?.key;
+  if (!carrier) return item;
+  const value = live[carrier];
+  // 负值是「这次探测失败」，不是延迟；缺值同理，都保持窗口给的那个数。
+  if (value == null || value < 0 || value === item.lastValue) return item;
+  return { ...item, lastValue: value };
+}
+
+/**
+ * 节点在单线路模式下显示哪条线路：单独绑过就用绑的，否则用站点的「默认线路」设置
+ * （`homepageDefaultPingTaskId`，站长没设过才是电信）。
+ */
+export function useSelectedTaskId(uuid: string): number {
+  const { homepagePingBindings, homepageDefaultPingTaskId } = useThemeSettings();
+  return useMemo(() => {
+    const byClient = invertHomepagePingTaskBindings(homepagePingBindings);
+    return (
+      byClient.get(uuid) ??
+      resolveDefaultHomepagePingTaskId(homepageDefaultPingTaskId)
+    );
+  }, [homepageDefaultPingTaskId, homepagePingBindings, uuid]);
+}
+
+/**
+ * 保留给首页网格调用。实时累积不需要轮询，这里只是接口占位，
+ * 让调用方不必区分数据来源。
+ */
+export function useHomepagePingOverview(_viewMode: NodeViewMode): void {
+  void _viewMode;
+}
+
+export function useNodePingOverview(uuid: string, enabled = true): PingOverviewItem {
+  const samples = usePingSamples(uuid, enabled);
+  const taskId = useSelectedTaskId(uuid);
+  return useMemo(
+    () =>
+      enabled
+        ? getCachedItem(uuid, taskId, samples)
+        : EMPTY_PING,
+    [enabled, samples, taskId, uuid],
+  );
 }
 
 export function useNodePingOverviewLines(
   uuid: string,
   enabled = true,
 ): HomepagePingLine[] {
-  const subscribe = useCallback(
-    (cb: Listener) =>
-      uuid && enabled ? subscribeToPingItem(uuid, cb) : () => undefined,
-    [enabled, uuid],
+  const samples = usePingSamples(uuid, enabled);
+  const taskIds = useNodeMultiPingTaskIds(uuid);
+  const carrierNames = useCarrierNames();
+  return useMemo(
+    () =>
+      enabled
+        ? getCachedLines(uuid, taskIds, samples, undefined, carrierNames)
+        : EMPTY_PING_LINES,
+    [carrierNames, enabled, samples, taskIds, uuid],
   );
-  const getSnapshot = useCallback(
-    () => (uuid && enabled ? getPingLinesSnapshot(uuid) : EMPTY_PING_LINES),
-    [enabled, uuid],
+}
+
+/** 这台节点在本机换过的线路；没换过是同一个空表，引用稳定。 */
+export function useNodePingLineOverrides(uuid: string): PingLineOverrides {
+  const getSnapshot = useCallback(() => getPingLineOverrides(uuid), [uuid]);
+  return useSyncExternalStore(subscribePingLineOverrides, getSnapshot, getSnapshot);
+}
+
+/** 本机所有节点换过的线路（设置页拼「保存到后端」快照用）。 */
+export function useAllPingLineOverrides(): PingLineOverridesByNode {
+  return useSyncExternalStore(
+    subscribePingLineOverrides,
+    getAllPingLineOverrides,
+    getAllPingLineOverrides,
   );
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/**
+ * 多线路模式下这台节点实际显示哪几条线路，三层叠：站点的 `homepageMultiPingTaskIds` 打底 →
+ * 站长存到后端的逐节点换线（`homepagePingLineOverrides`）→ 本机在卡片上换过的行
+ * （`pingLineOverrideStore`）。取数（上面的 `useNodePingOverviewLines`）和卡片排行
+ * （`useNodeCardModel`）必须共用这一份，否则会出现「行上写着电信、画的是联通」。
+ * 条数仍由站点设置决定，只能换、不能加减。
+ */
+export function useNodeMultiPingTaskIds(uuid: string): readonly number[] {
+  const { homepageMultiPingTaskIds, homepagePingLineOverrides } = useThemeSettings();
+  const siteOverrides = nodePingLineOverrides(homepagePingLineOverrides, uuid);
+  const localOverrides = useNodePingLineOverrides(uuid);
+  return useMemo(
+    () =>
+      resolveNodePingLineTaskIds(
+        resolveNodePingLineTaskIds(homepageMultiPingTaskIds, siteOverrides),
+        localOverrides,
+      ),
+    [homepageMultiPingTaskIds, localOverrides, siteOverrides],
+  );
+}
+
+const EMPTY_TASK_IDS: readonly number[] = [];
+const availableTaskIdsCache = new WeakMap<object, readonly number[]>();
+
+/**
+ * 这台节点有数据的线路（缓冲区里至少一个样本有值，探测失败的负值也算），按线路表顺序。
+ *
+ * 卡片线路切换菜单只列这些：后端对没配探测目标的槽位下发 `false`（→ null），那几条对这台节点
+ * 永远是空的，换过去只会是一行「无样本」——「没数据就不展示」是站长定的口径。
+ * 按样本数组缓存，同一份缓冲区返回同一个数组。
+ */
+export function listAvailablePingTaskIds(
+  samples: readonly PingLiveSample[],
+): readonly number[] {
+  if (samples.length === 0) return EMPTY_TASK_IDS;
+  const cached = availableTaskIdsCache.get(samples);
+  if (cached) return cached;
+  const taskIds = CARRIER_TASKS.filter((task) =>
+    samples.some((sample) => sample.ping[task.key] != null),
+  ).map((task) => task.id);
+  availableTaskIdsCache.set(samples, taskIds);
+  return taskIds;
+}
+
+export function useAvailablePingTaskIds(uuid: string, enabled = true): readonly number[] {
+  return listAvailablePingTaskIds(usePingSamples(uuid, enabled));
+}
+
+/**
+ * 掉线之后的柱子怎么画。
+ *
+ * `offlineSince` 是节点最后一次上报的时刻（在线时传 null）。它做三件事：
+ *
+ * 1. 丢掉时间戳晚于它的样本。后端 `/api/servers` 的一小时窗口是「没有新数据就沿用
+ *    上一个值」，节点掉线后它很可能照样按墙钟往前铺格子，不挡掉就会拿旧值填满掉线段。
+ * 2. 把最后一个真实样本的延续截断在这里，不再吃 `MAX_SAMPLE_HOLD_MS` 那 5 分钟。
+ * 3. 整格都在它之后的桶标成 `offline`，由卡片涂红。注意是「整格」——掉线当下那一格
+ *    还压着在线数据，要等它被掉线时间填满才变红，柱子于是一格一格往左推。
+ */
+function resolveOfflineSince(offlineSince?: number | null): number | null {
+  return typeof offlineSince === "number" &&
+    Number.isFinite(offlineSince) &&
+    offlineSince > 0
+    ? offlineSince
+    : null;
+}
+
+/**
+ * 柱状图画多宽：不写死时间区，直接由数据自己的时间范围决定 —— 最老的一个事件（样本或空槽）到
+ * `now`。后端把窗口从 1 小时调到 2 小时、或以后再调，一格仍旧对着一个后端采样点，前端不用改
+ * 常量（后端作者的原话：前端不写死时间区，自动取 api 返回的内容）。夹在
+ * [{@link MIN_PING_WINDOW_MS}, {@link MAX_PING_WINDOW_MS}] 之间：太短会把「刚加进来只有几分钟
+ * 数据」的节点画成几格宽（下限内左侧照旧留空）；太长（TTL 边缘的孤立样本）会把柱子压扁。
+ * 一个数据都没有时退回 {@link PING_WINDOW_MS} 基准（此时全是空格，跨度多少无所谓）。
+ * `override` 由调用方显式给定时优先（单测用来钉死跨度）。
+ */
+function resolvePingWindowMs(
+  ping: Pick<PingOverviewItem, "samples" | "emptyTimes">,
+  offlineAt: number | null,
+  now: number,
+  override?: number,
+): number {
+  if (typeof override === "number" && Number.isFinite(override) && override > 0) {
+    return Math.min(MAX_PING_WINDOW_MS, Math.max(MIN_PING_WINDOW_MS, override));
+  }
+  let oldest = Number.POSITIVE_INFINITY;
+  const consider = (time: number) => {
+    if (
+      Number.isFinite(time) &&
+      time > 0 &&
+      time <= now &&
+      (offlineAt == null || time <= offlineAt) &&
+      time < oldest
+    ) {
+      oldest = time;
+    }
+  };
+  for (const sample of ping.samples ?? []) consider(sample.time);
+  for (const time of ping.emptyTimes ?? []) consider(time);
+  if (!Number.isFinite(oldest)) return PING_WINDOW_MS;
+  return Math.min(MAX_PING_WINDOW_MS, Math.max(MIN_PING_WINDOW_MS, now - oldest));
 }
 
 export function buildPingBuckets(
-  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs">,
+  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs" | "emptyTimes">,
   count?: number,
   now = Date.now(),
+  offlineSince?: number | null,
+  windowMs?: number,
 ): PingOverviewBucket[] {
-  const totalWindowMs = 60 * 60 * 1000;
-  const requestedCount = count ?? MAX_VISIBLE_HOMEPAGE_PING_BUCKETS;
+  const offlineAt = resolveOfflineSince(offlineSince);
+  const totalWindowMs = resolvePingWindowMs(ping, offlineAt, now, windowMs);
+  const requestedCount = count ?? HOMEPAGE_PING_BUCKET_COUNT;
   const boundedRequestedCount =
     Number.isFinite(requestedCount) && requestedCount > 0
       ? Math.min(240, Math.max(1, Math.round(requestedCount)))
-      : MAX_VISIBLE_HOMEPAGE_PING_BUCKETS;
+      : HOMEPAGE_PING_BUCKET_COUNT;
   const metricIntervalMs =
     typeof ping.metricIntervalMs === "number" &&
     Number.isFinite(ping.metricIntervalMs) &&
@@ -1317,44 +507,102 @@ export function buildPingBuckets(
 
     totals[bucketIndex] += sampleCount;
     losts[bucketIndex] += sampleLost;
-    // 聚合点的 value 已由 metric 适配层恢复为“成功样本均值”，这里按 valid count
-    // 加权；旧接口/模拟数据没有 count，仍等价于单样本累加。
     if (sample.value >= 0 && sampleValid > 0) {
       positiveSums[bucketIndex] += sample.value * sampleValid;
       positiveCounts[bucketIndex] += sampleValid;
     }
   };
 
-  for (const sample of ping.samples ?? []) {
-    if (metricIntervalMs > bucketMs) {
-      const sampleEnd = sample.time + metricIntervalMs;
-      if (sampleEnd <= windowStart || sample.time > now) continue;
+  // 一个样本代表「到下一次采样为止的这段时间」。下一次采样可能是下一个有值的样本，
+  // 也可能是一个明确没有值的槽位（`emptyTimes`）—— 后者要让图表真的留空。
+  // 后端窗口的最新一格常常不落在网格上，与上一格能差好几分钟；
+  // 不做延续就会在最右边凭空空出一格，而且随着 now 推进时有时无。
+  // 掉线之后的样本一律不认：后端窗口可能还在按墙钟往前铺格子、沿用最后一个已知值。
+  const beforeOffline = (time: number) => offlineAt == null || time <= offlineAt;
 
-      // 后端时间戳是聚合桶起点。以每个可视 bucket 的中点判断它属于哪个
-      // 聚合区间，相当于对粗粒度数据做 sample-and-hold：不会制造规律性空洞，
-      // 也不会因为减少 DOM 数量而让不同节点的柱宽不一致。
-      for (let index = 0; index < resolvedCount; index += 1) {
-        const midpoint = windowStart + (index + 0.5) * bucketMs;
-        if (midpoint >= sample.time && midpoint < sampleEnd) {
-          addSampleToBucket(index, sample);
-        }
+  const eventTimes = [
+    ...(ping.samples ?? []).map((sample) => sample.time),
+    ...(ping.emptyTimes ?? []),
+  ]
+    .filter(beforeOffline)
+    .sort((left, right) => left - right);
+
+  const nextEventAfter = (time: number): number | undefined => {
+    let low = 0;
+    let high = eventTimes.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (eventTimes[mid]! <= time) low = mid + 1;
+      else high = mid;
+    }
+    return eventTimes[low];
+  };
+
+  // 延续上限至少给「两格」：格宽随窗口跨度变化（2 小时 20 格≈6 分钟），固定 5 分钟会短于
+  // 后端相邻两点的间距，把连续的点断成一条条缝。相邻两点之间靠 `nextEventAfter` 兜住不会
+  // 过填，这个上限只在「后面没有下一个点」（末点或真断档）时才起作用。
+  const holdCapMs = Math.max(MAX_SAMPLE_HOLD_MS, bucketMs * 2);
+  const holdMs =
+    metricIntervalMs > 0
+      ? Math.min(holdCapMs, Math.max(metricIntervalMs, bucketMs) * 2)
+      : 0;
+
+  /**
+   * 最老的那个样本要向前补多久。
+   *
+   * 跨度改成跟着数据走之后，最老样本通常正好落在 `windowStart`，向前补基本是空操作；这段仍留着
+   * 兜两种情形：① 数据跨度不足下限、按 {@link MIN_PING_WINDOW_MS} 撑开时，最老样本在 windowStart
+   * 之后，第一格会缺一点；② 最老的事件是个空槽（`emptyTimes`）、比最老的有值样本还早。
+   * 补的量取**这个样本自己**到下一个事件的实际间隔，不用全局中位数 `metricIntervalMs`：缓冲区里
+   * 混着本地实测（约 60 秒一个），中位数会被拉低，补不够左边那格就时空时不空。上限同
+   * {@link holdMs}，免得孤立样本把左边整段涂满。
+   */
+  const leadingHoldMs = (time: number): number => {
+    if (holdMs <= 0) return 0;
+    const gapToNext = (nextEventAfter(time) ?? time + metricIntervalMs) - time;
+    return Math.min(holdMs, Math.max(metricIntervalMs, gapToNext));
+  };
+
+  const samples = (ping.samples ?? []).filter((sample) => beforeOffline(sample.time));
+  for (const [order, sample] of samples.entries()) {
+    if (sample.time > now) continue;
+
+    const coverEnd = Math.max(
+      sample.time,
+      Math.min(
+        nextEventAfter(sample.time) ?? Number.POSITIVE_INFINITY,
+        sample.time + holdMs,
+        offlineAt ?? Number.POSITIVE_INFINITY,
+        now,
+      ),
+    );
+    if (coverEnd <= windowStart) continue;
+
+    // 最老的一个样本向前补一段（见 {@link leadingHoldMs}）：跨度撑到下限、或最老事件是个空槽时，
+    // 最老样本在 windowStart 之后，不补的话最左边那格永远差一点点数据。补的量取「这个样本到下一个
+    // 事件的实际间隔」而不是全局中位数，免得被本地实测把中位数拉低而补不够。
+    const coverStart =
+      order === 0
+        ? Math.max(sample.time - leadingHoldMs(sample.time), windowStart)
+        : sample.time;
+
+    // 覆盖区间跨过哪些 bucket 的中点，就填哪些 —— 相当于 sample-and-hold，
+    // 柱宽不随节点变化，也不会因为 bucket 边界对不齐而漏格。
+    let assigned = false;
+    for (let index = 0; index < resolvedCount; index += 1) {
+      const midpoint = windowStart + (index + 0.5) * bucketMs;
+      if (midpoint >= coverStart && midpoint < coverEnd) {
+        addSampleToBucket(index, sample);
+        assigned = true;
       }
-      continue;
     }
+    if (assigned) continue;
 
-    let sampleTime = sample.time;
-    if (metricIntervalMs > 0) {
-      const sampleEnd = sample.time + metricIntervalMs;
-      if (sampleEnd <= windowStart || sample.time > now) continue;
-      const overlapStart = Math.max(sample.time, windowStart);
-      const overlapEnd = Math.min(sampleEnd, now);
-      if (overlapEnd < overlapStart) continue;
-      sampleTime = overlapStart + (overlapEnd - overlapStart) / 2;
-    } else if (sample.time < windowStart || sample.time > now) {
-      continue;
-    }
-
-    let bucketIndex = Math.floor((sampleTime - windowStart) / bucketMs);
+    // 覆盖区间比一个 bucket 还短（或正好错过中点）时，落到它自己所在的那格。
+    const overlapStart = Math.max(coverStart, windowStart);
+    const overlapEnd = Math.max(Math.min(coverEnd, now), overlapStart);
+    const center = overlapStart + (overlapEnd - overlapStart) / 2;
+    let bucketIndex = Math.floor((center - windowStart) / bucketMs);
     if (bucketIndex < 0) continue;
     if (bucketIndex >= resolvedCount) bucketIndex = resolvedCount - 1;
     addSampleToBucket(bucketIndex, sample);
@@ -1364,45 +612,48 @@ export function buildPingBuckets(
     const startAt = windowStart + index * bucketMs;
     const endAt = startAt + bucketMs;
     const total = totals[index];
-    const lost = Math.round(losts[index]);
+    // 丢包率按未取整的丢失量算：后端给的是百分比，先取整再求比例只会剩 0 和 100。
+    const lostExact = losts[index];
+    const lost = Math.round(lostExact);
     const positiveCount = positiveCounts[index];
 
     return {
       index,
       value: positiveCount > 0 ? positiveSums[index] / positiveCount : null,
-      loss: total > 0 ? (lost / total) * 100 : null,
+      loss: total > 0 ? (lostExact / total) * 100 : null,
       total,
       lost,
       startAt,
       endAt,
+      // 整格都在掉线之后才算离线格。掉线当下那一格还压着在线数据，
+      // 要等掉线时长把它填满才翻红，于是红色一格一格往左推。
+      offline: offlineAt != null && startAt >= offlineAt,
     };
   });
 }
 
 export function usePingBuckets(
-  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs">,
+  ping: Pick<PingOverviewItem, "samples" | "metricIntervalMs" | "emptyTimes">,
   count?: number,
   enabled = true,
+  offlineSince?: number | null,
+  windowMs?: number,
 ): PingOverviewBucket[] {
-  const { samples, metricIntervalMs } = ping;
-  // 轮询返回同引用数据时窗口也要随时间前移,否则时间轴最多滞后约 2 个桶;分钟粒度足够
-  // (桶宽 ≥150s),也避免每个 ws tick 都重算。
+  const { samples, metricIntervalMs, emptyTimes } = ping;
+  // 数据引用不变时窗口也要随时间前移,否则时间轴最多滞后约 2 个桶;分钟粒度足够
+  // (桶宽 ≥150s),也避免每次推送都重算。
   const now = useMinuteClock(enabled);
   return useMemo(
     () =>
       enabled
-        ? buildPingBuckets({ samples, metricIntervalMs }, count, now)
+        ? buildPingBuckets(
+            { samples, metricIntervalMs, emptyTimes },
+            count,
+            now,
+            offlineSince,
+            windowMs,
+          )
         : EMPTY_PING_BUCKETS,
-    [count, enabled, metricIntervalMs, now, samples],
+    [count, emptyTimes, enabled, metricIntervalMs, now, offlineSince, samples, windowMs],
   );
-}
-
-// 模块级定时器/请求在热更新时必须停掉,否则新旧两个模块实例会并行轮询。
-// disposed 标志 + 清零消费者计数:in-flight 请求的 finally 恢复逻辑不会再重启旧模块的轮询。
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    pingPollingDisposed = true;
-    activeConsumers = 0;
-    stopPingPolling();
-  });
 }

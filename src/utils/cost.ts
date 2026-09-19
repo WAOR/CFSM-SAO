@@ -1,4 +1,4 @@
-import type { NodeInfo } from "@/types/komari";
+import type { NodeInfo } from "@/types/cfsm";
 import { normalizeBillingCycle } from "@/utils/billing";
 import { fetchWithTimeout } from "@/utils/abort";
 import { resolveExpireTimestamp } from "@/utils/format";
@@ -8,7 +8,7 @@ const COST_TARGET_CURRENCY = "CNY";
 export const DEFAULT_COST_RATE_API_URL = "https://api.frankfurter.dev/v2/rates?base=USD";
 const RATE_CACHE_TTL_MS = 60 * 60 * 1000;
 // Legacy key retained so existing users keep their cached exchange rates after the rename.
-const RATE_CACHE_KEY_PREFIX = "komaritheme:cost-rates:";
+export const RATE_CACHE_KEY_PREFIX = "cfsm-luminaplus:cost-rates:";
 const RATE_REQUEST_TIMEOUT_MS = 10_000;
 
 const CURRENCY_ALIASES: Record<string, string> = {

@@ -1,4 +1,4 @@
-import { memo, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowDown,
@@ -17,7 +17,10 @@ import { OsLogo } from "@/components/ui/OsLogo";
 import { IpStackBadges } from "./IpStackBadges";
 import { NodeTodayTrafficPopover } from "./NodeTodayTrafficPopover";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
+import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick";
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { HOMEPAGE_PING_BUCKET_COUNT } from "@/hooks/usePingOverview";
 import { speedRateColor } from "@/utils/metricTone";
 import { supportsFineHover } from "@/utils/mediaQuery";
 import {
@@ -28,10 +31,10 @@ import {
 } from "./nodeCardShared";
 import { formatHealthBucketTooltip } from "./pingBucketText";
 import { formatBytes, type ByteRateDisplay } from "@/utils/format";
-import type { NodeInfo, NodeMetrics, PingOverviewItem, PingOverviewBucket } from "@/types/komari";
+import type { NodeInfo, NodeMetrics, PingOverviewItem, PingOverviewBucket } from "@/types/cfsm";
 
 // 迷你卡固定为巡检布局，不跟随紧凑卡的可选指标开关；数据仍走共享模型。
-const HEALTH_BAR_COUNT = 24;
+
 
 type MiniNode = NodeInfo & NodeMetrics;
 type MiniTag = { label: string; color: string };
@@ -46,7 +49,7 @@ function MiniHeader({
   showTodayTraffic: boolean;
 }) {
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
-  const detailHref = `/instance/${encodeURIComponent(node.uuid)}`;
+  const detailHref = `/server/${encodeURIComponent(node.uuid)}`;
   return (
     <header className="mini-node-header">
       <Flag region={node.region} size={14} />
@@ -272,8 +275,29 @@ function MiniHealthBars({
 }) {
   const width = Math.max(1, buckets.length * 4 - 1);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const touchHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoveredBucket = hoveredIndex == null ? null : (buckets[hoveredIndex] ?? null);
   const tooltip = hoveredBucket ? formatHealthBucketTooltip(hoveredBucket, kind) : null;
+
+  useEffect(
+    () => () => {
+      if (touchHoldTimerRef.current != null) clearTimeout(touchHoldTimerRef.current);
+    },
+    [],
+  );
+
+  const pickIndex = (clientX: number, rect: DOMRect) =>
+    setHoveredIndex(resolveTouchBucketIndex(clientX, rect, buckets.length));
+
+  /** 触屏：按下就选中，抬手后再留一会儿（口径见 `touchBucketPick`）。 */
+  const handleTouchPick = (clientX: number, rect: DOMRect) => {
+    pickIndex(clientX, rect);
+    if (touchHoldTimerRef.current != null) clearTimeout(touchHoldTimerRef.current);
+    touchHoldTimerRef.current = setTimeout(() => {
+      touchHoldTimerRef.current = null;
+      setHoveredIndex(null);
+    }, TOUCH_BUCKET_HOLD_MS);
+  };
 
   return (
     <div className="mini-health-chart-wrap">
@@ -282,17 +306,25 @@ function MiniHealthBars({
         viewBox={`0 0 ${width} 16`}
         preserveAspectRatio="none"
         aria-hidden
+        onPointerDown={(event) => {
+          if (supportsFineHover(event.pointerType)) return;
+          handleTouchPick(event.clientX, event.currentTarget.getBoundingClientRect());
+        }}
         onPointerMove={(event) => {
           if (!supportsFineHover(event.pointerType)) {
-            setHoveredIndex(null);
+            // 手指按着才跟随；触屏没有悬停，抬着手划过来不该动它。
+            if (event.buttons !== 0) {
+              handleTouchPick(event.clientX, event.currentTarget.getBoundingClientRect());
+            }
             return;
           }
-          const rect = event.currentTarget.getBoundingClientRect();
-          if (rect.width <= 0 || buckets.length === 0) return;
-          const ratio = (event.clientX - rect.left) / rect.width;
-          setHoveredIndex(Math.max(0, Math.min(buckets.length - 1, Math.floor(ratio * buckets.length))));
+          pickIndex(event.clientX, event.currentTarget.getBoundingClientRect());
         }}
-        onPointerLeave={() => setHoveredIndex(null)}
+        onPointerLeave={() => {
+          // 触屏那份有自己的收尾计时，别被这里抢先清掉。
+          if (touchHoldTimerRef.current != null) return;
+          setHoveredIndex(null);
+        }}
       >
         {buckets.map((bucket, index) => {
           const slot = healthBarSlotModel(bucket, kind);
@@ -401,8 +433,9 @@ export const MiniNodeCard = memo(function MiniNodeCard({
   showTodayTraffic?: boolean;
 }) {
   const model = useNodeCardModel(uuid, {
-    pingBucketCount: HEALTH_BAR_COUNT,
+    pingBucketCount: HOMEPAGE_PING_BUCKET_COUNT,
   });
+  const themeSettings = useThemeSettings();
 
   if (!model.node) {
     return <article className="mini-node-card animate-pulse" aria-busy />;
@@ -431,7 +464,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({
       <MiniHeader
         node={node}
         osName={osName}
-        showTodayTraffic={showTodayTraffic}
+        showTodayTraffic={showTodayTraffic && themeSettings.showTodayTrafficPopover !== false}
       />
       <MiniChips tags={footerTags} renewalPrice={renewalPrice} ipv4={node.ipv4} ipv6={node.ipv6} />
       <MiniVitals node={node} loadFraction={loadFraction} />

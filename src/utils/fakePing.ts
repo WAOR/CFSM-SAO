@@ -1,4 +1,4 @@
-import type { PingOverviewItem } from "@/types/komari";
+import type { PingOverviewItem } from "@/types/cfsm";
 
 // 未绑定首页 Ping 任务的节点用这份前端生成的"模拟延迟"填充卡片,避免与已绑定节点混排时出现
 // "未配置"占位。纯展示数据:不发请求、不代表真实网络质量,是否启用由 fakePingForUnbound 决定。

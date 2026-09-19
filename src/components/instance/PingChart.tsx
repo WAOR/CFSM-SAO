@@ -3,6 +3,8 @@ import UplotReact from "uplot-react";
 import type uPlot from "uplot";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import { usePingRecords } from "@/hooks/useRecords";
+import { useCarrierNames } from "@/hooks/usePublicConfig";
+import { carrierTaskName } from "@/services/cfsm/mappers";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
@@ -14,6 +16,7 @@ import {
   type ChartTooltipState,
 } from "./chartShared";
 import { ChartTooltip, SwitchToggle } from "./ChartParts";
+import { PingLossStrip, type PingLossRow } from "./PingLossStrip";
 import {
   cutPeakValues,
   detectTypicalIntervalSeconds,
@@ -23,9 +26,15 @@ import {
 } from "./chartData";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
-import { resolvePingChartInterval, resolvePingSampleCounts } from "@/utils/pingMetrics";
+import {
+  bucketPingLoss,
+  formatPingTooltipValue,
+  resolvePingChartInterval,
+  resolvePingSampleCounts,
+  type PingLossSample,
+} from "@/utils/pingMetrics";
 import { usePreferences } from "@/hooks/usePreferences";
-import type { PingRecord, PingTaskStats } from "@/types/komari";
+import type { PingRecord, PingTaskStats } from "@/types/cfsm";
 import type { TimedMetricPoint } from "./chartData";
 
 interface WeightedLatency {
@@ -96,6 +105,10 @@ export function summarizePingRecords(records: PingRecord[]) {
 
 const EMPTY_PING_STATS: PingTaskStats[] = [];
 const MAX_RENDER_POINTS = 160;
+// 纵轴槽位与左右内边距：丢包色带靠这三个常量与主图对齐，改一处必须改另一处。
+const Y_AXIS_SIZE = 64;
+const CHART_PADDING_LEFT = 2;
+const CHART_PADDING_RIGHT = 14;
 // 1 即关闭平滑(smoothByCount 对 <=1 原样返回);保留常量便于调参,非削峰模式当前不平滑。
 const SMOOTH_WINDOW_POINTS = 1;
 const SMOOTH_WINDOW_POINTS_PEAK = 13;
@@ -123,7 +136,11 @@ export function PingChart({
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
   const [connectNulls, setConnectNulls] = useState(false);
   const [cutPeak, setCutPeak] = useState(false);
+  const [showLoss, setShowLoss] = useState(true);
+  const [cursorLeft, setCursorLeft] = useState<number | null>(null);
   const chartRef = useRef<uPlot.AlignedData>([[]]);
+  // tooltip 的 buildRows 只拿得到点位下标，丢包值走 ref 与图表数据同步。
+  const lossRef = useRef<Array<Array<number | null>>>([]);
   const [tooltip, setTooltip] = useState<ChartTooltipState>({
     show: false,
     left: 0,
@@ -132,8 +149,18 @@ export function PingChart({
     time: "",
   });
   const isDark = resolvedAppearance === "dark";
+  // 线路名以 `/api/config` 的自定义名为准：历史查询是按 uuid+hours 缓存的，站长改名
+  // （或 config 晚于历史返回）不会让那份缓存重算，所以在这里按当前名字重新贴一遍。
+  const carrierNames = useCarrierNames();
   // API 顺序与后台任务权重一致，响应本身不一定包含可重排的权重。
-  const tasks = useMemo(() => [...(data?.tasks ?? [])], [data]);
+  const tasks = useMemo(
+    () =>
+      (data?.tasks ?? []).map((task) => ({
+        ...task,
+        name: carrierTaskName(task.id, carrierNames),
+      })),
+    [carrierNames, data],
+  );
   const taskLabels = useMemo(() => {
     const counts = new Map<string, number>();
     for (const task of tasks) {
@@ -192,9 +219,11 @@ export function PingChart({
     [data],
   );
 
-  const chart = useMemo(() => {
+  const chartBundle = useMemo(() => {
     if (!data?.records.length || !tasks.length) return null;
     const pointMap = new Map<number, TimedMetricPoint>();
+    // 丢包与延迟走各自的聚合口径：延迟保峰、丢包按样本数加权平均，所以在这里单独攒原始样本。
+    const lossSamples = new Map<string, PingLossSample[]>(taskKeys.map((key) => [key, []]));
     const taskIntervals = tasks
       .map((task) => task.interval)
       .filter((value): value is number => typeof value === "number" && value > 0);
@@ -212,13 +241,17 @@ export function PingChart({
     // 升序游标把邻近任务采样合并到同一时间锚点，保持 O(n)。
     let lastAnchor = Number.NEGATIVE_INFINITY;
     for (const { record, time } of sortedRecords) {
-      if (!taskKeySet.has(String(record.task_id))) continue;
+      const taskKey = String(record.task_id);
+      if (!taskKeySet.has(taskKey)) continue;
       const anchor = time - lastAnchor <= tolerance ? lastAnchor : time;
       if (anchor === time) lastAnchor = time;
       const current = pointMap.get(anchor) ?? { time: anchor };
       // 0 是亚毫秒成功，负值才表示丢包。
-      current[String(record.task_id)] = record.value >= 0 ? record.value : null;
+      current[taskKey] = record.value >= 0 ? record.value : null;
       pointMap.set(anchor, current);
+      // 整点超时(value < 0)与部分丢包(loss 百分比)都由 resolvePingSampleCounts 归一。
+      const counts = resolvePingSampleCounts(record);
+      lossSamples.get(taskKey)?.push({ time: anchor, lost: counts.lost, total: counts.total });
     }
 
     let chartPoints = [...pointMap.values()].sort((a, b) => a.time - b.time);
@@ -247,12 +280,34 @@ export function PingChart({
       cutPeak ? SMOOTH_WINDOW_POINTS_PEAK : SMOOTH_WINDOW_POINTS,
     );
 
-    return [reduced.times, ...smoothed] as uPlot.AlignedData;
+    return {
+      data: [reduced.times, ...smoothed] as uPlot.AlignedData,
+      // 归到与折线同一套时间格上，色带才能和曲线逐像素对齐。削峰/平滑只作用于延迟，
+      // 丢包始终是真实值。
+      loss: taskKeys.map((key) =>
+        bucketPingLoss(lossSamples.get(key) ?? [], reduced.times),
+      ),
+    };
   }, [cutPeak, data, sortedRecords, taskKeySet, taskKeys, tasks]);
 
+  const chart = chartBundle?.data ?? null;
+
+  // 只画当前可见的线路，和图例的显示/隐藏联动。
+  const lossRows = useMemo<PingLossRow[]>(() => {
+    if (!chartBundle) return [];
+    return visibleTasks.map((task) => ({
+      id: task.id,
+      label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
+      loss: chartBundle.loss[taskIndexById.get(task.id) ?? 0] ?? [],
+    }));
+  }, [chartBundle, taskIndexById, taskLabels, visibleTasks]);
+
   useEffect(() => {
-    if (chart) chartRef.current = chart;
-  }, [chart]);
+    if (chartBundle) {
+      chartRef.current = chartBundle.data;
+      lossRef.current = chartBundle.loss;
+    }
+  }, [chartBundle]);
 
   const requestedXRange = useMemo(() => historyChartRangeSeconds(data), [data]);
   const coverageMeta = useMemo(() => {
@@ -273,10 +328,29 @@ export function PingChart({
     if (!times?.length) return null;
     return historyCoverageLabel(coverageMeta, times[0], times[times.length - 1]);
   }, [chart, coverageMeta]);
+  // 查询超过 1 小时时，后端按后台设置的采样点数返回（「查询超过 1 小时时返回的采样点数」，
+  // 可选 60/120/180/240）。点数固定而区间不固定，于是区间越长采样越粗 —— 240 点时 12 小时
+  // 约 3 分钟一个、1 天约 6 分钟一个。把实际分辨率写出来，读者才明白为什么同一段短促丢包
+  // 在短区间看得到、长区间就没了。
+  const samplingLabel = useMemo(() => {
+    if (sortedRecords.length < 2) return null;
+    const seconds = detectTypicalIntervalSeconds(
+      sortedRecords.map(({ time }) => time),
+      0,
+    );
+    if (!Number.isFinite(seconds) || seconds <= 0) return null;
+    const text =
+      seconds >= 60
+        ? `${Number((seconds / 60).toFixed(seconds % 60 === 0 ? 0 : 1))} 分钟`
+        : `${Math.round(seconds)} 秒`;
+    return `每 ${text}一个采样点`;
+  }, [sortedRecords]);
+  const panelDescription =
+    [coverageLabel, samplingLabel].filter(Boolean).join(" · ") || undefined;
 
+  // 纵轴恒定从 0 起：截取中间一段会把 210ms 和 240ms 画成天差地别，看不出真实量级。
   const yRange = useMemo<[number | null, number | null]>(() => {
     if (!chart) return [null, null];
-    let min = Number.POSITIVE_INFINITY;
     let max = Number.NEGATIVE_INFINITY;
     for (let index = 0; index < tasks.length; index += 1) {
       if (!visibleTaskIds.has(tasks[index].id)) continue;
@@ -284,18 +358,12 @@ export function PingChart({
       if (!series) continue;
       for (const value of series) {
         if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-          if (value < min) min = value;
           if (value > max) max = value;
         }
       }
     }
-    if (min === Number.POSITIVE_INFINITY) return [0, 100];
-    if (min === max) {
-      const pad = Math.max(5, min * 0.1);
-      return [Math.max(0, min - pad), max + pad];
-    }
-    const pad = Math.max(5, (max - min) * 0.12);
-    return [Math.max(0, min - pad), max + pad];
+    if (max === Number.NEGATIVE_INFINITY || max <= 0) return [0, 100];
+    return [0, max + Math.max(5, max * 0.12)];
   }, [chart, tasks, visibleTaskIds]);
 
   const baseOptions = useMemo<Omit<uPlot.Options, "width" | "height"> | null>(() => {
@@ -311,9 +379,11 @@ export function PingChart({
           .map((task) => {
             const taskIndex = taskIndexById.get(task.id) ?? 0;
             const raw = chartRef.current[taskIndex + 1]?.[idx] as number | null | undefined;
+            const loss = lossRef.current[taskIndex]?.[idx] ?? null;
             return {
               label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
               raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
+              loss,
               color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
             };
           })
@@ -322,14 +392,14 @@ export function PingChart({
             if (b.raw == null) return -1;
             return b.raw - a.raw;
           })
-          .map(({ label, raw, color }) => ({
+          .map(({ label, raw, loss, color }) => ({
             label,
-            value: raw == null ? "—" : `${raw.toFixed(1)} ms`,
+            value: formatPingTooltipValue(raw, loss),
             color,
           })),
     });
     return {
-      padding: [10, 14, 12, 2],
+      padding: [10, CHART_PADDING_RIGHT, 12, CHART_PADDING_LEFT],
       cursor: { drag: { x: true, y: false } },
       legend: { show: false },
       scales: {
@@ -350,7 +420,8 @@ export function PingChart({
           stroke: text,
           grid: { stroke: grid, width: 1 },
           ticks: { stroke: grid },
-          size: 54,
+          // 64 而非 54：延迟冲到四位数时 "1400 ms" 放不下，uPlot 会从左边把「1」裁掉。
+          size: Y_AXIS_SIZE,
           values: (_self, splits) => splits.map((value) => (value === 0 ? "" : `${Math.round(value)} ms`)),
         },
       ],
@@ -374,7 +445,16 @@ export function PingChart({
           tooltipHooks.onInit,
         ],
         destroy: [tooltipHooks.onDestroy],
-        setCursor: [tooltipHooks.onSetCursor],
+        setCursor: [
+          tooltipHooks.onSetCursor,
+          // 把游标位置同步给上方的丢包色带，让那根竖线一路贯穿到色带里。
+          // 相同像素值时 React 会自行跳过重渲，不必额外节流。
+          (u) => {
+            const left = u.cursor.left;
+            const inside = left != null && left >= 0 && u.cursor.idx != null;
+            setCursorLeft(inside ? Math.round(left) : null);
+          },
+        ],
       },
     };
   }, [chart, connectNulls, hiddenTasks, hours, isDark, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
@@ -489,8 +569,14 @@ export function PingChart({
   }
 
   return (
-    <InstancePanel title="Ping 图表" description={coverageLabel ?? undefined}>
+    <InstancePanel title="Ping 图表" description={panelDescription}>
       <div className="instance-ping-toolbar">
+        <SwitchToggle
+          label="丢包色带"
+          active={showLoss}
+          onToggle={() => setShowLoss((value) => !value)}
+          title="在图表上方按线路显示丢包率色带：越红丢得越多，空缺表示该时段没有采样。不受削峰平滑影响。注意：查询超过 1 小时时，后端按后台设置的采样点数返回（可选 60/120/180/240），点数固定而区间不固定，所以区间越长采样越粗；持续一两分钟的短促丢包可能整段没被采到 —— 同一次丢包在 1 小时图里看得见、在 1 天图里消失就是这个原因，调大后台的采样点数可缓解。"
+        />
         <SwitchToggle
           label="削峰平滑"
           active={cutPeak}
@@ -561,6 +647,19 @@ export function PingChart({
           );
         })}
       </div>
+
+      {showLoss && chart && lossRows.length > 0 && (
+        <PingLossStrip
+          times={chart[0] as number[]}
+          xRange={requestedXRange}
+          rows={lossRows}
+          chartWidth={w}
+          gutter={Y_AXIS_SIZE + CHART_PADDING_LEFT}
+          rightPad={CHART_PADDING_RIGHT}
+          isDark={isDark}
+          cursorLeft={cursorLeft}
+        />
+      )}
 
       <div ref={chartSizeRef} className="instance-uplot-wrap is-large">
         {chart && options && visibleTasks.length > 0 ? (

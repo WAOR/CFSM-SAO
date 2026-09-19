@@ -1,14 +1,19 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { BackgroundLayer } from "./BackgroundLayer";
+import { TurnstileGate } from "./TurnstileGate";
+import { SiteFooter } from "./SiteFooter";
+import { RealtimeSessionPrompt } from "./RealtimeSessionPrompt";
+import { SiteThemeSyncNotice } from "./SiteThemeSyncNotice";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAppearance } from "@/hooks/useAppearance";
 import { useAuth } from "@/hooks/useAuth";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
-import { useSiteMetadata } from "@/hooks/useSiteMetadata";
-import { readStoredSiteMetadata } from "@/hooks/useSiteMetadata";
+import { useSiteMetadata, readStoredSiteMetadata } from "@/hooks/useSiteMetadata";
+import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerification";
 import { useMetricColorsSync } from "@/hooks/useMetricColors";
 import { useNodeStoreStatus } from "@/hooks/useNode";
+import { getAdminUrl } from "@/services/cfsm/config";
 
 export function AppShell() {
   useAppearance();
@@ -21,12 +26,14 @@ export function AppShell() {
   const siteName =
     publicConfig.data?.sitename?.trim() ||
     cachedMeta.siteName ||
-    (publicConfig.isPending ? "" : "Komari");
+    (publicConfig.isPending ? "" : "CF-Server-Monitor");
+  const needsVerification = useTurnstileVerificationRequired();
   const normalizedPath = (pathname.replace(/\/+$/, "") || "/").toLowerCase();
   const isDataRoute =
     normalizedPath === "/" ||
     normalizedPath === "/assets" ||
     normalizedPath === "/traffic" ||
+    normalizedPath.startsWith("/server/") ||
     normalizedPath.startsWith("/instance/");
   const isCheckingAccess =
     isDataRoute &&
@@ -38,18 +45,25 @@ export function AppShell() {
     publicConfig.data?.private_site === true &&
     !auth.isPending &&
     auth.data?.logged_in !== true;
+  const awaitingVerification = isDataRoute && needsVerification;
   const isHomeDashboard =
     normalizedPath === "/" && new URLSearchParams(search).get("view") !== "theme-manage";
   const canHydrateHome =
-    isHomeDashboard && !isCheckingAccess && !accessError && !isPrivateVisitor;
+    isHomeDashboard &&
+    !isCheckingAccess &&
+    !accessError &&
+    !awaitingVerification &&
+    !isPrivateVisitor;
   const homeStoreStatus = useNodeStoreStatus(canHydrateHome);
   const isCheckingHomeData =
     canHydrateHome && !homeStoreStatus.hydrated && !homeStoreStatus.nodeInfoError;
   const isCheckingShell = isCheckingAccess || isCheckingHomeData;
+
   return (
     <div className="relative flex min-h-screen flex-col">
       <BackgroundLayer />
-      {/* MAO 风格顶部导航 Bar 框架 */}
+      <TurnstileGate />
+      {/* SAO 风格顶部导航 Bar 框架 */}
       <header className="mao-top-nav-bar">
         <div className="mx-auto flex h-14 w-full max-w-430 items-center justify-between px-3 sm:px-5 md:px-6 lg:px-8">
           <div className="mao-nav-brand-left flex items-center gap-2.5">
@@ -84,6 +98,8 @@ export function AppShell() {
             </div>
           ) : accessError ? (
             <AccessError onRetry={() => void publicConfig.refetch()} />
+          ) : awaitingVerification ? (
+            <div className="min-h-[60vh]" aria-hidden />
           ) : isPrivateVisitor ? (
             <PrivateSiteGate />
           ) : (
@@ -91,6 +107,9 @@ export function AppShell() {
           )}
         </div>
       </main>
+      <SiteFooter />
+      <RealtimeSessionPrompt />
+      <SiteThemeSyncNotice />
     </div>
   );
 }
@@ -124,7 +143,7 @@ function PrivateSiteGate() {
         </p>
       </div>
       <a
-        href="/admin"
+        href={getAdminUrl()}
         target="_blank"
         rel="noopener noreferrer"
         className="control-button px-4 py-2 text-[13px] font-medium"

@@ -1,13 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
-import { useMinuteClock } from "@/hooks/useClock";
-import { useTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 import { InstanceSwitcher } from "./InstanceSwitcher";
-import {
-  formatTodayPeakValue,
-  formatTodayTrafficValue,
-} from "./instanceTodayTrafficFormat";
 import {
   formatBytes,
   formatUptimeDays,
@@ -29,11 +22,8 @@ export function InstanceDetails({
   uuid: string;
   onNodeReady?: () => (() => void) | void;
 }) {
-  const now = useMinuteClock();
   const meta = useNodeMeta(uuid);
   const metrics = useNodeMetrics(uuid);
-  const trafficQuery = useTodayTrafficStats([uuid], now, "summary");
-  const todayStat = trafficQuery.data?.rows.find((row) => row.uuid === uuid);
   const isReady = Boolean(meta && metrics);
 
   useEffect(() => {
@@ -46,11 +36,11 @@ export function InstanceDetails({
   const isOnline = metrics.online;
   const uptime = formatUptimeDays(metrics.uptime);
   // 按 traffic_limit_type (max/sum/up/down/min) 归并上下行，和卡片、后端保持一致——
-  // 对非 "sum" 节点直接把上下行相加是错的。
+  // 对非 "sum" 节点直接把上下行相加是错的。配额用按周期重置的月度累计值。
   const trafficUsage = resolveTrafficUsage(
     meta.traffic_limit_type,
-    metrics.trafficUp,
-    metrics.trafficDown,
+    metrics.trafficUpMonthly,
+    metrics.trafficDownMonthly,
     meta.traffic_limit,
   );
   const lastUpdated =
@@ -75,9 +65,11 @@ export function InstanceDetails({
             value={`${meta.cpu_name || "—"}${meta.cpu_cores > 0 ? ` (x${meta.cpu_cores})` : ""}`}
           />
           <InfoRow label="架构" value={meta.arch || "—"} />
-          <InfoRow label="虚拟化" value={meta.virtualization || "—"} />
           <InfoRow label="显卡" value={meta.gpu_name || "—"} />
           <InfoRow label="操作系统" value={meta.os || "—"} />
+          {/* 原来这里是「虚拟化」，但 CF-Server-Monitor 不上报该字段(见 toNodeInfo)，
+              永远显示「—」。换成后端确实下发、之前一直没用上的内核版本。 */}
+          <InfoRow label="内核版本" value={meta.kernel_version || "—"} />
         </div>
 
         <div className="instance-info-group">
@@ -109,55 +101,26 @@ export function InstanceDetails({
             value={`↑ ${formatBytes(metrics.netUp)}/s · ↓ ${formatBytes(metrics.netDown)}/s`}
           />
           <InfoRow label={isOnline ? "最近更新" : "最后上报"} value={lastUpdated} />
-          <InfoRow
-            label="今日流量"
-            value={
-              <span className="instance-info-inline-value">
-                <span>
-                  {formatTodayTrafficValue(
-                    todayStat,
-                    trafficQuery.isPending,
-                    trafficQuery.isError,
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className={`instance-info-refresh${trafficQuery.isFetching ? " is-spinning" : ""}`}
-                  onClick={() => void trafficQuery.refetch()}
-                  disabled={trafficQuery.isFetching}
-                  aria-busy={trafficQuery.isFetching}
-                  aria-label="刷新今日流量"
-                  title="刷新今日流量"
-                >
-                  <RefreshCw size={13} strokeWidth={2.2} />
-                </button>
-              </span>
-            }
-          />
-          <InfoRow
-            label="峰值速度"
-            value={formatTodayPeakValue(todayStat, trafficQuery.isPending)}
-          />
+          {/* 「今日流量」「峰值速度」已移除：后端没有今日累计字节字段，两者只能由历史瞬时速率
+              积分/取极值得出，而历史接口每次固定只返回约 120 个点（区间越长采样越粗），
+              数值会随返回的采样点大幅漂移，误导性大于参考价值。 */}
           <div className="instance-info-item is-stack">
             <span className="instance-info-label">总流量</span>
             <div className="instance-info-traffic">
               <span className="instance-info-value">{`↑ ${formatBytes(metrics.trafficUp)} · ↓ ${formatBytes(metrics.trafficDown)}`}</span>
-              <div
-                className={`instance-progress-track${trafficUsage.unlimited ? " is-unlimited" : ""}`}
-                aria-hidden
-              >
-                {!trafficUsage.unlimited && (
-                  <span
-                    className="instance-progress-fill"
-                    style={{ width: `${trafficUsage.fraction * 100}%` }}
-                  />
-                )}
-              </div>
-              <span className="instance-info-note">
-                {trafficUsage.unlimited
-                  ? `${formatBytes(trafficUsage.used)} / ∞`
-                  : `${formatBytes(trafficUsage.used)} / ${formatBytes(trafficUsage.limit)}`}
-              </span>
+              {meta.traffic_limit > 0 && (
+                <>
+                  <div className="instance-progress-track" aria-hidden>
+                    <span
+                      className="instance-progress-fill"
+                      style={{ width: `${trafficUsage.fraction * 100}%` }}
+                    />
+                  </div>
+                  <span className="instance-info-note">
+                    {`${formatBytes(trafficUsage.used)} / ${formatBytes(meta.traffic_limit)}`}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -170,7 +133,7 @@ function InfoRow({
   label,
   value,
 }: {
-  label: string;
+  label: ReactNode;
   value: ReactNode;
 }) {
   return (

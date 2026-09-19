@@ -21,7 +21,6 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useMetricColorsVersion } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
-import { HOMEPAGE_MULTI_PING_TASK_COUNT } from "@/utils/pingTasks";
 import {
   speedRateColor,
   trafficQuotaSegmentColor,
@@ -44,7 +43,7 @@ import { HealthBucketTooltip } from "./HealthBucketTooltip";
 import { MultiPingStatus } from "./MultiPingStatus";
 import { formatHealthBucketTooltip } from "./pingBucketText";
 import { clsx } from "clsx";
-import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/komari";
+import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/cfsm";
 import type { ByteRateDisplay } from "@/utils/format";
 
 type NodeCardNode = NodeInfo & NodeMetrics;
@@ -87,7 +86,8 @@ export const NodeCard = memo(function NodeCard({
     expire,
     expireColor,
     uptime,
-    renewalPrice,
+    renewalPrice: metaRenewalPrice,
+    showCardPrice,
     latencyColor,
     lossColor,
     loadFraction,
@@ -101,6 +101,7 @@ export const NodeCard = memo(function NodeCard({
     isOffline,
     osName,
   } = model;
+  const renewalPrice = showCardPrice ? metaRenewalPrice : null;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
 
   return (
@@ -112,7 +113,7 @@ export const NodeCard = memo(function NodeCard({
           node={node}
           subtitle={subtitle}
           osName={osName}
-          showTodayTraffic={showTodayTraffic}
+          showTodayTraffic={showTodayTraffic && themeSettings.showTodayTrafficPopover !== false}
         />
 
         <div className="server-card-stack">
@@ -155,8 +156,9 @@ export const NodeCard = memo(function NodeCard({
             </div>
           )}
 
-          {homepagePingLines.length === HOMEPAGE_MULTI_PING_TASK_COUNT ? (
+          {homepagePingLines.length > 0 ? (
             <MultiPingStatus
+              uuid={uuid}
               lines={homepagePingLines}
               density="large"
               className="card-metric-section"
@@ -206,7 +208,7 @@ function NodeCardHeader({
         <div className="server-card-title-row">
           <Flag region={node.region} size={15} />
           <Link
-            to={`/instance/${encodeURIComponent(node.uuid)}`}
+            to={`/server/${encodeURIComponent(node.uuid)}`}
             className="server-card-title-link"
             title={node.name}
           >
@@ -227,7 +229,7 @@ function NodeCardHeader({
       <div className="server-card-actions">
         {showTodayTraffic && <NodeTodayTrafficPopover uuid={node.uuid} />}
         <Link
-          to={`/instance/${encodeURIComponent(node.uuid)}`}
+          to={`/server/${encodeURIComponent(node.uuid)}`}
           className="server-card-detail-link"
           title={detailLabels.title}
           aria-label={detailLabels.ariaLabel}
