@@ -839,13 +839,13 @@ function GlobeArrow({
         <ArrowDown
           size={9}
           strokeWidth={2.4}
-          className="absolute -right-[2px] bottom-[-1px]"
+          className="absolute -right-0.5 -bottom-px"
         />
       ) : (
         <ArrowUp
           size={9}
           strokeWidth={2.4}
-          className="absolute -right-[2px] bottom-[-1px]"
+          className="absolute -right-0.5 -bottom-px"
         />
       )}
     </span>

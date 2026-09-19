@@ -406,7 +406,7 @@ const ToggleRow = memo(function ToggleRow({
         type="checkbox"
         checked={checked}
         onChange={(event) => onPatch(field, event.target.checked)}
-        className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+        className="h-4 w-4 shrink-0 accent-(--accent-500)"
       />
     </label>
   );
@@ -423,7 +423,7 @@ function SettingSelect({
       <select
         {...props}
         className={clsx(
-          "surface-inset text-[13px] text-[var(--text-primary)] outline-none",
+          "surface-inset text-[13px] text-(--text-primary) outline-none",
           className,
         )}
       >
@@ -480,29 +480,29 @@ const TaskBindingSection = memo(function TaskBindingSection({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">
+            <h3 className="text-[15px] font-semibold text-(--text-primary)">
               {task.name || `任务 #${task.id}`}
             </h3>
             {isDefaultTask && (
-              <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
+              <span className="rounded-full border border-(--hairline) px-2 py-0.5 text-[10px] font-medium text-(--text-tertiary)">
                 默认线路
               </span>
             )}
           </div>
-          <div className="mt-2 text-[12px] text-[var(--text-secondary)]">
-            <span className="font-medium text-[var(--text-primary)]">
+          <div className="mt-2 text-[12px] text-(--text-secondary)">
+            <span className="font-medium text-(--text-primary)">
               {assigned.length > 0
                 ? `${assigned.length} 台节点在首页显示这条线路的延迟`
                 : "还没有节点选这条线路"}
             </span>
             {isDefaultTask && (
               <>
-                <span className="mx-2 text-[var(--text-tertiary)]">·</span>
+                <span className="mx-2 text-(--text-tertiary)">·</span>
                 <span>没单独指定线路的节点都走这条</span>
               </>
             )}
           </div>
-          <p className="mt-2 text-[12px] text-[var(--text-tertiary)]" title={assignedSummary}>
+          <p className="mt-2 text-[12px] text-(--text-tertiary)" title={assignedSummary}>
             {assignedSummary}
           </p>
         </div>
@@ -553,15 +553,15 @@ const TaskBindingSection = memo(function TaskBindingSection({
       </div>
 
       {expanded && (
-        <div className="mt-4 border-t border-[var(--hairline)] pt-4">
+        <div className="mt-4 border-t border-(--hairline) pt-4">
           <label className="surface-inset flex items-center gap-2 px-3 py-2">
-            <Search size={14} className="text-[var(--text-tertiary)]" />
+            <Search size={14} className="text-(--text-tertiary)" />
             <input
               value={nodeSearch}
               onChange={(event) => onNodeSearch(event.target.value)}
               placeholder="搜索节点名称 / UUID / 分组 / 地区"
               aria-label="搜索节点"
-              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--text-tertiary)]"
+              className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-(--text-tertiary)"
             />
           </label>
 
@@ -573,10 +573,10 @@ const TaskBindingSection = memo(function TaskBindingSection({
                 <label
                   key={client.uuid}
                   className={clsx(
-                    "flex cursor-pointer items-start gap-3 rounded-[12px] border px-3 py-3 transition-colors",
+                    "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors",
                     checked
-                      ? "border-[var(--border-strong)] bg-[color-mix(in_srgb,var(--hover-bg)_72%,transparent)]"
-                      : "border-[var(--hairline)] bg-transparent hover:bg-[var(--hover-bg)]",
+                      ? "border-(--border-strong) bg-[color-mix(in_srgb,var(--hover-bg)_72%,transparent)]"
+                      : "border-(--hairline) bg-transparent hover:bg-(--hover-bg)",
                   )}
                 >
                   <input
@@ -588,7 +588,7 @@ const TaskBindingSection = memo(function TaskBindingSection({
                         applyClientAssignment(prev, task.id, client.uuid, nextChecked),
                       );
                     }}
-                    className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+                    className="mt-1 h-4 w-4 shrink-0 accent-(--accent-500)"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -631,7 +631,7 @@ const PremiumList = memo(function PremiumList({
   onPatchAcquiredAt: (uuid: string, rawValue: string) => void;
 }) {
   return (
-    <div className="surface-inset max-h-[320px] overflow-y-auto">
+    <div className="surface-inset max-h-80 overflow-y-auto">
       {clients.map((client) => {
         const entry = costPremiums[client.uuid];
         const detail = detailByUuid.get(client.uuid);
@@ -646,12 +646,12 @@ const PremiumList = memo(function PremiumList({
         return (
           <div
             key={client.uuid}
-            className="flex items-center justify-between gap-3 border-b border-[var(--hairline)] px-3 py-2 last:border-b-0"
+            className="flex items-center justify-between gap-3 border-b border-(--hairline) px-3 py-2 last:border-b-0"
           >
             <div className="flex min-w-0 items-center gap-2">
               <Flag region={client.region ?? ""} size={13} />
               <span
-                className="truncate text-[13px] text-[var(--text-primary)]"
+                className="truncate text-[13px] text-(--text-primary)"
                 title={client.name}
               >
                 {client.name}
@@ -716,7 +716,7 @@ const PremiumList = memo(function PremiumList({
                     ? "收购日期：修改后会按当前价格、周期、到期日和汇率回算该日剩余价值，重新计算并固化溢价"
                     : "该节点已忽略或汇率缺失，无法折算剩余价值"
                 }
-                className="surface-inset w-[8.75rem] px-2 py-1 text-[12px] outline-none disabled:opacity-45"
+                className="surface-inset w-35 px-2 py-1 text-[12px] outline-none disabled:opacity-45"
               />
             </div>
           </div>
@@ -1271,10 +1271,10 @@ export function ThemeManage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
         <div role="alert" className="space-y-2">
-          <div className="text-[15px] font-semibold text-[var(--text-primary)]">
+          <div className="text-[15px] font-semibold text-(--text-primary)">
             无法读取主题配置
           </div>
-          <p className="max-w-[32rem] text-[13px] text-[var(--text-secondary)]">
+          <p className="max-w-lg text-[13px] text-(--text-secondary)">
             {configError instanceof Error ? configError.message : "请稍后重试。"}
           </p>
         </div>
@@ -1348,7 +1348,7 @@ export function ThemeManage() {
             <div
               role="status"
               aria-live="polite"
-              className="rounded-[12px] border border-[color-mix(in_srgb,var(--status-online)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-online)_11%,var(--surface))] px-4 py-3 text-[13px] text-[var(--status-online)]"
+              className="rounded-xl border border-[color-mix(in_srgb,var(--status-online)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-online)_11%,var(--surface))] px-4 py-3 text-[13px] text-(--status-online)"
             >
               {message}
             </div>
@@ -1356,7 +1356,7 @@ export function ThemeManage() {
           {error && (
             <div
               role="alert"
-              className="rounded-[12px] border border-[color-mix(in_srgb,var(--status-offline)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-offline)_11%,var(--surface))] px-4 py-3 text-[13px] text-[var(--status-offline)]"
+              className="rounded-xl border border-[color-mix(in_srgb,var(--status-offline)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-offline)_11%,var(--surface))] px-4 py-3 text-[13px] text-(--status-offline)"
             >
               {error}
             </div>
@@ -1364,7 +1364,7 @@ export function ThemeManage() {
           {adminError && (
             <div
               role="alert"
-              className="rounded-[12px] border border-[color-mix(in_srgb,var(--status-offline)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-offline)_11%,var(--surface))] px-4 py-3 text-[13px] text-[var(--status-offline)]"
+              className="rounded-xl border border-[color-mix(in_srgb,var(--status-offline)_28%,transparent)] bg-[color-mix(in_srgb,var(--status-offline)_11%,var(--surface))] px-4 py-3 text-[13px] text-(--status-offline)"
             >
               无法读取后台节点列表: {adminError}
             </div>
@@ -1623,7 +1623,7 @@ export function ThemeManage() {
                           aria-label="卡片不透明度百分比"
                           className="surface-inset w-20 px-3 py-2 text-right text-[13px] tabular outline-none"
                         />
-                        <span className="text-[13px] font-medium text-[var(--text-tertiary)]">%</span>
+                        <span className="text-[13px] font-medium text-(--text-tertiary)">%</span>
                       </span>
                     </div>
                     <span className="setting-hint">
@@ -1737,7 +1737,7 @@ export function ThemeManage() {
                         {orderedDraftGroups.map((group, index) => (
                           <div
                             key={group}
-                            className="flex items-center justify-between rounded-[8px] border border-[var(--hairline)] px-3 py-2 text-[13px]"
+                            className="flex items-center justify-between rounded-lg border border-(--hairline) px-3 py-2 text-[13px]"
                           >
                             <span>{group}</span>
                             <div className="flex items-center gap-1">
@@ -2010,9 +2010,9 @@ export function ThemeManage() {
                         {draft.homepageMultiPingTaskIds.map((taskId, slot) => (
                           <div
                             key={slot}
-                            className="flex items-center justify-between gap-2 rounded-[10px] border border-[var(--hairline)] px-3 py-2"
+                            className="flex items-center justify-between gap-2 rounded-[10px] border border-(--hairline) px-3 py-2"
                           >
-                            <span className="text-[12px] font-medium text-[var(--text-secondary)]">
+                            <span className="text-[12px] font-medium text-(--text-secondary)">
                               槽位 #{slot + 1}
                             </span>
                             <SettingSelect
