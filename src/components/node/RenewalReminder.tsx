@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CircleDollarSign, X } from "lucide-react";
 import {
@@ -71,13 +71,16 @@ export function RenewalReminder({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpenState] = useState(false);
-  const setOpen = (valueOrFn: boolean | ((prev: boolean) => boolean)) => {
-    setOpenState((prev) => {
-      const next = typeof valueOrFn === "function" ? valueOrFn(prev) : valueOrFn;
-      onOpenChange?.(next);
-      return next;
-    });
-  };
+  const setOpen = useCallback(
+    (valueOrFn: boolean | ((prev: boolean) => boolean)) => {
+      setOpenState((prev) => {
+        const next = typeof valueOrFn === "function" ? valueOrFn(prev) : valueOrFn;
+        onOpenChange?.(next);
+        return next;
+      });
+    },
+    [onOpenChange],
+  );
   const [clock, setClock] = useState(() => Date.now());
   const [preferences, setPreferences] = useState(readPreferences);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -111,11 +114,11 @@ export function RenewalReminder({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   useEffect(() => {
     if (visibleReminders.length === 0 && open) setOpen(false);
-  }, [open, visibleReminders.length]);
+  }, [open, visibleReminders.length, setOpen]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {

@@ -1705,7 +1705,12 @@ export function ThemeManage() {
                       <span className="setting-subhead-title">默认排序字段</span>
                       <SettingSelect
                         value={draft.homeSortField}
-                        onChange={(event) => patch("homeSortField", event.target.value as any)}
+                        onChange={(event) =>
+                          patch(
+                            "homeSortField",
+                            event.target.value as (typeof HOME_SORT_FIELDS)[number],
+                          )
+                        }
                       >
                         {HOME_SORT_FIELDS.map((field) => (
                           <option key={field} value={field}>
@@ -1719,7 +1724,9 @@ export function ThemeManage() {
                       <span className="setting-subhead-title">默认排序方向</span>
                       <SettingSelect
                         value={draft.homeSortDirection}
-                        onChange={(event) => patch("homeSortDirection", event.target.value as any)}
+                        onChange={(event) =>
+                          patch("homeSortDirection", event.target.value as "asc" | "desc")
+                        }
                       >
                         <option value="asc">升序 (ASC)</option>
                         <option value="desc">降序 (DESC)</option>
