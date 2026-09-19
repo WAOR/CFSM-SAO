@@ -180,7 +180,55 @@ function inferPlainTagColor(label: string): string {
   return "violet";
 }
 
-/** 把 `tag1<color>;tag2<color2>` (支持中英文分号/逗号分隔) 解析成 [{ label, color }]。 */
+export const SUPPORTED_TAG_COLORS = new Set([
+  // 红色/粉色系
+  "tomato",
+  "red",
+  "ruby",
+  "crimson",
+  "pink",
+  "plum",
+  // 紫色/蓝色系
+  "purple",
+  "violet",
+  "iris",
+  "indigo",
+  "blue",
+  "cyan",
+  // 绿色系
+  "teal",
+  "jade",
+  "green",
+  "grass",
+  "mint",
+  // 橙黄/棕色系
+  "bronze",
+  "gold",
+  "brown",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  // 中性色系
+  "sky",
+  "gray",
+  "mauve",
+  "slate",
+  "sage",
+  "olive",
+  "sand",
+]);
+
+const COLOR_NAMES_PATTERN = Array.from(SUPPORTED_TAG_COLORS).join("|");
+const SANITIZED_SUFFIX_REGEX = new RegExp(`^(.*?)(${COLOR_NAMES_PATTERN})$`, "i");
+
+/**
+ * 把标签字符串解析成 [{ label, color }]。
+ * 1. 优先支持 CFSM 减号语法：`香港BGP-blue` / `特惠-red`
+ * 2. 兼容被 CFSM 过滤掉尖括号的残留文本：`香港BGPBLUE` -> { label: "香港BGP", color: "blue" }
+ * 3. 兼容标准尖括号语法：`VIP<red>`
+ * 4. 普通纯文字标签，按线路关键词智能推断
+ */
 export function parseTags(raw: string | undefined | null): Array<{ label: string; color: string }> {
   if (!raw) return [];
   return raw
@@ -188,8 +236,29 @@ export function parseTags(raw: string | undefined | null): Array<{ label: string
     .map((s) => s.trim())
     .filter(Boolean)
     .map((item) => {
-      const m = item.match(/^(.*?)<([a-zA-Z]+)>$/);
-      if (m) return { label: m[1].trim(), color: m[2].toLowerCase() };
+      // 1. 减号指定颜色语法：`香港BGP-blue`、`特惠-red`
+      const mHyphen = item.match(/^(.*?)-([a-zA-Z]+)$/);
+      if (mHyphen) {
+        const candidate = mHyphen[2].toLowerCase();
+        if (SUPPORTED_TAG_COLORS.has(candidate)) {
+          return { label: mHyphen[1].trim(), color: candidate };
+        }
+      }
+
+      // 2. 兼容标准尖括号语法：`VIP<red>`
+      const mBracket = item.match(/^(.*?)<([a-zA-Z]+)>$/);
+      if (mBracket) {
+        return { label: mBracket[1].trim(), color: mBracket[2].toLowerCase() };
+      }
+
+      // 3. 自动救活：被后端过滤掉尖括号的残留（如 `香港BGPBLUE`、`特惠red`）
+      const mSanitized = item.match(SANITIZED_SUFFIX_REGEX);
+      if (mSanitized && mSanitized[1].trim()) {
+        const candidate = mSanitized[2].toLowerCase();
+        return { label: mSanitized[1].trim(), color: candidate };
+      }
+
+      // 4. 普通纯文字标签，按线路关键词智能推断
       return { label: item, color: inferPlainTagColor(item) };
     });
 }

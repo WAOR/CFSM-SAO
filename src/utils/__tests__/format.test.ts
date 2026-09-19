@@ -165,6 +165,30 @@ describe("parseTags", () => {
     ]);
   });
 
+  it("parses hyphenated colors for CFSM compatibility", () => {
+    expect(parseTags("香港BGP-blue;特惠-RED;线路-gold")).toEqual([
+      { label: "香港BGP", color: "blue" },
+      { label: "特惠", color: "red" },
+      { label: "线路", color: "gold" },
+    ]);
+  });
+
+  it("preserves non-color hyphenated tags without truncation", () => {
+    // US-West 里的 west 不是已知颜色，应保留完整标签
+    expect(parseTags("US-West;HK-01")).toEqual([
+      { label: "US-West", color: "violet" },
+      { label: "HK-01", color: "violet" },
+    ]);
+  });
+
+  it("rescues sanitized color suffixes stripped by backend", () => {
+    // 后端把 <blue> 过滤成 BLUE 的残留情况，前端自动纠偏提取
+    expect(parseTags("香港BGPBLUE;特惠red")).toEqual([
+      { label: "香港BGP", color: "blue" },
+      { label: "特惠", color: "red" },
+    ]);
+  });
+
   it("infers colors for plain tags by known keywords", () => {
     expect(parseTags("CN2GIA")).toEqual([{ label: "CN2GIA", color: "blue" }]);
     expect(parseTags("4837")).toEqual([{ label: "4837", color: "green" }]);
