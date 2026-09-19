@@ -88,6 +88,7 @@ export const NodeCard = memo(function NodeCard({
     uptime,
     renewalPrice: metaRenewalPrice,
     showCardPrice,
+    isPriceVisible,
     latencyColor,
     lossColor,
     loadFraction,
@@ -101,7 +102,7 @@ export const NodeCard = memo(function NodeCard({
     isOffline,
     osName,
   } = model;
-  const renewalPrice = showCardPrice ? metaRenewalPrice : null;
+  const renewalPrice = showCardPrice && isPriceVisible !== false ? metaRenewalPrice : null;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
 
   return (

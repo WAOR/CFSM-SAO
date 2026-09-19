@@ -11,6 +11,7 @@ import {
   withLiveLatency,
 } from "@/hooks/usePingOverview";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { usePriceVisibility } from "@/hooks/usePriceVisibility";
 import { carrierTaskName } from "@/services/cfsm/mappers";
 import { useCarrierNames, useLatencyWindowMs } from "@/hooks/usePublicConfig";
 import type { HomepagePingDisplayLine, HomepagePingLine } from "@/types/cfsm";
@@ -63,6 +64,7 @@ export function useNodeCardModel(
     enableHomepageMultiPing,
     homepageMultiPingTaskIds,
   } = useThemeSettings();
+  const { isPriceVisible } = usePriceVisibility();
   // 后端关掉「输出首页详细 ping/loss」时那三条线一条数据都没有，直接回退单线路，
   // 免得画出三条空线（口径见 useShowThreeNetDetails）。
   const showThreeNetDetails = useShowThreeNetDetails();
@@ -200,12 +202,14 @@ export function useNodeCardModel(
       expireColor: getExpireTextColor(meta.expired_at, now),
       // 「卡片显示价格」只作用于大卡片（NodeCard 自己收敛）；小卡片等布局照旧显示，
       // 未填价格显示「免费」。
+      // 价格标签受「向访客公开价格与资产」配置及管理员临时隐藏切换管辖。
       showCardPrice,
-      renewalPrice: formatRenewalPrice(meta),
+      isPriceVisible,
+      renewalPrice: isPriceVisible ? formatRenewalPrice(meta) : null,
       osName: resolveOsInfo(meta.os).name,
       loadBaseline: meta.cpu_cores > 0 ? meta.cpu_cores : 4,
     };
-  }, [meta, now, showCardGroup, showCardPrice]);
+  }, [meta, now, showCardGroup, showCardPrice, isPriceVisible]);
 
   // ping 派生的颜色只在 ping item 变化时才变。
   const pingModel = useMemo(

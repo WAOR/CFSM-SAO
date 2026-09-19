@@ -20,4 +20,23 @@ describe("resolvePriceVisibility", () => {
     expect(resolvePriceVisibility(true, true, "hidden")).toBe(false);
     expect(resolvePriceVisibility(true, false, "hidden")).toBe(false);
   });
+
+  it("suppresses node card price tags when price visibility resolves to false", () => {
+    const rawPrice = "¥30.00/月";
+    // 访客未开放价格
+    const guestHidden = resolvePriceVisibility(false, false, null);
+    expect(guestHidden ? rawPrice : null).toBeNull();
+
+    // 访客开放价格
+    const guestVisible = resolvePriceVisibility(false, true, null);
+    expect(guestVisible ? rawPrice : null).toBe(rawPrice);
+
+    // 管理员临时隐藏价格
+    const adminHidden = resolvePriceVisibility(true, true, "hidden");
+    expect(adminHidden ? rawPrice : null).toBeNull();
+
+    // 管理员正常显示价格
+    const adminVisible = resolvePriceVisibility(true, false, "visible");
+    expect(adminVisible ? rawPrice : null).toBe(rawPrice);
+  });
 });

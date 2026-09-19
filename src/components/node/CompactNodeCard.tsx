@@ -483,6 +483,7 @@ function CompactNodeInfoStrip({
   expire,
   expireColor,
   renewalPrice,
+  isPriceVisible = true,
 }: {
   node: CompactNode;
   trafficTrend: { up: TrafficTrendSample[]; down: TrafficTrendSample[] };
@@ -494,6 +495,7 @@ function CompactNodeInfoStrip({
   expire: CompactExpire;
   expireColor: string;
   renewalPrice: string | null;
+  isPriceVisible?: boolean;
 }) {
   const infoTileCount =
     1 + (showTrafficTotal ? 1 : 0) + (showBilling ? 1 : 0) + (showConnections ? 1 : 0);
@@ -561,8 +563,9 @@ function CompactNodeInfoStrip({
           <CompactInfoRow
             icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
             // 后端 price 为空/0/-1 都表示免费，小卡片直接写「免费」而不是留白。
-            value={renewalPrice || "免费"}
-            color={renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
+            // 当价格不可见时（未向访客公开或管理员临时隐藏），脱敏显示 "**"
+            value={isPriceVisible ? (renewalPrice || "免费") : "**"}
+            color={isPriceVisible && renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
           />
         </CompactInfoTile>
       )}
@@ -724,6 +727,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     compactFooterTags: footerTags,
     subtitle,
     renewalPrice,
+    isPriceVisible,
     expire,
     expireColor,
     upRate,
@@ -764,6 +768,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         expire={expire}
         expireColor={expireColor}
         renewalPrice={renewalPrice}
+        isPriceVisible={isPriceVisible}
       />
       <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
       {homepagePingLines.length > 0 ? (
