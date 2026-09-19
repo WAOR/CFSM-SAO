@@ -13,7 +13,9 @@ Thumbs.db
 *.zip
 
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 .claude/
 .codex
 .env

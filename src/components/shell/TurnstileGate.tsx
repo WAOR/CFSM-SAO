@@ -142,20 +142,20 @@ export function TurnstileGate() {
   if (!needsVerification) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-0)]/90 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--bg-0)/90 backdrop-blur-sm">
       <div className="surface-inset flex w-[min(22rem,90vw)] flex-col items-center gap-4 px-6 py-7 text-center">
         <div className="space-y-1.5">
-          <div className="text-[15px] font-semibold text-[var(--text-primary)]">
+          <div className="text-[15px] font-semibold text-(--text-primary)">
             请完成人机验证
           </div>
-          <p className="text-[13px] text-[var(--text-secondary)]">
+          <p className="text-[13px] text-(--text-secondary)">
             本站开启了 Cloudflare Turnstile 验证，通过后即可查看节点数据。
           </p>
         </div>
         <div ref={containerRef} />
         {verifying && <Spinner size={18} />}
         {error && (
-          <p role="alert" className="text-[12px] text-[var(--status-error)]">
+          <p role="alert" className="text-[12px] text-(--status-error)">
             {error}
           </p>
         )}
