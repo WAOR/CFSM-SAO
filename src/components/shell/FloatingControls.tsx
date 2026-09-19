@@ -1,7 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
+  AlertCircle,
   AlertTriangle,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -87,26 +89,53 @@ function buildRefreshTitle({
   return `${base}\n上次刷新 ${at}${partial}`;
 }
 
-/** 刷新结束后短暂显示的结果条文案；返回 null 表示这会儿不该显示。 */
-function buildRefreshToast({
+export interface RefreshAlertData {
+  title: string;
+  description: string;
+  variant: "default" | "warning" | "destructive";
+}
+
+/** 刷新反馈提示：遵循 shadcn Alert 规范，提供有层次的标题与描述 */
+export function buildRefreshAlert({
   status,
   lastResult,
   minutesSinceLastRefresh,
-}: PingHistoryRefreshState): string | null {
+}: PingHistoryRefreshState): RefreshAlertData | null {
   if (status === "warn") {
     const ago =
       minutesSinceLastRefresh == null || minutesSinceLastRefresh < 1
         ? "刚刚"
         : `${minutesSinceLastRefresh} 分钟前`;
-    return `${ago}才刷新过，数据没长多少 · 再点一次仍会刷新`;
+    return {
+      title: "刷新过于频繁",
+      description: `${ago}才刷新过，数据变动较小 · 再次点击仍会强制刷新`,
+      variant: "warning",
+    };
   }
   if (status === "done") {
-    if (!lastResult) return "延迟数据已更新";
-    return lastResult.failed > 0
-      ? `已更新 ${lastResult.succeeded} 台 · ${lastResult.failed} 台失败`
-      : `延迟数据已更新 · ${lastResult.succeeded} 台`;
+    if (!lastResult) {
+      return {
+        title: "延迟数据已更新",
+        description: "已成功同步服务器最新延迟指标",
+        variant: "default",
+      };
+    }
+    return {
+      title: "延迟数据已更新",
+      description:
+        lastResult.failed > 0
+          ? `已成功更新 ${lastResult.succeeded} 台 · ${lastResult.failed} 台失败`
+          : `已成功同步全部 ${lastResult.succeeded} 台服务器`,
+      variant: "default",
+    };
   }
-  if (status === "error") return "刷新失败，点按钮重试";
+  if (status === "error") {
+    return {
+      title: "刷新失败",
+      description: "同步节点延迟数据超时，点击刷新按钮可重试",
+      variant: "destructive",
+    };
+  }
   return null;
 }
 
@@ -172,7 +201,7 @@ export function FloatingControls({
   }, [collapsed, onExpandedChange]);
 
   const refreshTitle = buildRefreshTitle(pingRefresh);
-  const refreshToast = buildRefreshToast(pingRefresh);
+  const refreshAlert = buildRefreshAlert(pingRefresh);
   const refreshDone = pingRefresh.status === "done";
   const refreshWarn = pingRefresh.status === "warn";
 
@@ -332,22 +361,52 @@ export function FloatingControls({
             <MetricColorPicker hidden={collapsed || !colorsOpen} />
           </Suspense>
         )}
-        {refreshToast && !colorsOpen && (
+        {refreshAlert && !colorsOpen && (
           <div
             className={clsx(
-              "floating-controls-refresh-toast pointer-events-none flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur",
-              refreshDone ? "is-done" : refreshWarn ? "is-warn" : "is-error",
+              "floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-[280px] max-w-[340px] items-start gap-3 rounded-xl border p-3 shadow-lg shadow-black/5 backdrop-blur-md transition-all animate-in fade-in-0 slide-in-from-top-1 duration-200",
+              refreshAlert.variant === "warning" && [
+                "border-amber-500/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100",
+                "[&>svg]:text-amber-600 dark:[&>svg]:text-amber-400",
+              ],
+              refreshAlert.variant === "default" && [
+                "border-emerald-500/35 bg-emerald-500/10 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-100",
+                "[&>svg]:text-emerald-600 dark:[&>svg]:text-emerald-400",
+              ],
+              refreshAlert.variant === "destructive" && [
+                "border-red-500/35 bg-red-500/10 text-red-950 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-100",
+                "[&>svg]:text-red-600 dark:[&>svg]:text-red-400",
+              ],
             )}
-            role="status"
+            role="alert"
           >
-            {refreshDone ? <Check size={12} /> : <AlertTriangle size={12} />}
-            <span>{refreshToast}</span>
+            {refreshAlert.variant === "default" ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : refreshAlert.variant === "warning" ? (
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            <div className="flex-1 text-left min-w-0">
+              <h5 className="text-xs font-semibold tracking-tight leading-none">{refreshAlert.title}</h5>
+              <div className="mt-1 text-[11px] opacity-85 leading-normal font-normal">
+                {refreshAlert.description}
+              </div>
+            </div>
           </div>
         )}
-        {showSyncWarning && !collapsed && !colorsOpen && !refreshToast && (
-          <div className="floating-controls-sync-warning pointer-events-none flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--status-offline)_32%,transparent)] bg-[color-mix(in_srgb,var(--surface-a)_90%,transparent)] px-3 py-1 text-[11px] font-medium text-(--status-offline) shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur">
-            <AlertTriangle size={12} />
-            <span>实时状态同步异常，当前展示的是最近缓存</span>
+        {showSyncWarning && !collapsed && !colorsOpen && !refreshAlert && (
+          <div
+            className="floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-[280px] max-w-[340px] items-start gap-3 rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-red-950 shadow-lg shadow-black/5 backdrop-blur-md dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-100 [&>svg]:text-red-600 dark:[&>svg]:text-red-400 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+            role="alert"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex-1 text-left min-w-0">
+              <h5 className="text-xs font-semibold tracking-tight leading-none">实时状态同步异常</h5>
+              <div className="mt-1 text-[11px] opacity-85 leading-normal font-normal">
+                网络连接波动，当前展示的是最近本地缓存
+              </div>
+            </div>
           </div>
         )}
       </div>
