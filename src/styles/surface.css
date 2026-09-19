@@ -667,6 +667,7 @@ body::after {
   }
 
   .floating-controls-actions .control-button,
+  .floating-controls-refresh,
   .floating-controls-trigger {
     width: 32px;
     min-width: 32px;

@@ -47,6 +47,7 @@ interface CachedLatestVersion {
 
 function readCachedLatest(): CachedLatestVersion | null {
   try {
+    window.localStorage.removeItem("cfsm-luminaplus:theme-latest-version");
     const parsed: unknown = JSON.parse(window.localStorage.getItem(LATEST_THEME_CACHE_KEY) ?? "null");
     if (!parsed || typeof parsed !== "object") return null;
     const entry = parsed as Record<string, unknown>;

@@ -19,7 +19,7 @@ export function useVersionInfo(): { backend: VersionStatus; theme: VersionStatus
   const isOwner = me?.logged_in === true;
   const themeCurrent = useMemo(() => readCurrentThemeVersion(), []);
   const { data: themeLatest } = useQuery({
-    queryKey: ["theme-latest-version"],
+    queryKey: ["sao-theme-latest-version"],
     queryFn: () => fetchLatestThemeVersion(),
     enabled: isOwner && themeCurrent != null,
     staleTime: Number.POSITIVE_INFINITY,
