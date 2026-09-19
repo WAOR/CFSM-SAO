@@ -1,14 +1,33 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Grid3x3, LayoutGrid, List, Monitor, Palette, RefreshCw, Rows3, Settings, SlidersHorizontal, Sun, Moon } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Grid3x3,
+  LayoutGrid,
+  List,
+  Monitor,
+  Palette,
+  RefreshCw,
+  Rows3,
+  Settings,
+  SlidersHorizontal,
+  Sun,
+  Moon,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { usePriceVisibility } from "@/hooks/usePriceVisibility";
 import type { PingHistoryRefreshState } from "@/hooks/usePingHistoryRefresh";
 import { getAdminUrl } from "@/services/cfsm/config";
-import type { NodeViewMode } from "@/utils/themeSettings";
+import type { NodeViewMode, Appearance } from "@/utils/themeSettings";
 import { clsx } from "clsx";
 
 const MetricColorPicker = lazy(() =>
@@ -22,6 +41,21 @@ const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: str
   compact: { icon: Rows3, label: "小视图" },
   mini: { icon: Grid3x3, label: "迷你视图" },
   list: { icon: List, label: "列表视图" },
+};
+
+const NEXT_APPEARANCE: Record<Appearance, Appearance> = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+};
+
+const APPEARANCE_META: Record<
+  Appearance,
+  { icon: typeof Sun; label: string; nextLabel: string }
+> = {
+  light: { icon: Sun, label: "浅色", nextLabel: "深色" },
+  dark: { icon: Moon, label: "深色", nextLabel: "跟随系统" },
+  system: { icon: Monitor, label: "跟随系统", nextLabel: "浅色" },
 };
 
 /**
@@ -76,12 +110,6 @@ function buildRefreshToast({
   return null;
 }
 
-const APPEARANCE_OPTIONS = [
-  { value: "light", icon: Sun, label: "浅色" },
-  { value: "system", icon: Monitor, label: "跟随系统" },
-  { value: "dark", icon: Moon, label: "深色" },
-] as const;
-
 export function FloatingControls({
   onExpandedChange,
   pingRefresh,
@@ -94,26 +122,54 @@ export function FloatingControls({
   const { mode, nextMode, toggleMode } = useViewMode();
   const { data: me } = useAuth();
   const themeSettings = useThemeSettings();
+  const { isPriceVisible, togglePriceVisibility } = usePriceVisibility();
   const { failureStreak } = useNodeStoreStatus();
   const [collapsed, setCollapsed] = useState(true);
   const [colorsOpen, setColorsOpen] = useState(false);
   const [colorsMounted, setColorsMounted] = useState(false);
   const settingsReady = themeSettings.isReady;
   const showAdmin = settingsReady && themeSettings.enableAdminButton;
-  // 主题设置与配色都只保存在本机浏览器（第三方主题不能写后端配置），
-  // 因此对所有访客开放，各自调各自的。
-  const showThemeManage = settingsReady;
-  const showColorPicker = settingsReady;
+  // 主题管理入口与配色取色器都仅对登录管理员开放（配色存后端、全局生效）。
+  const loggedIn = Boolean(me?.logged_in);
+  const showThemeManage = loggedIn;
+  const showColorPicker = loggedIn;
+  const showPriceToggle = loggedIn;
   const showSyncWarning = failureStreak >= 2;
   const hiddenTabIndex = collapsed ? -1 : undefined;
   const ToggleIcon = collapsed ? ChevronLeft : ChevronRight;
   const ViewIcon = VIEW_MODE_META[nextMode].icon;
+  const currentAppearance = APPEARANCE_META[appearance] ?? APPEARANCE_META.system;
+  const AppearanceIcon = currentAppearance.icon;
+
+  const cycleAppearance = () => {
+    setAppearance(NEXT_APPEARANCE[appearance] ?? "system");
+  };
+
   // 只要不在最宽松的大卡默认态,就视为"已切换"，按钮保持高亮。
   const isReducedView = mode !== "large";
   useEffect(() => {
     onExpandedChange?.(false);
     return () => onExpandedChange?.(false);
   }, [onExpandedChange]);
+
+  // 仅监听用户主动的滚轮/触摸滑动手势（wheel / touchmove），100% 免疫任何 DOM 尺寸变化或重排引发的 scroll 事件
+  useEffect(() => {
+    if (collapsed) return;
+
+    const handleUserScroll = () => {
+      setCollapsed(true);
+      setColorsOpen(false);
+      onExpandedChange?.(false);
+    };
+
+    window.addEventListener("wheel", handleUserScroll, { passive: true });
+    window.addEventListener("touchmove", handleUserScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("wheel", handleUserScroll);
+      window.removeEventListener("touchmove", handleUserScroll);
+    };
+  }, [collapsed, onExpandedChange]);
 
   const refreshTitle = buildRefreshTitle(pingRefresh);
   const refreshToast = buildRefreshToast(pingRefresh);
@@ -141,29 +197,19 @@ export function FloatingControls({
           <div className="floating-controls-actions" aria-hidden={collapsed}>
             {settingsReady && (
               <>
-                <div
-                  className="control-group floating-controls-appearance"
-                  role="group"
-                  aria-label="外观选择"
+                <button
+                  type="button"
+                  onClick={cycleAppearance}
+                  aria-label={`外观: ${currentAppearance.label} (点击切换为${currentAppearance.nextLabel})`}
+                  title={`外观: ${currentAppearance.label} (点击切换为${currentAppearance.nextLabel})`}
+                  tabIndex={hiddenTabIndex}
+                  className={clsx(
+                    "control-button grid h-9 w-9 place-items-center",
+                    appearance !== "system" && "control-toggle is-active",
+                  )}
                 >
-                  {APPEARANCE_OPTIONS.map(({ value, icon: Icon, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setAppearance(value)}
-                      aria-label={label}
-                      aria-pressed={appearance === value}
-                      title={label}
-                      tabIndex={hiddenTabIndex}
-                      className={clsx(
-                        "control-button grid h-9 w-9 place-items-center",
-                        appearance === value && "control-toggle is-active",
-                      )}
-                    >
-                      <Icon size={16} />
-                    </button>
-                  ))}
-                </div>
+                  <AppearanceIcon size={16} />
+                </button>
                 <button
                   type="button"
                   onClick={toggleMode}
@@ -178,6 +224,22 @@ export function FloatingControls({
                 >
                   <ViewIcon size={16} />
                 </button>
+                {showPriceToggle && (
+                  <button
+                    type="button"
+                    onClick={togglePriceVisibility}
+                    aria-label={isPriceVisible ? "隐藏价格与资产" : "显示价格与资产"}
+                    aria-pressed={!isPriceVisible}
+                    title={isPriceVisible ? "临时隐藏价格与资产" : "临时显示价格与资产"}
+                    tabIndex={hiddenTabIndex}
+                    className={clsx(
+                      "control-button grid h-9 w-9 place-items-center",
+                      !isPriceVisible && "control-toggle is-active",
+                    )}
+                  >
+                    {isPriceVisible ? <Eye size={16} /> : <EyeOff size={16} />}
+                  </button>
+                )}
                 {showColorPicker && (
                   <button
                     type="button"

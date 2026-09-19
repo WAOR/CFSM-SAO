@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { NodeGrid } from "@/components/node/NodeGrid";
 import { FloatingControls } from "@/components/shell/FloatingControls";
@@ -19,6 +19,13 @@ function HomeDashboard() {
   // 刷新状态机放在这一层：快捷栏的按钮持有它，各处共享一份状态，
   // 「请求在途」的互斥才生效，连点不会把请求打两遍。
   const pingRefresh = usePingHistoryRefresh();
+
+  useEffect(() => {
+    document.body.classList.toggle("is-nav-controls-expanded", controlsExpanded);
+    return () => {
+      document.body.classList.remove("is-nav-controls-expanded");
+    };
+  }, [controlsExpanded]);
 
   return (
     <div

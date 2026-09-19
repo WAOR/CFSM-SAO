@@ -49,6 +49,7 @@
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
+    transform: translateX(-20px);
   }
 }
 
@@ -57,8 +58,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: opacity 160ms ease, visibility 160ms ease;
-  will-change: opacity;
+  transition: opacity 200ms ease, visibility 200ms ease, transform 200ms ease;
+  will-change: opacity, transform;
 }
 
 .home-overview {
