@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { BackgroundLayer } from "./BackgroundLayer";
@@ -15,33 +14,12 @@ import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerificati
 import { useMetricColorsSync } from "@/hooks/useMetricColors";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { getAdminUrl } from "@/services/cfsm/config";
-import { queryClient } from "@/services/queryClient";
-import { getLocalThemeSettings, saveLocalThemeSettings } from "@/services/themeSettingsStore";
 
 export function AppShell() {
   useAppearance();
   useSiteMetadata();
   useMetricColorsSync();
   const { pathname, search } = useLocation();
-
-  // 支持 URL 参数快捷注入绑定管理员昵称，例如访问 ?user=jerry
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const userParam = params.get("user") || params.get("username") || params.get("nickname");
-    if (userParam && userParam.trim()) {
-      const cleanUser = userParam.trim().slice(0, 40);
-      window.localStorage.setItem("cfsm_admin_username", cleanUser);
-      saveLocalThemeSettings({ ...getLocalThemeSettings(), adminNickname: cleanUser });
-      queryClient.invalidateQueries({ queryKey: ["me"] });
-      params.delete("user");
-      params.delete("username");
-      params.delete("nickname");
-      const newQuery = params.toString() ? `?${params.toString()}` : "";
-      const newUrl = `${window.location.pathname}${newQuery}${window.location.hash}`;
-      window.history.replaceState(null, "", newUrl);
-    }
-  }, []);
   const publicConfig = usePublicConfig();
   const auth = useAuth();
   const cachedMeta = readStoredSiteMetadata();
