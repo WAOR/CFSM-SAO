@@ -14,8 +14,11 @@ const OS_NAME_SPLIT_REGEX = /[\s/]+/;
  * 下面 `image` 里只记文件名，必须存在于后端 `public/os-icons/`；没有对应图标的系统
  * 统一落到 os-unknown。URL 在渲染时才拼，模块初始化阶段不依赖 window。
  */
-function osIconUrl(file: string) {
-  return hostAssetUrl(`/os-icons/${file}`);
+function osIconUrl(file: string, stage: number) {
+  if (stage % 2 === 0) {
+    return hostAssetUrl(`/os-icons/${file}`);
+  }
+  return `/assets/os-icons/${file}`;
 }
 
 const OS_CONFIGS: OsConfig[] = [
@@ -234,7 +237,7 @@ export const OsLogo = memo(function OsLogo({
   const os = resolveOsInfo(value);
   const [failStage, setFailStage] = useState<number>(0);
 
-  if (failStage >= 2) {
+  if (failStage >= 4) {
     // 降级兜底：当后端未提供图标或网络异常时，以无碎图的通用 Server SVG 兜底
     return (
       <svg
@@ -258,8 +261,8 @@ export const OsLogo = memo(function OsLogo({
     );
   }
 
-  const file = failStage === 1 ? DEFAULT_OS_CONFIG.image : os.image;
-  const src = osIconUrl(file);
+  const file = failStage >= 2 ? DEFAULT_OS_CONFIG.image : os.image;
+  const src = osIconUrl(file, failStage);
 
   return (
     <img
