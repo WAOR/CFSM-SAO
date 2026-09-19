@@ -73,6 +73,8 @@ export interface ResolvedThemeSettings {
   homeSortDirection: HomeSortDirection;
   /** 离线节点排最前面；默认 false = 置底。 */
   offlineNodesFirst: boolean;
+  /** 自定义管理员问候昵称（留空时自动读取后台用户名）。 */
+  adminNickname: string;
   showCostSummary: boolean;
   showCostSummaryFloatingButton: boolean;
   showPriceForGuests: boolean;
@@ -128,6 +130,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   homeSortField: "default",
   homeSortDirection: HOME_SORT_NATURAL_DIRECTION.default,
   offlineNodesFirst: false,
+  adminNickname: "",
   showCostSummary: true,
   showCostSummaryFloatingButton: true,
   showPriceForGuests: false,
@@ -282,6 +285,7 @@ export function normalizeThemeSettings(
     enableHomeSort: enabledUnlessFalse(settings?.enableHomeSort),
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),
     offlineNodesFirst: settings?.offlineNodesFirst === true,
+    adminNickname: normalizePlainText(settings?.adminNickname).trim().slice(0, 40),
     showCostSummary:
       enabledUnlessFalse(settings?.showCostSummary) ||
       settings?.showCostSummaryFloatingButton === true,

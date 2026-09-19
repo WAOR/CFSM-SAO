@@ -135,4 +135,9 @@ describe("normalizeThemeSettings", () => {
       normalizeThemeSettings({ hiddenNodes: "节点A, 节点A\nuuid-1；节点B" } as never).hiddenNodes,
     ).toEqual(["节点A", "uuid-1", "节点B"]);
   });
+
+  it("normalizes and trims adminNickname cleanly", () => {
+    expect(normalizeThemeSettings({}).adminNickname).toBe("");
+    expect(normalizeThemeSettings({ adminNickname: "  jerry  " }).adminNickname).toBe("jerry");
+  });
 });

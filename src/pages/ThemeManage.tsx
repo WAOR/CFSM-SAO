@@ -304,6 +304,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     homeSortField: settings.homeSortField,
     homeSortDirection: settings.homeSortDirection,
     offlineNodesFirst: settings.offlineNodesFirst,
+    adminNickname: settings.adminNickname,
     showCostSummary: settings.showCostSummary,
     showCostSummaryFloatingButton: settings.showCostSummaryFloatingButton,
     showPriceForGuests: settings.showPriceForGuests,
@@ -1673,6 +1674,22 @@ export function ThemeManage() {
                     checked={draft.showRegionBar}
                     onPatch={patch}
                   />
+                </div>
+                <div className="mt-4 pt-4 border-t border-(--border-color)">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-(--text-muted) mb-1.5">
+                    管理员问候昵称（显示在首页顶部）
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={40}
+                    value={draft.adminNickname}
+                    onChange={(e) => patch("adminNickname", e.target.value)}
+                    placeholder="留空则自动读取面板后台用户名 (如 jerry)"
+                    className="w-full px-3 py-2 text-sm rounded bg-(--input-bg,rgba(255,255,255,0.05)) border border-(--border-color) text-(--text-primary) placeholder:text-(--text-muted)/50 focus:outline-none focus:border-(--accent)"
+                  />
+                  <p className="mt-1.5 text-xs text-(--text-muted)">
+                    自定义首页顶部问候语显示的专属昵称（例如 <code>jerry</code>）。留空时将自动同步面板后端配置的真实用户名。
+                  </p>
                 </div>
               </InstancePanel>
 

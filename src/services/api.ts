@@ -222,9 +222,10 @@ function decodeUtf8(binary: string): string {
 }
 
 /**
- * 从 JWT token 中提取用户名（如 jerry）。
- * 优先匹配 payload.username / payload.sub / payload.user 等字段。
- * 兼容 base64url 与 UTF-8 编码，并剔除控制字符。
+ * 从 JWT token 中提取用户名。
+ * 优先匹配 payload.username / payload.user / payload.name / payload.login / payload.account。
+ * 特别注意：CF-Server-Monitor 后端生成的 JWT 里硬编码了 sub: "admin"；
+ * 如果 sub 为 "admin"（不区分大小写），不作为真实用户名，避免掩盖用户的真实配置。
  */
 export function extractUsernameFromJwt(token?: string | null): string {
   if (!token || typeof token !== "string") return "";
@@ -245,7 +246,6 @@ export function extractUsernameFromJwt(token?: string | null): string {
 
     const candidates = [
       payload.username,
-      payload.sub,
       payload.user,
       payload.name,
       payload.login,
@@ -260,6 +260,14 @@ export function extractUsernameFromJwt(token?: string | null): string {
         }
       }
     }
+
+    // 只有当 sub 存在且不等于 CFSM 默认硬编码的 "admin" 时才作为有效用户名
+    if (typeof payload.sub === "string") {
+      const sanitizedSub = payload.sub.replace(/[\x00-\x1F\x7F]/g, "").trim();
+      if (sanitizedSub && sanitizedSub.toLowerCase() !== "admin" && sanitizedSub.length <= 40) {
+        return sanitizedSub;
+      }
+    }
   } catch {
     // 畸形 token 或解析失败，降级处理
   }
@@ -268,17 +276,26 @@ export function extractUsernameFromJwt(token?: string | null): string {
 }
 
 /**
- * 从 localStorage 的备选 key 中尝试提取用户名（以防部分扩展/登录器额外写入）。
+ * 从 localStorage 的备选 key 中尝试提取用户名（以防部分扩展/登录器额外写入，或此前通过 /admin/api 成功获取并缓存）。
  */
 export function extractUsernameFromStorage(): string {
   if (typeof window === "undefined" || !window.localStorage) return "";
-  const keys = ["username", "user", "admin_user", "login_user", "cfsm_user"];
+  const keys = [
+    "cfsm_admin_username",
+    "admin_username",
+    "custom_username",
+    "username",
+    "user",
+    "admin_user",
+    "login_user",
+    "cfsm_user",
+  ];
   for (const key of keys) {
     try {
       const val = window.localStorage.getItem(key);
       if (typeof val === "string") {
         const sanitized = val.replace(/[\x00-\x1F\x7F]/g, "").trim();
-        if (sanitized && sanitized.length <= 40) {
+        if (sanitized && sanitized.toLowerCase() !== "admin" && sanitized.length <= 40) {
           return sanitized;
         }
       }
@@ -289,17 +306,60 @@ export function extractUsernameFromStorage(): string {
   return "";
 }
 
+const AdminSettingsSchema = z
+  .object({
+    success: z.boolean().optional(),
+    settings: z
+      .object({
+        username: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+/**
+ * 通过已有的登录凭据向 `/admin/api` 发起请求，获取 CFSM 后端真实配置的管理员用户名（如 jerry）。
+ * 成功后会自动持久化到 localStorage("cfsm_admin_username")，以便下次首屏 0 毫秒秒开。
+ */
+export async function fetchAdminUsername(options?: RequestOptions): Promise<string> {
+  const token = getJwtToken();
+  if (!token) return "";
+
+  try {
+    const res = await cfsmPost(
+      "/admin/api",
+      { action: "get_settings" },
+      AdminSettingsSchema,
+      options,
+    );
+    const rawUser = res.settings?.username;
+    if (typeof rawUser === "string") {
+      const sanitized = rawUser.replace(/[\x00-\x1F\x7F]/g, "").trim();
+      if (sanitized && sanitized.length <= 40) {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.setItem("cfsm_admin_username", sanitized);
+        }
+        return sanitized;
+      }
+    }
+  } catch {
+    // 跨域或权限不足时静默降级
+  }
+  return "";
+}
+
 /**
  * 解析当前登录用户的实际用户名。
- * 优先读取 JWT Payload，若无则兜底读取 Storage，最后保底返回 "Admin"。
+ * 优先级：Storage 已缓存的真实用户名 -> JWT Payload（排除 admin 硬编码） -> 保底 "Admin"。
  */
 export function resolveAuthUsername(token?: string | null): string {
   const t = token ?? getJwtToken();
   if (!t) return "";
-  const fromJwt = extractUsernameFromJwt(t);
-  if (fromJwt) return fromJwt;
   const fromStorage = extractUsernameFromStorage();
   if (fromStorage) return fromStorage;
+  const fromJwt = extractUsernameFromJwt(t);
+  if (fromJwt) return fromJwt;
   return "Admin";
 }
 
@@ -321,8 +381,8 @@ export function getInitialAuth(): Me {
 }
 
 /**
- * CF-Server-Monitor 没有 `/api/me`：登录态由 `/api/config` 的 `authorization` 决定，
- * 令牌本身存在 localStorage 里由 `/admin` 登录时写入。
+ * CF-Server-Monitor 没有 `/api/me`：登录态由 `/api/config` 的 `authorization` 决定。
+ * 登录状态下，若本地未缓存自定义用户名，会自动异步拉取 `/admin/api` 获取真正的 settings.username。
  */
 export async function getMe(options?: RequestOptions): Promise<Me> {
   const token = getJwtToken();
@@ -330,9 +390,26 @@ export async function getMe(options?: RequestOptions): Promise<Me> {
     return { logged_in: false, username: "", uuid: "" };
   }
   const config = await getSiteConfig(options);
+  if (!config.authorization) {
+    return { logged_in: false, username: "", uuid: "" };
+  }
+
+  let username = resolveAuthUsername(token);
+  // 如果本地当前只有兜底的 "Admin"，尝试通过 /admin/api 拉取真实设置的用户名（如 jerry）
+  if (!username || username.toLowerCase() === "admin") {
+    try {
+      const fetched = await fetchAdminUsername(options);
+      if (fetched) {
+        username = fetched;
+      }
+    } catch {
+      // 忽略
+    }
+  }
+
   return {
-    logged_in: config.authorization,
-    username: config.authorization ? resolveAuthUsername(token) : "",
+    logged_in: true,
+    username: username || "Admin",
     uuid: "",
   };
 }

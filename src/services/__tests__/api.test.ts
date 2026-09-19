@@ -4,6 +4,7 @@ import {
   clearHistoryCache,
   extractUsernameFromJwt,
   extractUsernameFromStorage,
+  fetchAdminUsername,
   getInitialAuth,
   getLoadRecords,
   getMe,
@@ -314,6 +315,11 @@ describe("auth username resolution and zero-flicker initialData", () => {
     expect(extractUsernameFromJwt(makeMockJwt({ account: "operator" }))).toBe("operator");
   });
 
+  it("ignores generic CFSM hardcoded sub: admin to avoid masking user's real name", () => {
+    expect(extractUsernameFromJwt(makeMockJwt({ sub: "admin" }))).toBe("");
+    expect(extractUsernameFromJwt(makeMockJwt({ sub: "Admin" }))).toBe("");
+  });
+
   it("decodes UTF-8 and Unicode characters correctly without garbled text", () => {
     expect(extractUsernameFromJwt(makeMockJwt({ username: "桐人" }))).toBe("桐人");
   });
@@ -332,11 +338,26 @@ describe("auth username resolution and zero-flicker initialData", () => {
   });
 
   it("falls back to storage keys if JWT payload lacks username claims", () => {
-    window.localStorage.setItem("username", "storage_user");
-    expect(extractUsernameFromStorage()).toBe("storage_user");
+    window.localStorage.setItem("cfsm_admin_username", "jerry_cached");
+    expect(extractUsernameFromStorage()).toBe("jerry_cached");
 
-    const noUserJwt = makeMockJwt({ exp: 123456 });
-    expect(resolveAuthUsername(noUserJwt)).toBe("storage_user");
+    const genericAdminJwt = makeMockJwt({ sub: "admin" });
+    expect(resolveAuthUsername(genericAdminJwt)).toBe("jerry_cached");
+  });
+
+  it("fetches real username from /admin/api when only generic admin token exists", async () => {
+    const genericToken = makeMockJwt({ sub: "admin" });
+    window.localStorage.setItem("jwt_token", genericToken);
+    fetchMock.mockImplementation(
+      jsonReply({
+        success: true,
+        settings: { username: "jerry" },
+      }),
+    );
+
+    const fetched = await fetchAdminUsername();
+    expect(fetched).toBe("jerry");
+    expect(window.localStorage.getItem("cfsm_admin_username")).toBe("jerry");
   });
 
   it("defaults to Admin if token has no usable username claim and storage is empty", () => {
@@ -348,9 +369,10 @@ describe("auth username resolution and zero-flicker initialData", () => {
     // 1. 无 token 状态：同步返回未登录
     expect(getInitialAuth()).toEqual({ logged_in: false, username: "", uuid: "" });
 
-    // 2. 有 token 状态：同步秒级提取出真实用户名 jerry，直接喂给 TanStack Query initialData
-    const token = makeMockJwt({ username: "jerry" });
+    // 2. 有 token 状态且缓存了真实用户名：同步直接返回 jerry
+    const token = makeMockJwt({ sub: "admin" });
     window.localStorage.setItem("jwt_token", token);
+    window.localStorage.setItem("cfsm_admin_username", "jerry");
     expect(getInitialAuth()).toEqual({
       logged_in: true,
       username: "jerry",

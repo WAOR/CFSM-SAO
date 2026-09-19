@@ -932,7 +932,11 @@ export function NodeGrid() {
           bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
           assetRatingLabels={themeSettings.assetRatingLabels}
           onWarmTraffic={warmTrafficPage}
-          username={me?.username || (me?.logged_in ? "Admin" : "Guest")}
+          username={
+            me?.logged_in
+              ? (themeSettings.adminNickname?.trim() || me?.username || "Admin")
+              : "Guest"
+          }
           todayTrafficTotal={todayTrafficTotal}
           todayTrafficLoading={todayTrafficQuery.isPending}
         />
