@@ -1,1 +1,0 @@
-import{at as e}from"./index-DgTDYASM.js";var t=e(`ChevronUp`,[[`path`,{d:`m18 15-6-6-6 6`,key:`153udz`}]]);export{t};
