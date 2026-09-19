@@ -1,10 +1,6 @@
 # CFSM-Theme-SAO
 
 <p align="center">
-  <img src="docs/images/theme-preview.png" alt="CFSM-Theme-SAO 综合预览" width="90%">
-</p>
-
-<p align="center">
   <strong>SAO 克制的探针监控主题</strong>
 </p>
 
@@ -67,34 +63,6 @@ https://github.com/WAOR/CFSM-SAO/tree/<40位dist分支CommitSHA>
 
 ---
 
-## 🖼️ 界面预览
-
-### 首页总览与大卡片
-<p align="center">
-  <img src="docs/images/v1.1.9/overview-large-card-solid.png" alt="首页总览与大卡片" width="85%">
-</p>
-<p align="center">
-  <img src="docs/images/v1.1.9/overview-large-card-solid-dark.png" alt="首页总览与大卡片夜间模式" width="85%">
-</p>
-
-### 紧凑小卡片模式
-<p align="center">
-  <img src="docs/images/v1.1.9/overview-compact-card-solid.png" alt="首页总览与小卡片" width="85%">
-</p>
-<p align="center">
-  <img src="docs/images/v1.1.9/overview-compact-card-solid-dark.png" alt="首页总览与小卡片夜间模式" width="85%">
-</p>
-
-### 透明毛玻璃与视频背景
-<p align="center">
-  <img src="docs/images/v1.1.9/overview-large-card-glass.png" alt="透明背景首页总览与大卡片" width="85%">
-</p>
-<p align="center">
-  <img src="docs/images/v1.1.9/overview-large-card-glass-dark.png" alt="透明背景首页总览与大卡片夜间模式" width="85%">
-</p>
-
----
-
 ## 💻 本地开发与调试
 
 本主题支持在无需后端接口的情况下，使用内置 Mock 数据进行离线完整开发与交互调试：
@@ -132,7 +100,7 @@ npm run dev
 ## 💖 致谢与项目渊源
 
 本项目汲取了开源社区探针美学设计灵感，特别感谢以下优秀项目与作者：
-- **[WAOR/Komari-Theme-SAO](https://github.com/WAOR/Komari-Theme-SAO)**：本项目的前身与对应的 Komari 探针版本主题。
+- **[volcano-1025/CFSM-Theme-LuminaPlus](https://github.com/volcano-1025/CFSM-Theme-LuminaPlus)**：CFSM 版本的 LuminaPlus 主题。
 - **[stqfdyr/komari-theme-Lumina](https://github.com/stqfdyr/komari-theme-Lumina)**：开源了优雅的初代 Lumina 主题。
 - **[shanyang242/Komari-Theme-LuminaPlus](https://github.com/shanyang242/Komari-Theme-LuminaPlus)**：丰富的功能扩展与架构设计。
 - **[Montia37/komari-theme-purcarte](https://github.com/Montia37/komari-theme-purcarte)**：动态背景视频设计思路与素材参考。
