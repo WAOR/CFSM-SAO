@@ -34,7 +34,7 @@ import {
   formatByteRate,
   formatByteRateLabel,
 } from "@/utils/format";
-import { calculateCostSummary, formatCnyMoney, getExchangeRates } from "@/utils/cost";
+import { calculateCostSummary, getExchangeRates } from "@/utils/cost";
 import { useHiddenNodeUuids } from "@/hooks/useVisibleNodes";
 import {
   getHomeGroupLabel,
@@ -201,7 +201,7 @@ function HomeOverviewCards({
   loggedIn,
 }: {
   overview: HomeOverview;
-  costSummary: { remainingCny: number } | null;
+  costSummary: { remainingCny: number; totalOriginalPriceCny?: number } | null;
   costLoading: boolean;
   dense: boolean;
   showOverviewRatings: boolean;
@@ -246,11 +246,20 @@ function HomeOverviewCards({
   const onlinePct =
     overview.totalNodes > 0 ? (overview.onlineNodes / overview.totalNodes) * 100 : 0;
   const { isPriceVisible } = usePriceVisibility();
-  const remainingValue = costSummary
-    ? formatCnyMoney(costSummary.remainingCny)
-    : costLoading
-      ? "计算中"
-      : "—";
+  const renderAssetValue = () => {
+    if (!isPriceVisible) return "保密";
+    if (!costSummary) return costLoading ? "计算中" : "—";
+    const totalOriginal = costSummary.totalOriginalPriceCny ?? 0;
+    if (totalOriginal > 0 || costSummary.remainingCny > 0) {
+      return (
+        <>
+          <span>¥{Math.round(costSummary.remainingCny).toLocaleString("zh-CN")}</span>
+          <em className="mao-stat-slash-total"> / ¥{Math.round(totalOriginal).toLocaleString("zh-CN")}</em>
+        </>
+      );
+    }
+    return "—";
+  };
 
   const assetRating =
     isPriceVisible && showOverviewRatings && showAssetRating && costSummary
@@ -458,7 +467,7 @@ function HomeOverviewCards({
                 )}
               </div>
               <div className="mao-stat-value">
-                {!isPriceVisible ? "保密" : remainingValue}
+                {renderAssetValue()}
               </div>
               <div className="mao-stat-footer">
                 <span className="mao-stat-caption">
