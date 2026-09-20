@@ -369,20 +369,20 @@ function HomeOverviewCards({
 
         {/* 6 宫格指标卡片 */}
         <div className="mao-stat-grid" data-cards={showAssetCard ? 6 : 5}>
-          {/* 1. 实时带宽 (合并实时上行与实时下行) */}
-          <div className="mao-stat-card" data-metric="bandwidth">
+          {/* 1. 活跃连接 (全站活跃连接数) */}
+          <div className="mao-stat-card" data-metric="connections">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Activity size={15} className="mao-stat-icon text-(--speed-high,var(--accent-500))" />
-                <span className="mao-stat-label">实时带宽</span>
+                <Network size={15} className="mao-stat-icon text-(--progress-network,var(--accent-500))" />
+                <span className="mao-stat-label">活跃连接</span>
               </div>
             </div>
-            <div className="mao-stat-value mao-stat-highlight">
-              {bandwidthRate.value} <span className="mao-stat-unit">{bandwidthRate.unit}</span>
+            <div className="mao-stat-value">
+              {totalConnections.toLocaleString()} <span className="mao-stat-unit">Conn</span>
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`实时上行: ${formatByteRateLabel(overview.netUp)} · 实时下行: ${formatByteRateLabel(overview.netDown)}`}>
-                ↑ {formatByteRateLabel(overview.netUp)} · ↓ {formatByteRateLabel(overview.netDown)}
+              <span className="mao-stat-caption" title={`TCP 连接: ${overview.totalTcpConn.toLocaleString()} · UDP 连接: ${overview.totalUdpConn.toLocaleString()}`}>
+                TCP {overview.totalTcpConn.toLocaleString()} · UDP {overview.totalUdpConn.toLocaleString()}
               </span>
             </div>
           </div>
@@ -441,20 +441,20 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 5. 活跃连接 (全站活跃连接数) */}
-          <div className="mao-stat-card" data-metric="connections">
+          {/* 5. 实时带宽 (合并实时上行与实时下行) */}
+          <div className="mao-stat-card" data-metric="bandwidth">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Network size={15} className="mao-stat-icon text-(--progress-network,var(--accent-500))" />
-                <span className="mao-stat-label">活跃连接</span>
+                <Activity size={15} className="mao-stat-icon text-(--speed-high,var(--accent-500))" />
+                <span className="mao-stat-label">实时带宽</span>
               </div>
             </div>
-            <div className="mao-stat-value">
-              {totalConnections.toLocaleString()} <span className="mao-stat-unit">Conn</span>
+            <div className="mao-stat-value mao-stat-highlight">
+              {bandwidthRate.value} <span className="mao-stat-unit">{bandwidthRate.unit}</span>
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`TCP 连接: ${overview.totalTcpConn.toLocaleString()} · UDP 连接: ${overview.totalUdpConn.toLocaleString()}`}>
-                TCP {overview.totalTcpConn.toLocaleString()} · UDP {overview.totalUdpConn.toLocaleString()}
+              <span className="mao-stat-caption" title={`实时上行: ${formatByteRateLabel(overview.netUp)} · 实时下行: ${formatByteRateLabel(overview.netDown)}`}>
+                ↑ {formatByteRateLabel(overview.netUp)} · ↓ {formatByteRateLabel(overview.netDown)}
               </span>
             </div>
           </div>
