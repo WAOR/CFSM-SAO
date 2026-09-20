@@ -191,11 +191,7 @@ function HomeOverviewCards({
   costSummary,
   costLoading,
   showOverviewRatings,
-  showTrafficRating,
-  showBandwidthRating,
   showAssetRating,
-  trafficRatingLabels,
-  bandwidthRatingLabels,
   assetRatingLabels,
   showDetailButton,
   showAssetCard,
@@ -209,11 +205,7 @@ function HomeOverviewCards({
   costLoading: boolean;
   dense: boolean;
   showOverviewRatings: boolean;
-  showTrafficRating: boolean;
-  showBandwidthRating: boolean;
   showAssetRating: boolean;
-  trafficRatingLabels: string;
-  bandwidthRatingLabels: string;
   assetRatingLabels: string;
   showDetailButton: boolean;
   showAssetCard: boolean;
@@ -260,22 +252,6 @@ function HomeOverviewCards({
       ? "计算中"
       : "—";
 
-  const trafficRating =
-    showOverviewRatings && showTrafficRating && totalCumulativeTraffic > 0
-      ? getOverviewRating({
-        kind: "traffic",
-        value: totalCumulativeTraffic,
-        customLabels: trafficRatingLabels,
-      })
-      : null;
-  const bandwidthRating =
-    showOverviewRatings && showBandwidthRating && totalBandwidth > 0
-      ? getOverviewRating({
-        kind: "bandwidth",
-        value: totalBandwidth,
-        customLabels: bandwidthRatingLabels,
-      })
-      : null;
   const assetRating =
     isPriceVisible && showOverviewRatings && showAssetRating && costSummary
       ? getOverviewRating({
@@ -385,7 +361,6 @@ function HomeOverviewCards({
               <span className="mao-stat-caption" title={`实时上行: ${formatByteRateLabel(overview.netUp)} · 实时下行: ${formatByteRateLabel(overview.netDown)}`}>
                 ↑ {formatByteRateLabel(overview.netUp)} · ↓ {formatByteRateLabel(overview.netDown)}
               </span>
-              {renderRating(bandwidthRating)}
             </div>
           </div>
 
@@ -407,25 +382,7 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 3. 内存用量 */}
-          <div className="mao-stat-card" data-metric="ram">
-            <div className="mao-stat-head">
-              <div className="mao-stat-title-wrap">
-                <Layers size={15} className="mao-stat-icon text-(--traffic-up,var(--status-info))" />
-                <span className="mao-stat-label">内存用量</span>
-              </div>
-            </div>
-            <div className="mao-stat-value">
-              {ramUsedValue} <span className="mao-stat-unit">{ramUsedUnit}</span>
-            </div>
-            <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalRamUsed)} / 总量: ${formatBytes(overview.totalRamTotal)}`}>
-                共 {formatBytes(overview.totalRamTotal)} · {overview.ramPct.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-
-          {/* 4. 硬盘用量 */}
+          {/* 3. 硬盘用量 */}
           <div className="mao-stat-card" data-metric="disk">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
@@ -439,6 +396,24 @@ function HomeOverviewCards({
             <div className="mao-stat-footer">
               <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalDiskUsed)} / 总量: ${formatBytes(overview.totalDiskTotal)}`}>
                 共 {formatBytes(overview.totalDiskTotal)} · {overview.diskPct.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* 4. 内存用量 */}
+          <div className="mao-stat-card" data-metric="ram">
+            <div className="mao-stat-head">
+              <div className="mao-stat-title-wrap">
+                <Layers size={15} className="mao-stat-icon text-(--traffic-up,var(--status-info))" />
+                <span className="mao-stat-label">内存用量</span>
+              </div>
+            </div>
+            <div className="mao-stat-value">
+              {ramUsedValue} <span className="mao-stat-unit">{ramUsedUnit}</span>
+            </div>
+            <div className="mao-stat-footer">
+              <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalRamUsed)} / 总量: ${formatBytes(overview.totalRamTotal)}`}>
+                共 {formatBytes(overview.totalRamTotal)} · {overview.ramPct.toFixed(1)}%
               </span>
             </div>
           </div>
@@ -458,7 +433,6 @@ function HomeOverviewCards({
               <span className="mao-stat-caption" title={`累计上行: ${formatBytes(overview.trafficUp)} · 累计下行: ${formatBytes(overview.trafficDown)}`}>
                 ↑ {formatBytes(overview.trafficUp)} · ↓ {formatBytes(overview.trafficDown)}
               </span>
-              {renderRating(trafficRating)}
             </div>
           </div>
 
@@ -513,16 +487,6 @@ function HomeOverviewCards({
                 <span className="mao-status-dot" />
                 {isAllHealthy ? "状态健康" : overview.totalNodes === 0 ? "未连接" : `存在离线 (${overview.offlineNodes})`}
               </span>
-              {bandwidthRating && (
-                <span
-                  className="overview-card-rating is-bandwidth-badge"
-                  data-rating-level={bandwidthRating.level}
-                  title={`全站实时带宽评级: ${bandwidthRating.label}`}
-                >
-                  <span className="mao-status-dot" />
-                  {bandwidthRating.label}
-                </span>
-              )}
             </div>
           </div>
 
@@ -571,7 +535,6 @@ function HomeOverviewCards({
           <OverviewTrafficChart
             netUp={overview.netUp}
             netDown={overview.netDown}
-            bandwidthRating={bandwidthRating}
           />
         </div>
       </div>
@@ -970,11 +933,7 @@ export function NodeGrid() {
           costSummary={costSummary}
           costLoading={costLoading}
           showOverviewRatings={themeSettings.showOverviewRatings}
-          showTrafficRating={themeSettings.showTrafficRating}
-          showBandwidthRating={themeSettings.showBandwidthRating}
           showAssetRating={themeSettings.showAssetRating}
-          trafficRatingLabels={themeSettings.trafficRatingLabels}
-          bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
           assetRatingLabels={themeSettings.assetRatingLabels}
           username={
             me?.logged_in

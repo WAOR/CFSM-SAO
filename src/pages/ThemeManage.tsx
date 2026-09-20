@@ -106,9 +106,7 @@ import {
   type BackgroundMediaType,
   type ResolvedThemeSettings,
 } from "@/utils/themeSettings";
-import {
-  type OverviewRatingKind,
-} from "@/utils/overviewRating";
+
 import { HOME_SORT_FIELDS, HOME_SORT_FIELD_LABELS } from "@/utils/homeSort";
 
 const APPEARANCE_OPTIONS = [
@@ -312,11 +310,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showPriceForGuests: settings.showPriceForGuests,
     renewalReminderDays: settings.renewalReminderDays,
     showOverviewRatings: settings.showOverviewRatings,
-    showTrafficRating: settings.showTrafficRating,
-    showBandwidthRating: settings.showBandwidthRating,
     showAssetRating: settings.showAssetRating,
-    trafficRatingLabels: settings.trafficRatingLabels,
-    bandwidthRatingLabels: settings.bandwidthRatingLabels,
     assetRatingLabels: settings.assetRatingLabels,
     compactShowTrafficTotal: settings.compactShowTrafficTotal,
     compactShowBilling: settings.compactShowBilling,
@@ -351,11 +345,9 @@ type ThemeDraft = Omit<
   ManagedThemeSettings,
   | "hiddenNodes"
   | "costIgnoredNodes"
-  | "trafficRatingLabels"
-  | "bandwidthRatingLabels"
   | "assetRatingLabels"
 > & {
-  ratingLabels: Record<OverviewRatingKind, string>;
+  ratingLabels: { asset: string };
   hiddenNodesText: string;
   costIgnoredText: string;
 };
@@ -364,16 +356,12 @@ function draftFromSettings(settings: ResolvedThemeSettings): ThemeDraft {
   const {
     hiddenNodes,
     costIgnoredNodes,
-    trafficRatingLabels,
-    bandwidthRatingLabels,
     assetRatingLabels,
     ...rest
   } = pickManagedThemeSettings(settings);
   return {
     ...rest,
     ratingLabels: {
-      traffic: trafficRatingLabels,
-      bandwidth: bandwidthRatingLabels,
       asset: assetRatingLabels,
     },
     hiddenNodesText: hiddenNodes.join("\n"),
@@ -1144,8 +1132,6 @@ export function ThemeManage() {
       ...rest,
       homepagePingBindings: pruneBindings(rest.homepagePingBindings),
       homeGroupOrder: normalizeHomeGroupOrder(rest.homeGroupOrder),
-      trafficRatingLabels: ratingLabels.traffic,
-      bandwidthRatingLabels: ratingLabels.bandwidth,
       assetRatingLabels: ratingLabels.asset,
       hiddenNodes: normalizeNodeIdentityList(hiddenNodesText),
       costIgnoredNodes: normalizeCostIgnoredNodes(costIgnoredText),
