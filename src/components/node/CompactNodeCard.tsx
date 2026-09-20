@@ -40,7 +40,6 @@ import {
   TRAFFIC_SLIVER_RATIO,
 } from "./nodeCardShared";
 import { IpStackBadges } from "./IpStackBadges";
-import { NodeTodayTrafficPopover } from "./NodeTodayTrafficPopover";
 import type {
   NodeInfo,
   NodeMetrics,
@@ -351,11 +350,9 @@ function CompactHealthItem({
 function CompactNodeHeader({
   node,
   osName,
-  showTodayTraffic,
 }: {
   node: CompactNode;
   osName: string;
-  showTodayTraffic: boolean;
 }) {
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
   return (
@@ -373,9 +370,6 @@ function CompactNodeHeader({
         </div>
       </div>
       <div className="compact-node-actions">
-        {showTodayTraffic && (
-          <NodeTodayTrafficPopover uuid={node.uuid} size={14} />
-        )}
         <Link
           to={`/server/${encodeURIComponent(node.uuid)}`}
           className="compact-node-detail-link"
@@ -712,10 +706,8 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
 
 export const CompactNodeCard = memo(function CompactNodeCard({
   uuid,
-  showTodayTraffic = true,
 }: {
   uuid: string;
-  showTodayTraffic?: boolean;
 }) {
   const model = useNodeCardModel(uuid, {
     pingBucketCount: HOMEPAGE_PING_BUCKET_COUNT,
@@ -763,7 +755,6 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       <CompactNodeHeader
         node={node}
         osName={osName}
-        showTodayTraffic={showTodayTraffic && themeSettings.showTodayTrafficPopover !== false}
       />
       <CompactNodeChips subtitle={subtitle} tags={footerTags} ipv4={node.ipv4} ipv6={node.ipv6} />
       <CompactNodeVitals node={node} loadFraction={loadFraction} />

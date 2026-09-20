@@ -514,7 +514,6 @@ export interface ThemeSettings {
   backgroundImageMobile?: string;
   backgroundVideo?: string;
   backgroundVideoDark?: string;
-  showTodayTrafficPopover?: boolean;
   showPriceForGuests?: boolean;
 }
 

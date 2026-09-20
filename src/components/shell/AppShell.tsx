@@ -32,7 +32,6 @@ export function AppShell() {
   const isDataRoute =
     normalizedPath === "/" ||
     normalizedPath === "/assets" ||
-    normalizedPath === "/traffic" ||
     normalizedPath.startsWith("/server/") ||
     normalizedPath.startsWith("/instance/");
   const isCheckingAccess =

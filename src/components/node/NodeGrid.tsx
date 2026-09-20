@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
-  ArrowDownRight,
-  ArrowUpRight,
   Check,
   CircleDollarSign,
-  Clock,
+  Cpu,
+  Layers,
   Pencil,
   Server,
   Sparkles,
@@ -31,6 +30,7 @@ import { useViewMode } from "@/hooks/useViewMode";
 import { usePriceVisibility } from "@/hooks/usePriceVisibility";
 import {
   formatBytes,
+  formatByteRate,
   formatByteRateLabel,
 } from "@/utils/format";
 import { calculateCostSummary, formatCnyMoney, getExchangeRates } from "@/utils/cost";
@@ -47,13 +47,8 @@ import {
 import { getDisplayRegionCode } from "@/utils/geo";
 import { useHomeSort } from "@/hooks/useHomeSort";
 import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
-import { useHourlyClock, useMinuteClock } from "@/hooks/useClock";
+import { useHourlyClock } from "@/hooks/useClock";
 import { preloadAssetsPage } from "@/services/assetsPageLoader";
-import {
-  preloadTodayTrafficStats,
-  TodayTrafficStatsProvider,
-  useTodayTrafficStats,
-} from "@/hooks/useTodayTrafficStats";
 import { HomeSortControl } from "./HomeSortControl";
 import {
   getOverviewRating,
@@ -96,22 +91,10 @@ interface HomeOverview {
   trafficDown: number;
   netUp: number;
   netDown: number;
-}
-
-function TrafficBarsIcon({ size = 19 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 20 20"
-      fill="none"
-      aria-hidden
-    >
-      <rect x="2" y="10" width="4" height="8" rx="1.2" fill="currentColor" />
-      <rect x="8" y="5.5" width="4" height="12.5" rx="1.2" fill="currentColor" />
-      <rect x="14" y="2" width="4" height="16" rx="1.2" fill="currentColor" />
-    </svg>
-  );
+  avgCpu: number;
+  totalRamUsed: number;
+  totalRamTotal: number;
+  ramPct: number;
 }
 
 function HomeBrand({ siteName }: { siteName: string }) {
@@ -214,10 +197,7 @@ function HomeOverviewCards({
   showAssetCard,
   renewalNodes,
   dense,
-  onWarmTraffic,
   username,
-  todayTrafficTotal,
-  todayTrafficLoading,
   loggedIn,
 }: {
   overview: HomeOverview;
@@ -234,10 +214,7 @@ function HomeOverviewCards({
   showDetailButton: boolean;
   showAssetCard: boolean;
   renewalNodes: RenewalReminderSource[];
-  onWarmTraffic: () => void;
   username: string;
-  todayTrafficTotal: number | null;
-  todayTrafficLoading: boolean;
   loggedIn: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -263,10 +240,12 @@ function HomeOverviewCards({
     setIsEditingName(false);
   };
 
-  const todayTrafficBytes = todayTrafficTotal ?? 0;
-  const [trafficValue, trafficUnit] = todayTrafficLoading && todayTrafficTotal === null
-    ? ["—", ""]
-    : formatBytes(todayTrafficBytes).split(" ");
+  const totalCumulativeTraffic = overview.trafficUp + overview.trafficDown;
+  const [trafficValue, trafficUnit] = formatBytes(totalCumulativeTraffic).split(" ");
+  const [ramUsedValue, ramUsedUnit] = formatBytes(overview.totalRamUsed).split(" ");
+  const totalBandwidth = overview.netUp + overview.netDown;
+  const bandwidthRate = formatByteRate(totalBandwidth);
+
   const onlinePct =
     overview.totalNodes > 0 ? (overview.onlineNodes / overview.totalNodes) * 100 : 0;
   const { isPriceVisible } = usePriceVisibility();
@@ -275,22 +254,20 @@ function HomeOverviewCards({
     : costLoading
       ? "计算中"
       : "—";
-  const trafficDetailLabel = todayTrafficTotal !== null
-    ? `今日全节点出入站累计 ${formatBytes(todayTrafficTotal)}`
-    : "今日流量统计中...";
+
   const trafficRating =
-    showOverviewRatings && showTrafficRating && todayTrafficTotal !== null
+    showOverviewRatings && showTrafficRating && totalCumulativeTraffic > 0
       ? getOverviewRating({
         kind: "traffic",
-        value: todayTrafficBytes,
+        value: totalCumulativeTraffic,
         customLabels: trafficRatingLabels,
       })
       : null;
   const bandwidthRating =
-    showOverviewRatings && showBandwidthRating && (overview.netUp > 0 || overview.netDown > 0)
+    showOverviewRatings && showBandwidthRating && totalBandwidth > 0
       ? getOverviewRating({
         kind: "bandwidth",
-        value: overview.netUp + overview.netDown,
+        value: totalBandwidth,
         customLabels: bandwidthRatingLabels,
       })
       : null;
@@ -324,7 +301,7 @@ function HomeOverviewCards({
 
   return (
     <section className={`mao-dashboard-hero home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
-      {/* 左侧主要区域：问候语 + 6 宫格指标小卡片 */}
+      {/* 左侧主要区域：问候语 + 5 宫格指标小卡片 */}
       <div className="mao-hero-main">
         <div className="mao-hero-header">
           <div className="mao-badge">
@@ -386,128 +363,101 @@ function HomeOverviewCards({
           </p>
         </div>
 
-        {/* 6 宫格指标卡片 */}
-        <div className="mao-stat-grid">
-          {/* 1. 实时上行 */}
-          <div className="mao-stat-card" data-metric="net-up">
+        {/* 5 宫格指标卡片 */}
+        <div className="mao-stat-grid" data-cards={showAssetCard ? 5 : 4}>
+          {/* 1. 实时带宽 (合并实时上行与实时下行) */}
+          <div className="mao-stat-card" data-metric="bandwidth">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <ArrowUpRight size={15} className="mao-stat-icon text-(--traffic-up,var(--status-success))" />
-                <span className="mao-stat-label">实时上行</span>
+                <Activity size={15} className="mao-stat-icon text-(--speed-high,var(--accent-500))" />
+                <span className="mao-stat-label">实时带宽</span>
               </div>
             </div>
-            <div className="mao-stat-value">
-              {formatByteRateLabel(overview.netUp)}
+            <div className="mao-stat-value mao-stat-highlight">
+              {bandwidthRate.value} <span className="mao-stat-unit">{bandwidthRate.unit}</span>
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`累计上行: ${formatBytes(overview.trafficUp)}`}>
-                累计 ↑ {formatBytes(overview.trafficUp)}
+              <span className="mao-stat-caption" title={`实时上行: ${formatByteRateLabel(overview.netUp)} · 实时下行: ${formatByteRateLabel(overview.netDown)}`}>
+                ↑ {formatByteRateLabel(overview.netUp)} · ↓ {formatByteRateLabel(overview.netDown)}
               </span>
+              {renderRating(bandwidthRating)}
             </div>
           </div>
 
-          {/* 2. 实时下行 */}
-          <div className="mao-stat-card" data-metric="net-down">
+          {/* 2. 平均 CPU */}
+          <div className="mao-stat-card" data-metric="cpu">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <ArrowDownRight size={15} className="mao-stat-icon text-(--speed-high,var(--accent-500))" />
-                <span className="mao-stat-label">实时下行</span>
+                <Cpu size={15} className="mao-stat-icon text-(--status-warning)" />
+                <span className="mao-stat-label">平均 CPU</span>
               </div>
             </div>
             <div className="mao-stat-value">
-              {formatByteRateLabel(overview.netDown)}
-            </div>
-            <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`累计下行: ${formatBytes(overview.trafficDown)}`}>
-                累计 ↓ {formatBytes(overview.trafficDown)}
-              </span>
-            </div>
-          </div>
-
-          {/* 3. 在线比例 */}
-          <div className="mao-stat-card" data-metric="online">
-            <div className="mao-stat-head">
-              <div className="mao-stat-title-wrap">
-                <Server size={15} className="mao-stat-icon text-(--status-success)" />
-                <span className="mao-stat-label">在线比例</span>
-              </div>
-            </div>
-            <div className="mao-stat-value">
-              {overview.onlineNodes} <span className="mao-stat-unit">/ {overview.totalNodes}</span>
+              {overview.avgCpu.toFixed(1)} <span className="mao-stat-unit">%</span>
             </div>
             <div className="mao-stat-footer">
               <span className="mao-stat-caption">
-                在线率 {onlinePct.toFixed(0)}%
+                {overview.onlineNodes > 0 ? `${overview.onlineNodes} 台在线服务器` : "暂无在线服务器"}
               </span>
             </div>
           </div>
 
-          {/* 4. 临期 / 到期提醒 */}
-          <div className={`mao-stat-card${renewalPopoverOpen ? " is-popover-open" : ""}`} data-metric="renewal">
+          {/* 3. 内存用量 */}
+          <div className="mao-stat-card" data-metric="ram">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Clock size={15} className="mao-stat-icon text-(--status-warning)" />
-                <span className="mao-stat-label">临期提醒</span>
+                <Layers size={15} className="mao-stat-icon text-(--traffic-up,var(--status-info))" />
+                <span className="mao-stat-label">内存用量</span>
               </div>
-              {showDetailButton && <RenewalReminder nodes={renewalNodes} onOpenChange={setRenewalPopoverOpen} />}
             </div>
             <div className="mao-stat-value">
-              {renewalCount > 0 ? `${renewalCount} 台临期` : "运行正常"}
+              {ramUsedValue} <span className="mao-stat-unit">{ramUsedUnit}</span>
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption">
-                {renewalCount > 0 ? "7天内即将到期" : "近期无临期设备"}
+              <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalRamUsed)} / 总量: ${formatBytes(overview.totalRamTotal)}`}>
+                共 {formatBytes(overview.totalRamTotal)} · {overview.ramPct.toFixed(1)}%
               </span>
             </div>
           </div>
 
-          {/* 5. 今日流量 */}
+          {/* 4. 累积流量 */}
           <div className="mao-stat-card" data-metric="traffic">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
                 <TrendingUp size={15} className="mao-stat-icon text-(--traffic-up,var(--status-info))" />
-                <span className="mao-stat-label">今日流量</span>
+                <span className="mao-stat-label">累积流量</span>
               </div>
-              <Link
-                to="/traffic"
-                className="overview-card-action mao-stat-action"
-                aria-label="打开今日流量统计页"
-                title="今日流量详情"
-                onPointerEnter={onWarmTraffic}
-                onFocus={onWarmTraffic}
-                onClick={onWarmTraffic}
-              >
-                <TrafficBarsIcon size={14} />
-              </Link>
             </div>
             <div className="mao-stat-value">
-              {trafficValue}{trafficUnit && <span className="mao-stat-unit"> {trafficUnit}</span>}
+              {trafficValue} <span className="mao-stat-unit">{trafficUnit}</span>
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption truncate" title={trafficDetailLabel}>
-                全节点出入站累计
+              <span className="mao-stat-caption" title={`累计上行: ${formatBytes(overview.trafficUp)} · 累计下行: ${formatBytes(overview.trafficDown)}`}>
+                ↑ {formatBytes(overview.trafficUp)} · ↓ {formatBytes(overview.trafficDown)}
               </span>
               {renderRating(trafficRating)}
             </div>
           </div>
 
-          {/* 6. 资产概览 */}
+          {/* 5. 资产总值 (右上角钱币图标集成临期提醒悬浮窗) */}
           {showAssetCard && (
-            <div className="mao-stat-card" data-metric="asset">
+            <div className={`mao-stat-card${renewalPopoverOpen ? " is-popover-open" : ""}`} data-metric="asset">
               <div className="mao-stat-head">
                 <div className="mao-stat-title-wrap">
                   <CircleDollarSign size={15} className="mao-stat-icon text-(--accent-500)" />
                   <span className="mao-stat-label">资产总值</span>
                 </div>
                 {showDetailButton && (
-                  <Link
-                    to="/assets"
-                    className="overview-card-action mao-stat-action"
-                    aria-label="打开资产统计页"
-                    title="资产统计"
-                  >
-                    <CircleDollarSign size={14} />
-                  </Link>
+                  <RenewalReminder nodes={renewalNodes} onOpenChange={setRenewalPopoverOpen}>
+                    <Link
+                      to="/assets"
+                      className="overview-card-action mao-stat-action"
+                      aria-label="打开资产统计页"
+                      title={renewalCount > 0 ? `${renewalCount} 台设备即将到期` : "资产统计"}
+                    >
+                      <CircleDollarSign size={14} className={renewalCount > 0 ? "text-(--status-warning)" : ""} />
+                    </Link>
+                  </RenewalReminder>
                 )}
               </div>
               <div className="mao-stat-value">
@@ -680,7 +630,6 @@ function RegionTabs({
 
 export function NodeGrid() {
   const now = useHourlyClock();
-  const queryClient = useQueryClient();
   const nodes = useHomeNodeSummaries();
   const nodeOnlineSummaries = useNodeOnlineSummaries();
   const allMeta = useAllNodeMeta();
@@ -725,22 +674,6 @@ export function NodeGrid() {
       online: onlineByUuid.get(node.uuid) ?? null,
     }));
   }, [nodeOnlineSummaries, visibleMeta]);
-  const trafficUuids = useMemo(
-    () => visibleMeta.map((node) => node.uuid),
-    [visibleMeta],
-  );
-  const warmTrafficPage = useCallback(() => {
-    void preloadTodayTrafficStats(queryClient, trafficUuids, Date.now());
-  }, [queryClient, trafficUuids]);
-  const todayTrafficClock = useMinuteClock();
-  const todayTrafficQuery = useTodayTrafficStats(trafficUuids, todayTrafficClock, "summary");
-  const todayTrafficTotal = useMemo(() => {
-    if (!todayTrafficQuery.data) return null;
-    return todayTrafficQuery.data.rows.reduce(
-      (sum, row) => sum + row.trafficUp + row.trafficDown,
-      0,
-    );
-  }, [todayTrafficQuery.data]);
   // 「名称」排序需要展示名(摘要无 name),从 meta 注入。
   const nameByUuid = useMemo(() => {
     const map = new Map<string, string>();
@@ -754,14 +687,27 @@ export function NodeGrid() {
     let trafficDown = 0;
     let netUp = 0;
     let netDown = 0;
+    let totalCpu = 0;
+    let totalRamUsed = 0;
+    let totalRamTotal = 0;
+
     for (const node of visibleNodes) {
-      if (node.online === true) onlineNodes += 1;
-      else if (node.online === false) offlineNodes += 1;
+      if (node.online === true) {
+        onlineNodes += 1;
+        totalCpu += node.cpuPct || 0;
+        totalRamUsed += node.ramUsed || 0;
+      } else if (node.online === false) {
+        offlineNodes += 1;
+      }
+      totalRamTotal += node.ramTotal || 0;
       trafficUp += node.trafficUp;
       trafficDown += node.trafficDown;
       netUp += node.netUp;
       netDown += node.netDown;
     }
+
+    const avgCpu = onlineNodes > 0 ? totalCpu / onlineNodes : 0;
+    const ramPct = totalRamTotal > 0 ? (totalRamUsed / totalRamTotal) * 100 : 0;
 
     return {
       totalNodes: visibleNodes.length,
@@ -771,10 +717,13 @@ export function NodeGrid() {
       trafficDown,
       netUp,
       netDown,
+      avgCpu,
+      totalRamUsed,
+      totalRamTotal,
+      ramPct,
     };
   }, [visibleNodes]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
-  const showTrafficPopover = themeSettings.isReady && themeSettings.showTodayTrafficPopover;
   const hasNodes = visibleMeta.length > 0;
   const loggedIn = Boolean(me?.logged_in);
   const canAccessAssets = loggedIn || themeSettings.showPriceForGuests;
@@ -920,24 +869,15 @@ export function NodeGrid() {
         : orderedUuids.map((uuid) => (
           <div key={uuid} className="min-w-0">
             {mode === "mini" ? (
-              <MiniNodeCard
-                uuid={uuid}
-                showTodayTraffic={showTrafficPopover}
-              />
+              <MiniNodeCard uuid={uuid} />
             ) : mode === "compact" ? (
-              <CompactNodeCard
-                uuid={uuid}
-                showTodayTraffic={showTrafficPopover}
-              />
+              <CompactNodeCard uuid={uuid} />
             ) : (
-              <NodeCard
-                uuid={uuid}
-                showTodayTraffic={showTrafficPopover}
-              />
+              <NodeCard uuid={uuid} />
             )}
           </div>
         )),
-    [orderedUuids, mode, showTrafficPopover],
+    [orderedUuids, mode],
   );
   const showGroupTabs =
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
@@ -1005,15 +945,12 @@ export function NodeGrid() {
           trafficRatingLabels={themeSettings.trafficRatingLabels}
           bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
           assetRatingLabels={themeSettings.assetRatingLabels}
-          onWarmTraffic={warmTrafficPage}
           username={
             me?.logged_in
               ? (themeSettings.adminNickname?.trim() || me?.username || "Admin")
               : "Guest"
           }
           loggedIn={Boolean(me?.logged_in)}
-          todayTrafficTotal={todayTrafficTotal}
-          todayTrafficLoading={todayTrafficQuery.isPending}
         />
       )}
     </>
@@ -1077,10 +1014,6 @@ export function NodeGrid() {
         )}
         {isList ? (
           <NodeListView uuids={orderedUuids} />
-        ) : showTrafficPopover ? (
-          <TodayTrafficStatsProvider uuids={trafficUuids}>
-            {gridElement}
-          </TodayTrafficStatsProvider>
         ) : (
           gridElement
         )}

@@ -15,11 +15,9 @@ import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { IpStackBadges } from "./IpStackBadges";
-import { NodeTodayTrafficPopover } from "./NodeTodayTrafficPopover";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
 import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick";
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
-import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { HOMEPAGE_PING_BUCKET_COUNT } from "@/hooks/usePingOverview";
 import { speedRateColor } from "@/utils/metricTone";
 import { supportsFineHover } from "@/utils/mediaQuery";
@@ -42,11 +40,9 @@ type MiniTag = { label: string; color: string };
 function MiniHeader({
   node,
   osName,
-  showTodayTraffic,
 }: {
   node: MiniNode;
   osName: string;
-  showTodayTraffic: boolean;
 }) {
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
   const detailHref = `/server/${encodeURIComponent(node.uuid)}`;
@@ -56,7 +52,6 @@ function MiniHeader({
       <Link to={detailHref} className="mini-node-title" title={node.name}>
         {node.name}
       </Link>
-      {showTodayTraffic && <NodeTodayTrafficPopover uuid={node.uuid} size={13} />}
       <Link
         to={detailHref}
         className="mini-node-os"
@@ -427,15 +422,12 @@ const MiniHealth = memo(function MiniHealth({
 
 export const MiniNodeCard = memo(function MiniNodeCard({
   uuid,
-  showTodayTraffic = true,
 }: {
   uuid: string;
-  showTodayTraffic?: boolean;
 }) {
   const model = useNodeCardModel(uuid, {
     pingBucketCount: HOMEPAGE_PING_BUCKET_COUNT,
   });
-  const themeSettings = useThemeSettings();
 
   if (!model.node) {
     return <article className="mini-node-card animate-pulse" aria-busy />;
@@ -465,7 +457,6 @@ export const MiniNodeCard = memo(function MiniNodeCard({
       <MiniHeader
         node={node}
         osName={osName}
-        showTodayTraffic={showTodayTraffic && themeSettings.showTodayTrafficPopover !== false}
       />
       <MiniChips
         tags={footerTags}

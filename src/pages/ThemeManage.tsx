@@ -322,7 +322,6 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     compactShowBilling: settings.compactShowBilling,
     compactShowUptime: settings.compactShowUptime,
     showConnections: settings.showConnections,
-    showTodayTrafficPopover: settings.showTodayTrafficPopover,
     hiddenNodes: settings.hiddenNodes,
     costIgnoredNodes: settings.costIgnoredNodes,
     costPremiums: Object.fromEntries(
@@ -1872,13 +1871,6 @@ export function ThemeManage() {
                   title="显示 TCP/UDP 连接数"
                   desc="在卡片网络区域标注实时活跃连接统计。"
                   checked={draft.showConnections}
-                  onPatch={patch}
-                />
-                <ToggleRow
-                  field="showTodayTrafficPopover"
-                  title="悬浮显示当日流量气泡 (SAO 特色)"
-                  desc="鼠标悬停在卡片或小卡片流量指标时，弹出精致的今日已用流量透视窗。"
-                  checked={draft.showTodayTrafficPopover}
                   onPatch={patch}
                 />
               </div>

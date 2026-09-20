@@ -682,58 +682,6 @@ function percentile(sortedValues: number[], fraction: number): number | null {
   return sortedValues[index] ?? null;
 }
 
-/** 今日流量：由历史里的上/下行速率按采样间隔积分近似得到。 */
-export interface TodayTrafficEstimate {
-  client: string;
-  up: number;
-  down: number;
-  peakUp: number;
-  peakDown: number;
-  rangeStartMs: number;
-  rangeEndMs: number;
-  samples: number;
-}
-
-export async function getTodayTrafficEstimate(
-  uuid: string,
-  startMs: number,
-  endMs: number,
-  options?: RequestOptions,
-): Promise<TodayTrafficEstimate> {
-  const spanHours = Math.max(0.167, (endMs - startMs) / 3_600_000);
-  const rows = await fetchHistoryRows(uuid, spanHours, options);
-  const inRange = rows.filter((row) => {
-    const time = row.timestamp;
-    return time >= startMs && time <= endMs;
-  });
-
-  let up = 0;
-  let down = 0;
-  let peakUp = 0;
-  let peakDown = 0;
-  for (let i = 0; i < inRange.length; i++) {
-    const row = inRange[i]!;
-    const previous = inRange[i - 1];
-    // 首个样本没有前驱，按 0 计入，避免把整段窗口的流量算在它头上。
-    const deltaSeconds = previous ? Math.max(0, (row.timestamp - previous.timestamp) / 1000) : 0;
-    up += row.net_out_speed * deltaSeconds;
-    down += row.net_in_speed * deltaSeconds;
-    peakUp = Math.max(peakUp, row.net_out_speed);
-    peakDown = Math.max(peakDown, row.net_in_speed);
-  }
-
-  return {
-    client: uuid,
-    up,
-    down,
-    peakUp,
-    peakDown,
-    rangeStartMs: startMs,
-    rangeEndMs: endMs,
-    samples: inRange.length,
-  };
-}
-
 /** 兼容旧调用点：主题设置改为本地保存，不再写回后端。 */
 export function saveThemeSettings(): Promise<void> {
   return Promise.reject(
