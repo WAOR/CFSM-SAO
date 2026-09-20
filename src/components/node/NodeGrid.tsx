@@ -382,25 +382,7 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 3. 硬盘用量 */}
-          <div className="mao-stat-card" data-metric="disk">
-            <div className="mao-stat-head">
-              <div className="mao-stat-title-wrap">
-                <HardDrive size={15} className="mao-stat-icon text-(--progress-disk,var(--accent-500))" />
-                <span className="mao-stat-label">硬盘用量</span>
-              </div>
-            </div>
-            <div className="mao-stat-value">
-              {diskUsedValue} <span className="mao-stat-unit">{diskUsedUnit}</span>
-            </div>
-            <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalDiskUsed)} / 总量: ${formatBytes(overview.totalDiskTotal)}`}>
-                共 {formatBytes(overview.totalDiskTotal)} · {overview.diskPct.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-
-          {/* 4. 内存用量 */}
+          {/* 3. 内存用量 */}
           <div className="mao-stat-card" data-metric="ram">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
@@ -414,6 +396,24 @@ function HomeOverviewCards({
             <div className="mao-stat-footer">
               <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalRamUsed)} / 总量: ${formatBytes(overview.totalRamTotal)}`}>
                 共 {formatBytes(overview.totalRamTotal)} · {overview.ramPct.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* 4. 硬盘用量 */}
+          <div className="mao-stat-card" data-metric="disk">
+            <div className="mao-stat-head">
+              <div className="mao-stat-title-wrap">
+                <HardDrive size={15} className="mao-stat-icon text-(--progress-disk,var(--accent-500))" />
+                <span className="mao-stat-label">硬盘用量</span>
+              </div>
+            </div>
+            <div className="mao-stat-value">
+              {diskUsedValue} <span className="mao-stat-unit">{diskUsedUnit}</span>
+            </div>
+            <div className="mao-stat-footer">
+              <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalDiskUsed)} / 总量: ${formatBytes(overview.totalDiskTotal)}`}>
+                共 {formatBytes(overview.totalDiskTotal)} · {overview.diskPct.toFixed(1)}%
               </span>
             </div>
           </div>
