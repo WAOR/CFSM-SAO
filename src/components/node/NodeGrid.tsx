@@ -6,6 +6,7 @@ import {
   Check,
   CircleDollarSign,
   Cpu,
+  HardDrive,
   Layers,
   Pencil,
   Server,
@@ -95,6 +96,9 @@ interface HomeOverview {
   totalRamUsed: number;
   totalRamTotal: number;
   ramPct: number;
+  totalDiskUsed: number;
+  totalDiskTotal: number;
+  diskPct: number;
 }
 
 function HomeBrand({ siteName }: { siteName: string }) {
@@ -243,6 +247,7 @@ function HomeOverviewCards({
   const totalCumulativeTraffic = overview.trafficUp + overview.trafficDown;
   const [trafficValue, trafficUnit] = formatBytes(totalCumulativeTraffic).split(" ");
   const [ramUsedValue, ramUsedUnit] = formatBytes(overview.totalRamUsed).split(" ");
+  const [diskUsedValue, diskUsedUnit] = formatBytes(overview.totalDiskUsed).split(" ");
   const totalBandwidth = overview.netUp + overview.netDown;
   const bandwidthRate = formatByteRate(totalBandwidth);
 
@@ -301,7 +306,7 @@ function HomeOverviewCards({
 
   return (
     <section className={`mao-dashboard-hero home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
-      {/* 左侧主要区域：问候语 + 5 宫格指标小卡片 */}
+      {/* 左侧主要区域：问候语 + 6 宫格指标小卡片 */}
       <div className="mao-hero-main">
         <div className="mao-hero-header">
           <div className="mao-badge">
@@ -363,8 +368,8 @@ function HomeOverviewCards({
           </p>
         </div>
 
-        {/* 5 宫格指标卡片 */}
-        <div className="mao-stat-grid" data-cards={showAssetCard ? 5 : 4}>
+        {/* 6 宫格指标卡片 */}
+        <div className="mao-stat-grid" data-cards={showAssetCard ? 6 : 5}>
           {/* 1. 实时带宽 (合并实时上行与实时下行) */}
           <div className="mao-stat-card" data-metric="bandwidth">
             <div className="mao-stat-head">
@@ -420,7 +425,25 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 4. 累积流量 */}
+          {/* 4. 硬盘用量 */}
+          <div className="mao-stat-card" data-metric="disk">
+            <div className="mao-stat-head">
+              <div className="mao-stat-title-wrap">
+                <HardDrive size={15} className="mao-stat-icon text-(--progress-disk,var(--accent-500))" />
+                <span className="mao-stat-label">硬盘用量</span>
+              </div>
+            </div>
+            <div className="mao-stat-value">
+              {diskUsedValue} <span className="mao-stat-unit">{diskUsedUnit}</span>
+            </div>
+            <div className="mao-stat-footer">
+              <span className="mao-stat-caption" title={`已用: ${formatBytes(overview.totalDiskUsed)} / 总量: ${formatBytes(overview.totalDiskTotal)}`}>
+                共 {formatBytes(overview.totalDiskTotal)} · {overview.diskPct.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* 5. 累积流量 */}
           <div className="mao-stat-card" data-metric="traffic">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
@@ -439,7 +462,7 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 5. 资产总值 (右上角钱币图标集成临期提醒悬浮窗) */}
+          {/* 6. 资产总值 (右上角钱币图标集成临期提醒悬浮窗) */}
           {showAssetCard && (
             <div className={`mao-stat-card${renewalPopoverOpen ? " is-popover-open" : ""}`} data-metric="asset">
               <div className="mao-stat-head">
@@ -690,16 +713,20 @@ export function NodeGrid() {
     let totalCpu = 0;
     let totalRamUsed = 0;
     let totalRamTotal = 0;
+    let totalDiskUsed = 0;
+    let totalDiskTotal = 0;
 
     for (const node of visibleNodes) {
       if (node.online === true) {
         onlineNodes += 1;
         totalCpu += node.cpuPct || 0;
         totalRamUsed += node.ramUsed || 0;
+        totalDiskUsed += node.diskUsed || 0;
       } else if (node.online === false) {
         offlineNodes += 1;
       }
       totalRamTotal += node.ramTotal || 0;
+      totalDiskTotal += node.diskTotal || 0;
       trafficUp += node.trafficUp;
       trafficDown += node.trafficDown;
       netUp += node.netUp;
@@ -708,6 +735,7 @@ export function NodeGrid() {
 
     const avgCpu = onlineNodes > 0 ? totalCpu / onlineNodes : 0;
     const ramPct = totalRamTotal > 0 ? (totalRamUsed / totalRamTotal) * 100 : 0;
+    const diskPct = totalDiskTotal > 0 ? (totalDiskUsed / totalDiskTotal) * 100 : 0;
 
     return {
       totalNodes: visibleNodes.length,
@@ -721,6 +749,9 @@ export function NodeGrid() {
       totalRamUsed,
       totalRamTotal,
       ramPct,
+      totalDiskUsed,
+      totalDiskTotal,
+      diskPct,
     };
   }, [visibleNodes]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
