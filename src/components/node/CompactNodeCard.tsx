@@ -5,7 +5,6 @@ import {
   ArrowDown,
   ArrowUp,
   Calendar,
-  CalendarDays,
   CircleDollarSign,
   Clock3,
   Cpu,
@@ -14,6 +13,7 @@ import {
   HardDrive,
   MemoryStick,
   Network,
+  RefreshCw,
   Unplug,
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -29,8 +29,8 @@ import { formatHealthBucketTooltip } from "./pingBucketText";
 import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick";
 import { MultiPingStatus } from "./MultiPingStatus";
 import {
+  formatCompactBillingCycle,
   formatCompactExpire,
-  formatCompactExpireDate,
   formatCompactPercent,
   formatCompactUptime,
   healthBarSlotModel,
@@ -554,7 +554,7 @@ function CompactNodeInfoStrip({
       )}
       {showBilling && (
         <CompactInfoTile
-          label={isPriceVisible ? "费用到期" : "到期时间"}
+          label="费用到期"
           color="var(--status-success)"
         >
           <CompactInfoRow
@@ -571,9 +571,9 @@ function CompactNodeInfoStrip({
             />
           ) : (
             <CompactInfoRow
-              icon={<CalendarDays size={12} strokeWidth={2.1} />}
-              // 当价格不可见时（未向访客公开或管理员临时隐藏），第二行显示具体到期日期
-              value={formatCompactExpireDate(node.expired_at)}
+              icon={<RefreshCw size={11} strokeWidth={2.2} />}
+              // 当价格不可见时（未向访客公开或管理员临时隐藏），第二行显示极简付费周期（如 年付/月付）
+              value={formatCompactBillingCycle(node.billing_cycle, node.price)}
               color="var(--text-tertiary)"
             />
           )}

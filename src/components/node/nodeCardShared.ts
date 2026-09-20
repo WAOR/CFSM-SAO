@@ -1,12 +1,6 @@
 // 大卡与紧凑卡共享的格式化和命中逻辑。
 
-import {
-  formatUptimeDays,
-  getExpireDaysRemaining,
-  LONG_TERM_EXPIRE_DAYS,
-  resolveExpireTimestamp,
-  trimFixed,
-} from "@/utils/format";
+import { formatUptimeDays, trimFixed } from "@/utils/format";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import type { PingOverviewBucket } from "@/types/cfsm";
 
@@ -28,25 +22,31 @@ export function formatCompactExpire({ value, unit }: { value: string; unit: stri
   return unit ? `余 ${value}${unit}` : value;
 }
 
-/** 格式化紧凑卡片隐藏价格时的具体到期日期（如 2026-10-21）。 */
-export function formatCompactExpireDate(
-  expiredAt: string | number | null | undefined,
+import { normalizeBillingCycle } from "@/utils/billing";
+
+/** 格式化紧凑卡片隐藏价格时的精简账单周期（如 年付 / 月付，2~3个字符避免超宽截断）。 */
+export function formatCompactBillingCycle(
+  billingCycle: string | number | null | undefined,
+  price?: number,
 ): string {
-  const ts = resolveExpireTimestamp(expiredAt);
-  if (ts == null) return "无到期日";
-  const days = getExpireDaysRemaining(expiredAt);
-  if (days != null && days > LONG_TERM_EXPIRE_DAYS) return "长期有效";
-
-  if (typeof expiredAt === "string") {
-    const match = expiredAt.trim().match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) return match[1];
+  if (price === -1) return "免费";
+  const cycle = normalizeBillingCycle(billingCycle);
+  switch (cycle.kind) {
+    case "lifetime":
+      return "永久";
+    case "month":
+      return "月付";
+    case "quarter":
+      return "季付";
+    case "halfYear":
+      return "半年付";
+    case "year":
+      return (cycle.years ?? 1) === 1 ? "年付" : `${cycle.years}年付`;
+    case "days":
+      return `${cycle.days}天`;
+    default:
+      return "年付";
   }
-
-  const date = new Date(ts);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 /** 非法或非正时长返回空串。 */

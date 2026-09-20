@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { PingOverviewBucket } from "@/types/cfsm";
 import {
+  formatCompactBillingCycle,
   formatCompactExpire,
-  formatCompactExpireDate,
   healthBarInteractionModel,
   healthBarSlotModel,
 } from "@/components/node/nodeCardShared";
@@ -84,21 +84,28 @@ describe("formatCompactExpire", () => {
   });
 });
 
-describe("formatCompactExpireDate", () => {
-  it("returns 无到期日 when no valid timestamp is available", () => {
-    expect(formatCompactExpireDate("")).toBe("无到期日");
-    expect(formatCompactExpireDate(null)).toBe("无到期日");
-    expect(formatCompactExpireDate(undefined)).toBe("无到期日");
-    expect(formatCompactExpireDate("0")).toBe("无到期日");
-    expect(formatCompactExpireDate("-1")).toBe("无到期日");
+describe("formatCompactBillingCycle", () => {
+  it("formats standard cycles correctly", () => {
+    expect(formatCompactBillingCycle("month")).toBe("月付");
+    expect(formatCompactBillingCycle(30)).toBe("月付");
+    expect(formatCompactBillingCycle("quarter")).toBe("季付");
+    expect(formatCompactBillingCycle(90)).toBe("季付");
+    expect(formatCompactBillingCycle("half_year")).toBe("半年付");
+    expect(formatCompactBillingCycle(180)).toBe("半年付");
+    expect(formatCompactBillingCycle("year")).toBe("年付");
+    expect(formatCompactBillingCycle(365)).toBe("年付");
+    expect(formatCompactBillingCycle("two_years")).toBe("2年付");
+    expect(formatCompactBillingCycle("lifetime")).toBe("永久");
+    expect(formatCompactBillingCycle(-1)).toBe("永久");
   });
 
-  it("extracts YYYY-MM-DD from date strings", () => {
-    expect(formatCompactExpireDate("2026-10-21")).toBe("2026-10-21");
-    expect(formatCompactExpireDate("2026-12-31T23:59:59Z")).toBe("2026-12-31");
+  it("handles free price sentinel", () => {
+    expect(formatCompactBillingCycle("year", -1)).toBe("免费");
   });
 
-  it("handles long term expiry", () => {
-    expect(formatCompactExpireDate("2999-01-01")).toBe("长期有效");
+  it("falls back to 年付 for invalid or empty cycle values", () => {
+    expect(formatCompactBillingCycle("")).toBe("年付");
+    expect(formatCompactBillingCycle(null)).toBe("年付");
+    expect(formatCompactBillingCycle(undefined)).toBe("年付");
   });
 });

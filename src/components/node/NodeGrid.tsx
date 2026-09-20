@@ -511,23 +511,11 @@ function HomeOverviewCards({
                 )}
               </div>
               <div className="mao-stat-value">
-                {!isPriceVisible ? (
-                  <span
-                    className="mao-stat-blur-mask select-none"
-                    title="已开启隐私保护"
-                    aria-label="资产总值已开启隐私保护"
-                  >
-                    <span className="mao-stat-blur-text" aria-hidden="true">
-                      ¥ 8,888.88
-                    </span>
-                  </span>
-                ) : (
-                  remainingValue
-                )}
+                {!isPriceVisible ? "保密" : remainingValue}
               </div>
               <div className="mao-stat-footer">
                 <span className="mao-stat-caption">
-                  {!isPriceVisible ? "已开启隐私保护" : "实时汇率折算"}
+                  {!isPriceVisible ? "仅管理员可见" : "实时汇率折算"}
                 </span>
                 {renderRating(assetRating)}
               </div>

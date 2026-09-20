@@ -400,43 +400,6 @@
   color: var(--text-tertiary);
 }
 
-/* 资产总值隐私磨砂毛玻璃效果 */
-.mao-stat-blur-mask {
-  display: inline-flex;
-  align-items: center;
-  position: relative;
-  user-select: none;
-  cursor: default;
-  vertical-align: middle;
-  padding: 1px 6px;
-  margin-left: -6px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.035);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  overflow: hidden;
-}
-
-:root[data-appearance="dark"] .mao-stat-blur-mask {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.mao-stat-blur-text {
-  filter: blur(5px);
-  opacity: 0.52;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  transform: scale(0.96);
-  transform-origin: left center;
-  pointer-events: none;
-  transition: filter 200ms ease, opacity 200ms ease;
-}
-
-:root[data-appearance="dark"] .mao-stat-blur-text {
-  opacity: 0.44;
-  filter: blur(5.5px);
-}
-
 .mao-stat-footer {
   display: flex;
   align-items: center;
