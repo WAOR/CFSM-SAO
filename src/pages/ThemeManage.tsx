@@ -1883,7 +1883,7 @@ export function ThemeManage() {
                     <ToggleRow
                       field="showAssetRating"
                       title="显示资产评级徽章"
-                      desc="在首页资产总值卡片右下角展示等级徽章（如 入门、标准）。"
+                      desc="在首页资产总值卡片右下角展示等级徽章（如 Nano、Micro）。"
                       checked={draft.showAssetRating}
                       onPatch={patch}
                     />
@@ -1895,11 +1895,11 @@ export function ThemeManage() {
                       type="text"
                       value={draft.assetRatingLabels}
                       onChange={(event) => patch("assetRatingLabels", event.target.value)}
-                      placeholder="入门,标准,顶级,富佬"
+                      placeholder="Nano,Micro,Medium,High-Spec"
                       className="surface-inset px-3 py-2 text-[13px] outline-none"
                     />
                     <span className="setting-hint">
-                      从低到高 4 个等级，以英文逗号分隔（默认：入门,标准,顶级,富佬）。对应阶梯为 ≤500元、≤1500元、≤3000元、&gt;3000元。
+                      从低到高 4 个等级，以英文逗号分隔（默认：Nano,Micro,Medium,High-Spec）。对应阶梯为 ≤500元、≤1500元、≤3000元、&gt;3000元。
                     </span>
                   </div>
 
