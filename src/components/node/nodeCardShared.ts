@@ -1,6 +1,12 @@
 // 大卡与紧凑卡共享的格式化和命中逻辑。
 
-import { formatUptimeDays, trimFixed } from "@/utils/format";
+import {
+  formatUptimeDays,
+  getExpireDaysRemaining,
+  LONG_TERM_EXPIRE_DAYS,
+  resolveExpireTimestamp,
+  trimFixed,
+} from "@/utils/format";
 import { latencyHeatColor, lossHeatColor } from "@/utils/metricTone";
 import type { PingOverviewBucket } from "@/types/cfsm";
 
@@ -20,6 +26,27 @@ export function formatCompactPercent(value: number) {
 export function formatCompactExpire({ value, unit }: { value: string; unit: string }) {
   if (value === "—") return "永久";
   return unit ? `余 ${value}${unit}` : value;
+}
+
+/** 格式化紧凑卡片隐藏价格时的具体到期日期（如 2026-10-21）。 */
+export function formatCompactExpireDate(
+  expiredAt: string | number | null | undefined,
+): string {
+  const ts = resolveExpireTimestamp(expiredAt);
+  if (ts == null) return "无到期日";
+  const days = getExpireDaysRemaining(expiredAt);
+  if (days != null && days > LONG_TERM_EXPIRE_DAYS) return "长期有效";
+
+  if (typeof expiredAt === "string") {
+    const match = expiredAt.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+
+  const date = new Date(ts);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /** 非法或非正时长返回空串。 */

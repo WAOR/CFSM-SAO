@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowUp,
   Calendar,
+  CalendarDays,
   CircleDollarSign,
   Clock3,
   Cpu,
@@ -29,6 +30,7 @@ import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick
 import { MultiPingStatus } from "./MultiPingStatus";
 import {
   formatCompactExpire,
+  formatCompactExpireDate,
   formatCompactPercent,
   formatCompactUptime,
   healthBarSlotModel,
@@ -552,7 +554,7 @@ function CompactNodeInfoStrip({
       )}
       {showBilling && (
         <CompactInfoTile
-          label="费用到期"
+          label={isPriceVisible ? "费用到期" : "到期时间"}
           color="var(--status-success)"
         >
           <CompactInfoRow
@@ -560,13 +562,21 @@ function CompactNodeInfoStrip({
             value={formatCompactExpire(expire)}
             color={expireColor}
           />
-          <CompactInfoRow
-            icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
-            // 后端 price 为空/0/-1 都表示免费，小卡片直接写「免费」而不是留白。
-            // 当价格不可见时（未向访客公开或管理员临时隐藏），脱敏显示 "**"
-            value={isPriceVisible ? (renewalPrice || "免费") : "**"}
-            color={isPriceVisible && renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
-          />
+          {isPriceVisible ? (
+            <CompactInfoRow
+              icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
+              // 后端 price 为空/0/-1 都表示免费，小卡片直接写「免费」而不是留白。
+              value={renewalPrice || "免费"}
+              color={renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
+            />
+          ) : (
+            <CompactInfoRow
+              icon={<CalendarDays size={12} strokeWidth={2.1} />}
+              // 当价格不可见时（未向访客公开或管理员临时隐藏），第二行显示具体到期日期
+              value={formatCompactExpireDate(node.expired_at)}
+              color="var(--text-tertiary)"
+            />
+          )}
         </CompactInfoTile>
       )}
       {showConnections && (

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PingOverviewBucket } from "@/types/cfsm";
 import {
   formatCompactExpire,
+  formatCompactExpireDate,
   healthBarInteractionModel,
   healthBarSlotModel,
 } from "@/components/node/nodeCardShared";
@@ -80,5 +81,24 @@ describe("formatCompactExpire", () => {
   it("keeps the remaining-days form otherwise", () => {
     expect(formatCompactExpire({ value: "12", unit: "天" })).toBe("余 12天");
     expect(formatCompactExpire({ value: "长期", unit: "" })).toBe("长期");
+  });
+});
+
+describe("formatCompactExpireDate", () => {
+  it("returns 无到期日 when no valid timestamp is available", () => {
+    expect(formatCompactExpireDate("")).toBe("无到期日");
+    expect(formatCompactExpireDate(null)).toBe("无到期日");
+    expect(formatCompactExpireDate(undefined)).toBe("无到期日");
+    expect(formatCompactExpireDate("0")).toBe("无到期日");
+    expect(formatCompactExpireDate("-1")).toBe("无到期日");
+  });
+
+  it("extracts YYYY-MM-DD from date strings", () => {
+    expect(formatCompactExpireDate("2026-10-21")).toBe("2026-10-21");
+    expect(formatCompactExpireDate("2026-12-31T23:59:59Z")).toBe("2026-12-31");
+  });
+
+  it("handles long term expiry", () => {
+    expect(formatCompactExpireDate("2999-01-01")).toBe("长期有效");
   });
 });
