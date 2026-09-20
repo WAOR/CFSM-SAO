@@ -95,6 +95,11 @@ describe("formatCompactBillingCycle", () => {
     expect(formatCompactBillingCycle("year")).toBe("年付");
     expect(formatCompactBillingCycle(365)).toBe("年付");
     expect(formatCompactBillingCycle("two_years")).toBe("2年付");
+    expect(formatCompactBillingCycle("三年付")).toBe("3年付");
+    expect(formatCompactBillingCycle("three_years")).toBe("3年付");
+    expect(formatCompactBillingCycle("four_years")).toBe("4年付");
+    expect(formatCompactBillingCycle("five_years")).toBe("5年付");
+    expect(formatCompactBillingCycle(1095)).toBe("3年付");
     expect(formatCompactBillingCycle("lifetime")).toBe("永久");
     expect(formatCompactBillingCycle(-1)).toBe("永久");
   });
