@@ -24,6 +24,8 @@ function node(partial: Partial<HomeNodeSummary> & Pick<HomeNodeSummary, "uuid">)
     ramTotal: 0,
     diskUsed: 0,
     diskTotal: 0,
+    tcpConn: 0,
+    udpConn: 0,
     ...partial,
   };
 }

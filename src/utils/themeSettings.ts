@@ -81,7 +81,9 @@ export interface ResolvedThemeSettings {
   /** 还有几天到期开始提醒；0 = 不提醒。 */
   renewalReminderDays: number;
   showOverviewRatings: boolean;
+  showBandwidthRating: boolean;
   showAssetRating: boolean;
+  bandwidthRatingLabels: string;
   assetRatingLabels: string;
   compactShowTrafficTotal: boolean;
   compactShowBilling: boolean;
@@ -131,7 +133,9 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showPriceForGuests: false,
   renewalReminderDays: DEFAULT_RENEWAL_REMINDER_DAYS,
   showOverviewRatings: true,
+  showBandwidthRating: true,
   showAssetRating: true,
+  bandwidthRatingLabels: "",
   assetRatingLabels: "",
   compactShowTrafficTotal: true,
   compactShowBilling: true,
@@ -283,7 +287,9 @@ export function normalizeThemeSettings(
     showPriceForGuests: settings?.showPriceForGuests === true,
     renewalReminderDays: normalizeRenewalReminderDays(settings?.renewalReminderDays),
     showOverviewRatings: enabledUnlessFalse(settings?.showOverviewRatings),
+    showBandwidthRating: enabledUnlessFalse(settings?.showBandwidthRating),
     showAssetRating: enabledUnlessFalse(settings?.showAssetRating),
+    bandwidthRatingLabels: normalizePlainText(settings?.bandwidthRatingLabels),
     assetRatingLabels: normalizePlainText(settings?.assetRatingLabels),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),

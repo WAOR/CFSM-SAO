@@ -489,7 +489,9 @@ export interface ThemeSettings {
   showCostSummary?: boolean;
   showCostSummaryFloatingButton?: boolean;
   showOverviewRatings?: boolean;
+  showBandwidthRating?: boolean;
   showAssetRating?: boolean;
+  bandwidthRatingLabels?: string;
   assetRatingLabels?: string;
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;

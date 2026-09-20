@@ -8,10 +8,10 @@ import {
   Cpu,
   HardDrive,
   Layers,
+  Network,
   Pencil,
   Server,
   Sparkles,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
@@ -99,6 +99,8 @@ interface HomeOverview {
   totalDiskUsed: number;
   totalDiskTotal: number;
   diskPct: number;
+  totalTcpConn: number;
+  totalUdpConn: number;
 }
 
 function HomeBrand({ siteName }: { siteName: string }) {
@@ -190,6 +192,9 @@ function HomeOverviewCards({
   overview,
   costSummary,
   costLoading,
+  showOverviewRatings,
+  showBandwidthRating,
+  bandwidthRatingLabels,
   showAssetRating,
   assetRatingLabels,
   showDetailButton,
@@ -203,6 +208,9 @@ function HomeOverviewCards({
   costSummary: { remainingCny: number; totalOriginalPriceCny?: number } | null;
   costLoading: boolean;
   dense: boolean;
+  showOverviewRatings: boolean;
+  showBandwidthRating: boolean;
+  bandwidthRatingLabels: string;
   showAssetRating: boolean;
   assetRatingLabels: string;
   showDetailButton: boolean;
@@ -234,8 +242,7 @@ function HomeOverviewCards({
     setIsEditingName(false);
   };
 
-  const totalCumulativeTraffic = overview.trafficUp + overview.trafficDown;
-  const [trafficValue, trafficUnit] = formatBytes(totalCumulativeTraffic).split(" ");
+  const totalConnections = overview.totalTcpConn + overview.totalUdpConn;
   const [ramUsedValue, ramUsedUnit] = formatBytes(overview.totalRamUsed).split(" ");
   const [diskUsedValue, diskUsedUnit] = formatBytes(overview.totalDiskUsed).split(" ");
   const totalBandwidth = overview.netUp + overview.netDown;
@@ -259,8 +266,17 @@ function HomeOverviewCards({
     return "—";
   };
 
+  const bandwidthRating =
+    showOverviewRatings && showBandwidthRating
+      ? getOverviewRating({
+        kind: "bandwidth",
+        value: overview.netUp + overview.netDown,
+        customLabels: bandwidthRatingLabels,
+      })
+      : null;
+
   const assetRating =
-    isPriceVisible && showAssetRating && costSummary
+    isPriceVisible && showOverviewRatings && showAssetRating && costSummary
       ? getOverviewRating({
         kind: "asset",
         value: costSummary.remainingCny,
@@ -425,20 +441,20 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 5. 累积流量 */}
-          <div className="mao-stat-card" data-metric="traffic">
+          {/* 5. 活跃连接 (全站活跃连接数) */}
+          <div className="mao-stat-card" data-metric="connections">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <TrendingUp size={15} className="mao-stat-icon text-(--traffic-up,var(--status-info))" />
-                <span className="mao-stat-label">累积流量</span>
+                <Network size={15} className="mao-stat-icon text-(--progress-network,var(--accent-500))" />
+                <span className="mao-stat-label">活跃连接</span>
               </div>
             </div>
             <div className="mao-stat-value">
-              {trafficValue} <span className="mao-stat-unit">{trafficUnit}</span>
+              {totalConnections.toLocaleString()} <span className="mao-stat-unit">Conn</span>
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`累计上行: ${formatBytes(overview.trafficUp)} · 累计下行: ${formatBytes(overview.trafficDown)}`}>
-                ↑ {formatBytes(overview.trafficUp)} · ↓ {formatBytes(overview.trafficDown)}
+              <span className="mao-stat-caption" title={`TCP 连接: ${overview.totalTcpConn.toLocaleString()} · UDP 连接: ${overview.totalUdpConn.toLocaleString()}`}>
+                TCP {overview.totalTcpConn.toLocaleString()} · UDP {overview.totalUdpConn.toLocaleString()}
               </span>
             </div>
           </div>
@@ -494,6 +510,16 @@ function HomeOverviewCards({
                 <span className="mao-status-dot" />
                 {isAllHealthy ? "状态健康" : overview.totalNodes === 0 ? "未连接" : `存在离线 (${overview.offlineNodes})`}
               </span>
+              {bandwidthRating && (
+                <span
+                  className="overview-card-rating is-bandwidth-badge"
+                  data-rating-level={bandwidthRating.level}
+                  title={`全站实时带宽评级: ${bandwidthRating.label}`}
+                >
+                  <span className="mao-status-dot" />
+                  {bandwidthRating.label}
+                </span>
+              )}
             </div>
           </div>
 
@@ -685,6 +711,8 @@ export function NodeGrid() {
     let totalRamTotal = 0;
     let totalDiskUsed = 0;
     let totalDiskTotal = 0;
+    let totalTcpConn = 0;
+    let totalUdpConn = 0;
 
     for (const node of visibleNodes) {
       if (node.online === true) {
@@ -692,6 +720,8 @@ export function NodeGrid() {
         totalCpu += node.cpuPct || 0;
         totalRamUsed += node.ramUsed || 0;
         totalDiskUsed += node.diskUsed || 0;
+        totalTcpConn += node.tcpConn || 0;
+        totalUdpConn += node.udpConn || 0;
       } else if (node.online === false) {
         offlineNodes += 1;
       }
@@ -722,6 +752,8 @@ export function NodeGrid() {
       totalDiskUsed,
       totalDiskTotal,
       diskPct,
+      totalTcpConn,
+      totalUdpConn,
     };
   }, [visibleNodes]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
@@ -938,6 +970,9 @@ export function NodeGrid() {
           renewalNodes={renewalNodes}
           costSummary={costSummary}
           costLoading={costLoading}
+          showOverviewRatings={themeSettings.showOverviewRatings}
+          showBandwidthRating={themeSettings.showBandwidthRating}
+          bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
           showAssetRating={themeSettings.showAssetRating}
           assetRatingLabels={themeSettings.assetRatingLabels}
           username={

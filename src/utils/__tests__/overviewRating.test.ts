@@ -29,11 +29,11 @@ describe("overview ratings", () => {
   it("rates traffic and bandwidth on their native byte inputs", () => {
     expect(getOverviewRating({ kind: "traffic", value: 35 * GB })).toEqual({
       level: 1,
-      label: "常规",
+      label: "MED",
     });
     expect(getOverviewRating({ kind: "bandwidth", value: 672 * 1024 / 8 })).toEqual({
       level: 0,
-      label: "流量闲置",
+      label: "IDLE",
     });
   });
 

@@ -107,7 +107,31 @@ import {
   type ResolvedThemeSettings,
 } from "@/utils/themeSettings";
 
+import {
+  type OverviewRatingKind,
+  getDefaultOverviewRatingLabelText,
+} from "@/utils/overviewRating";
 import { HOME_SORT_FIELDS, HOME_SORT_FIELD_LABELS } from "@/utils/homeSort";
+
+const OVERVIEW_RATING_LABEL_FIELDS: Array<{
+  key: Extract<OverviewRatingKind, "bandwidth" | "asset">;
+  title: string;
+  toggleKey: "showBandwidthRating" | "showAssetRating";
+  tierHint: string;
+}> = [
+  {
+    key: "bandwidth",
+    title: "实时带宽",
+    toggleKey: "showBandwidthRating",
+    tierHint: "对应阶梯：≤1Mbps、≤10Mbps、≤100Mbps、>100Mbps",
+  },
+  {
+    key: "asset",
+    title: "资产概览",
+    toggleKey: "showAssetRating",
+    tierHint: "对应阶梯：≤500元、≤1500元、≤3000元、>3000元",
+  },
+];
 
 const APPEARANCE_OPTIONS = [
   { value: "light", label: "浅色", icon: Sun },
@@ -310,7 +334,9 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showPriceForGuests: settings.showPriceForGuests,
     renewalReminderDays: settings.renewalReminderDays,
     showOverviewRatings: settings.showOverviewRatings,
+    showBandwidthRating: settings.showBandwidthRating,
     showAssetRating: settings.showAssetRating,
+    bandwidthRatingLabels: settings.bandwidthRatingLabels,
     assetRatingLabels: settings.assetRatingLabels,
     compactShowTrafficTotal: settings.compactShowTrafficTotal,
     compactShowBilling: settings.compactShowBilling,
@@ -345,7 +371,13 @@ type ThemeDraft = Omit<
   ManagedThemeSettings,
   | "hiddenNodes"
   | "costIgnoredNodes"
+  | "bandwidthRatingLabels"
+  | "assetRatingLabels"
 > & {
+  ratingLabels: {
+    bandwidth: string;
+    asset: string;
+  };
   hiddenNodesText: string;
   costIgnoredText: string;
 };
@@ -354,10 +386,16 @@ function draftFromSettings(settings: ResolvedThemeSettings): ThemeDraft {
   const {
     hiddenNodes,
     costIgnoredNodes,
+    bandwidthRatingLabels,
+    assetRatingLabels,
     ...rest
   } = pickManagedThemeSettings(settings);
   return {
     ...rest,
+    ratingLabels: {
+      bandwidth: bandwidthRatingLabels,
+      asset: assetRatingLabels,
+    },
     hiddenNodesText: hiddenNodes.join("\n"),
     costIgnoredText: costIgnoredNodes.join("\n"),
   };
@@ -1120,12 +1158,25 @@ export function ThemeManage() {
     draft.enableHomepageMultiPing &&
     !isHomepageMultiPingConfigured(draft.homepageMultiPingTaskIds);
 
+  const setRatingLabelDraft = useCallback((key: "bandwidth" | "asset", value: string) => {
+    editVersionRef.current += 1;
+    setDraft((prev) => ({
+      ...prev,
+      ratingLabels: {
+        ...prev.ratingLabels,
+        [key]: value,
+      },
+    }));
+  }, []);
+
   const draftThemeSettings = useMemo<ThemeSettings>(() => {
-    const { hiddenNodesText, costIgnoredText, ...rest } = draft;
+    const { ratingLabels, hiddenNodesText, costIgnoredText, ...rest } = draft;
     return {
       ...rest,
       homepagePingBindings: pruneBindings(rest.homepagePingBindings),
       homeGroupOrder: normalizeHomeGroupOrder(rest.homeGroupOrder),
+      bandwidthRatingLabels: ratingLabels.bandwidth,
+      assetRatingLabels: ratingLabels.asset,
       hiddenNodes: normalizeNodeIdentityList(hiddenNodesText),
       costIgnoredNodes: normalizeCostIgnoredNodes(costIgnoredText),
       costPremiums: normalizeCostPremiums(rest.costPremiums),
@@ -1772,6 +1823,62 @@ export function ThemeManage() {
               </InstancePanel>
 
               <InstancePanel
+                id="set-overview-ratings"
+                kicker="评级"
+                title="总览文字评级"
+                aside={<ListFilter size={16} />}
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="surface-inset flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                    <span className="min-w-0">
+                      <span className="block setting-subhead-title">启用总览评级</span>
+                      <span className="mt-1 block setting-hint">
+                        在实时带宽（集群状态右上角）、资产概览右下角显示文字评级。
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draft.showOverviewRatings}
+                      onChange={(event) => patch("showOverviewRatings", event.target.checked)}
+                      className="h-4 w-4 shrink-0 accent-(--accent-500)"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {OVERVIEW_RATING_LABEL_FIELDS.map((field) => {
+                      const defaultLabel = getDefaultOverviewRatingLabelText(field.key);
+                      const ratingEnabled = draft.showOverviewRatings && draft[field.toggleKey];
+                      return (
+                        <div key={field.key} className="surface-inset flex min-w-0 flex-col gap-2 px-4 py-3">
+                          <label className="flex items-center justify-between gap-2">
+                            <span className="setting-subhead-title">{field.title}</span>
+                            <input
+                              type="checkbox"
+                              checked={draft[field.toggleKey]}
+                              disabled={!draft.showOverviewRatings}
+                              onChange={(event) => patch(field.toggleKey, event.target.checked)}
+                              className="h-4 w-4 shrink-0 accent-(--accent-500)"
+                            />
+                          </label>
+                          <input
+                            value={draft.ratingLabels[field.key]}
+                            disabled={!ratingEnabled}
+                            onChange={(event) => setRatingLabelDraft(field.key, event.target.value)}
+                            placeholder={defaultLabel}
+                            aria-label={`${field.title}评级名称`}
+                            className="surface-inset w-full px-3 py-2 text-[13px] outline-none disabled:opacity-60"
+                          />
+                          <span className="setting-hint">
+                            {field.tierHint}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </InstancePanel>
+
+              <InstancePanel
                 id="set-hidden-nodes"
                 kicker="过滤"
                 title="隐藏节点"
@@ -1880,27 +1987,6 @@ export function ThemeManage() {
                       checked={draft.showPriceForGuests}
                       onPatch={patch}
                     />
-                    <ToggleRow
-                      field="showAssetRating"
-                      title="显示资产评级徽章"
-                      desc="在首页资产总值卡片右下角展示等级徽章（如 Nano、Micro）。"
-                      checked={draft.showAssetRating}
-                      onPatch={patch}
-                    />
-                  </div>
-
-                  <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                    <span className="setting-subhead-title">资产评级自定义标签</span>
-                    <input
-                      type="text"
-                      value={draft.assetRatingLabels}
-                      onChange={(event) => patch("assetRatingLabels", event.target.value)}
-                      placeholder="Nano,Micro,Medium,High-Spec"
-                      className="surface-inset px-3 py-2 text-[13px] outline-none"
-                    />
-                    <span className="setting-hint">
-                      从低到高 4 个等级，以英文逗号分隔（默认：Nano,Micro,Medium,High-Spec）。对应阶梯为 ≤500元、≤1500元、≤3000元、&gt;3000元。
-                    </span>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
