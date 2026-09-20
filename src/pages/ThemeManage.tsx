@@ -345,9 +345,7 @@ type ThemeDraft = Omit<
   ManagedThemeSettings,
   | "hiddenNodes"
   | "costIgnoredNodes"
-  | "assetRatingLabels"
 > & {
-  ratingLabels: { asset: string };
   hiddenNodesText: string;
   costIgnoredText: string;
 };
@@ -356,14 +354,10 @@ function draftFromSettings(settings: ResolvedThemeSettings): ThemeDraft {
   const {
     hiddenNodes,
     costIgnoredNodes,
-    assetRatingLabels,
     ...rest
   } = pickManagedThemeSettings(settings);
   return {
     ...rest,
-    ratingLabels: {
-      asset: assetRatingLabels,
-    },
     hiddenNodesText: hiddenNodes.join("\n"),
     costIgnoredText: costIgnoredNodes.join("\n"),
   };
@@ -1127,12 +1121,11 @@ export function ThemeManage() {
     !isHomepageMultiPingConfigured(draft.homepageMultiPingTaskIds);
 
   const draftThemeSettings = useMemo<ThemeSettings>(() => {
-    const { ratingLabels, hiddenNodesText, costIgnoredText, ...rest } = draft;
+    const { hiddenNodesText, costIgnoredText, ...rest } = draft;
     return {
       ...rest,
       homepagePingBindings: pruneBindings(rest.homepagePingBindings),
       homeGroupOrder: normalizeHomeGroupOrder(rest.homeGroupOrder),
-      assetRatingLabels: ratingLabels.asset,
       hiddenNodes: normalizeNodeIdentityList(hiddenNodesText),
       costIgnoredNodes: normalizeCostIgnoredNodes(costIgnoredText),
       costPremiums: normalizeCostPremiums(rest.costPremiums),
@@ -1649,13 +1642,6 @@ export function ThemeManage() {
                     onPatch={patch}
                   />
                   <ToggleRow
-                    field="showAssetOverview"
-                    title="显示资产概览卡"
-                    desc="在顶部总览中展示每月支出折算卡片（向所有访客公开）。"
-                    checked={draft.showAssetOverview}
-                    onPatch={patch}
-                  />
-                  <ToggleRow
                     field="showGroupTabs"
                     title="显示分组筛选栏"
                     desc="在卡片列表上方展示分组 Tab 快速筛选。"
@@ -1894,6 +1880,27 @@ export function ThemeManage() {
                       checked={draft.showPriceForGuests}
                       onPatch={patch}
                     />
+                    <ToggleRow
+                      field="showAssetRating"
+                      title="显示资产评级徽章"
+                      desc="在首页资产总值卡片右下角展示等级徽章（如 入门、标准）。"
+                      checked={draft.showAssetRating}
+                      onPatch={patch}
+                    />
+                  </div>
+
+                  <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                    <span className="setting-subhead-title">资产评级自定义标签</span>
+                    <input
+                      type="text"
+                      value={draft.assetRatingLabels}
+                      onChange={(event) => patch("assetRatingLabels", event.target.value)}
+                      placeholder="入门,标准,顶级,富佬"
+                      className="surface-inset px-3 py-2 text-[13px] outline-none"
+                    />
+                    <span className="setting-hint">
+                      从低到高 4 个等级，以英文逗号分隔（默认：入门,标准,顶级,富佬）。对应阶梯为 ≤500元、≤1500元、≤3000元、&gt;3000元。
+                    </span>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">

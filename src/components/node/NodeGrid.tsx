@@ -190,7 +190,6 @@ function HomeOverviewCards({
   overview,
   costSummary,
   costLoading,
-  showOverviewRatings,
   showAssetRating,
   assetRatingLabels,
   showDetailButton,
@@ -204,7 +203,6 @@ function HomeOverviewCards({
   costSummary: { remainingCny: number; totalOriginalPriceCny?: number } | null;
   costLoading: boolean;
   dense: boolean;
-  showOverviewRatings: boolean;
   showAssetRating: boolean;
   assetRatingLabels: string;
   showDetailButton: boolean;
@@ -262,7 +260,7 @@ function HomeOverviewCards({
   };
 
   const assetRating =
-    isPriceVisible && showOverviewRatings && showAssetRating && costSummary
+    isPriceVisible && showAssetRating && costSummary
       ? getOverviewRating({
         kind: "asset",
         value: costSummary.remainingCny,
@@ -730,9 +728,8 @@ export function NodeGrid() {
   const hasNodes = visibleMeta.length > 0;
   const loggedIn = Boolean(me?.logged_in);
   const canAccessAssets = loggedIn || themeSettings.showPriceForGuests;
-  // 卡内入口与悬浮入口互斥，避免重复操作入口。
-  const showAssetCard =
-    showHomeOverview && hasNodes && themeSettings.showAssetOverview;
+  // 资产总值卡片默认保持开启（展示与访客保密统一由 showPriceForGuests 控制）
+  const showAssetCard = showHomeOverview && hasNodes;
   const showCostDetailButton =
     showAssetCard && themeSettings.isReady && themeSettings.showCostSummary && canAccessAssets;
   const showCostFloatingButton =
@@ -941,7 +938,6 @@ export function NodeGrid() {
           renewalNodes={renewalNodes}
           costSummary={costSummary}
           costLoading={costLoading}
-          showOverviewRatings={themeSettings.showOverviewRatings}
           showAssetRating={themeSettings.showAssetRating}
           assetRatingLabels={themeSettings.assetRatingLabels}
           username={
