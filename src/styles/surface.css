@@ -861,8 +861,28 @@ body::after {
 .instance-segmented.is-even button {
   flex: 1 1 0;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 8px;
   white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .instance-segmented.is-stack-mobile {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .instance-segmented.is-stack-mobile button {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 12px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.35;
+  }
 }
 
 .instance-segmented button svg {
@@ -1657,6 +1677,9 @@ body::after {
   justify-content: center;
   gap: 6px;
   min-height: 30px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 12px;
   border-radius: 10px;
   color: var(--text-secondary);

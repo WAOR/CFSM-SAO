@@ -117,7 +117,8 @@
   display: flex;
   min-width: 0;
   min-height: 24px;
-  max-height: 24px;
+  max-height: 26px;
+  padding: 1px 0;
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;

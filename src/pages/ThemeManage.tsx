@@ -647,12 +647,12 @@ const PremiumList = memo(function PremiumList({
         return (
           <div
             key={client.uuid}
-            className="flex items-center justify-between gap-3 border-b border-(--hairline) px-3 py-2 last:border-b-0"
+            className="flex flex-col gap-2 border-b border-(--hairline) px-3 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
           >
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Flag region={client.region ?? ""} size={13} />
               <span
-                className="truncate text-[13px] text-(--text-primary)"
+                className="truncate text-[13px] font-medium text-(--text-primary)"
                 title={client.name}
               >
                 {client.name}
@@ -684,7 +684,7 @@ const PremiumList = memo(function PremiumList({
                 </span>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2 max-sm:w-full">
               <input
                 type="number"
                 inputMode="decimal"
@@ -703,7 +703,7 @@ const PremiumList = memo(function PremiumList({
                     ? "实际收购价（人民币），留空即清除记录"
                     : "该节点已忽略或汇率缺失，无法折算剩余价值"
                 }
-                className="surface-inset w-24 px-2 py-1 text-right text-[13px] outline-none disabled:opacity-45"
+                className="surface-inset w-24 px-2 py-1 text-right text-[13px] outline-none disabled:opacity-45 max-sm:flex-1"
               />
               <input
                 type="date"
@@ -717,7 +717,7 @@ const PremiumList = memo(function PremiumList({
                     ? "收购日期：修改后会按当前价格、周期、到期日和汇率回算该日剩余价值，重新计算并固化溢价"
                     : "该节点已忽略或汇率缺失，无法折算剩余价值"
                 }
-                className="surface-inset w-35 px-2 py-1 text-[12px] outline-none disabled:opacity-45"
+                className="surface-inset w-35 px-2 py-1 text-[12px] outline-none disabled:opacity-45 max-sm:flex-1"
               />
             </div>
           </div>
@@ -1992,7 +1992,7 @@ export function ThemeManage() {
                 <div className="flex flex-col gap-4">
                   <div className="surface-inset flex flex-col gap-3 px-4 py-4">
                     <span className="setting-subhead-title">首页探测展示模式</span>
-                    <div className="instance-segmented is-prominent is-even">
+                    <div className="instance-segmented is-prominent is-even is-stack-mobile">
                       <button
                         type="button"
                         data-active={!draft.enableHomepageMultiPing ? "true" : "false"}
@@ -2012,7 +2012,7 @@ export function ThemeManage() {
 
                   {draft.enableHomepageMultiPing ? (
                     <div className="surface-inset flex flex-col gap-3 px-4 py-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <span className="setting-subhead-title">多线路槽位展示列表</span>
                           <p className="setting-hint mt-1">
