@@ -14,9 +14,9 @@ import {
   Monitor,
   Palette,
   RefreshCw,
-  Rows3,
   Settings,
   SlidersHorizontal,
+  Square,
   Sun,
   Moon,
 } from "lucide-react";
@@ -39,8 +39,8 @@ const MetricColorPicker = lazy(() =>
 // 悬浮球切换按钮展示"下一档"的图标/文案(点击后会切到的视图),而不是当前视图——
 // 与 ThemeManage 里 NODE_VIEW_MODE_OPTIONS 的图标语义保持一致。
 const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: string }> = {
-  large: { icon: LayoutGrid, label: "大视图" },
-  compact: { icon: Rows3, label: "小视图" },
+  large: { icon: Square, label: "大视图" },
+  compact: { icon: LayoutGrid, label: "小视图" },
   mini: { icon: Grid3x3, label: "迷你视图" },
   list: { icon: List, label: "列表视图" },
 };
