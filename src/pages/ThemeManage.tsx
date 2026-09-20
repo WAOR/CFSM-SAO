@@ -21,6 +21,7 @@ import {
   CloudOff,
   ChevronDown,
   ChevronUp,
+  Grid3x3,
   ImageIcon,
   LayoutGrid,
   LayoutTemplate,
@@ -118,7 +119,7 @@ const APPEARANCE_OPTIONS = [
 const NODE_VIEW_MODE_OPTIONS = [
   { value: "large", label: "大卡片", icon: LayoutGrid },
   { value: "compact", label: "小卡片", icon: Rows3 },
-  { value: "mini", label: "迷你卡片", icon: LayoutGrid },
+  { value: "mini", label: "迷你卡片", icon: Grid3x3 },
   { value: "list", label: "列表", icon: List },
 ] as const;
 
