@@ -1157,8 +1157,9 @@ function updateWsSubscriptions(baseByServerId: Map<string, string>) {
   if (realtimePaused()) return;
   const idsByBase = new Map<string, string[]>();
   for (const [serverId, base] of baseByServerId) {
-    // 详情页只订阅正在看的这一台，推送量从全站降到一台。在同一条连接上改 ids、不重连，
-    // 「单次连接」的计时也就不会因为进出详情页被重置。
+    // 详情页只订阅正在看的这一台，推送量从全站降到一台。ids 交给 wsClient 在同一条
+    // WsConnection 上处理：全站↔单台切换时它会换掉 URL 的 subscribe 重开底层 socket，
+    // 但逻辑连接不变，「单次连接」的计时也就不会因为进出详情页被重置。
     if (realtimeFocusUuid != null && serverId !== realtimeFocusUuid) continue;
     const ids = idsByBase.get(base) ?? [];
     ids.push(serverId);

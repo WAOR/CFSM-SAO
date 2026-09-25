@@ -17,6 +17,9 @@ import { ANONYMOUS_MAX_HISTORY_HOURS } from "@/services/api";
 
 // 1 小时：详情页每打开一次就是一趟 /api/history/all 全量行，默认档位越短后端读的行越少。
 const DEFAULT_PING_HOURS = 1;
+// 负载图默认停在「1 小时」：默认发起的就是 hours=1 这一档，选中的按钮也应是「1 小时」，
+// 别默认到「实时」却偷偷请求 hours=1（实时档真正的请求窗口见 LoadChart 的 REALTIME_HISTORY_HOURS）。
+const DEFAULT_LOAD_HOURS = 1;
 /** `/api/history/all` 的 hours 上限。 */
 const MAX_HISTORY_HOURS = 168;
 type TimeRangeOption = ReturnType<typeof buildLoadTimeRangeOptions>[number];
@@ -56,7 +59,7 @@ export function Instance() {
   // 详情页只订阅这一台的实时推送（后端文档：详情页不要订阅全量再在前端过滤）。
   useRealtimeFocus(uuid);
   const [chartType, setChartType] = useState<"load" | "ping">("load");
-  const [loadHours, setLoadHours] = useState(0);
+  const [loadHours, setLoadHours] = useState(DEFAULT_LOAD_HOURS);
   const [pingHours, setPingHours] = useState(DEFAULT_PING_HOURS);
   const chartControlsRef = useRef<HTMLDivElement | null>(null);
 
@@ -88,7 +91,11 @@ export function Instance() {
 
   useEffect(() => {
     if (!loadRanges.some((range) => range.value === loadHours)) {
-      setLoadHours(loadRanges[0]?.value ?? 0);
+      setLoadHours(
+        loadRanges.find((range) => range.value === DEFAULT_LOAD_HOURS)?.value ??
+          loadRanges[0]?.value ??
+          DEFAULT_LOAD_HOURS,
+      );
     }
   }, [loadHours, loadRanges]);
 

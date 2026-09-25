@@ -71,6 +71,19 @@ describe("createWsConnection", () => {
     });
   });
 
+  it("connects a single-server subscription to subscribe=<id> (detail page)", () => {
+    const { socket } = connect(["node-a"]);
+
+    expect(socket().url).toBe("wss://status.example.com/api/ws?subscribe=node-a");
+    socket().open();
+
+    expect(JSON.parse(socket().sent[0]!)).toEqual({
+      type: "subscribe",
+      scope: "node-a",
+      ids: ["node-a"],
+    });
+  });
+
   it("reports availability only once the socket is open", () => {
     const { availability, socket } = connect(["node-a"]);
 
@@ -124,16 +137,43 @@ describe("createWsConnection", () => {
     expect(JSON.parse(socket().sent[0]!).ids).toHaveLength(500);
   });
 
-  it("resends the subscription when the node list changes", () => {
+  it("resends the subscription when the node list changes within the all scope", () => {
+    const { connection, socket } = connect(["node-a", "node-b"]);
+    socket().open();
+
+    connection.updateIds(["node-a", "node-b", "node-c"]);
+    expect(JSON.parse(socket().sent.at(-1)!).ids).toEqual(["node-a", "node-b", "node-c"]);
+
+    // 内容相同则不重复发送。
+    connection.updateIds(["node-a", "node-b", "node-c"]);
+    expect(socket().sent).toHaveLength(2);
+  });
+
+  it("reconnects with subscribe=<id> when the subscription narrows to one server", () => {
+    const { connection, socket } = connect(["node-a", "node-b"]);
+    socket().open();
+
+    connection.updateIds(["node-b"]);
+
+    // 全量→单台换了 URL 里的 subscribe，只能重开一条连接。
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(socket().url).toBe("wss://status.example.com/api/ws?subscribe=node-b");
+    socket().open();
+    expect(JSON.parse(socket().sent[0]!)).toEqual({
+      type: "subscribe",
+      scope: "node-b",
+      ids: ["node-b"],
+    });
+  });
+
+  it("reconnects back to subscribe=all when leaving the detail page", () => {
     const { connection, socket } = connect(["node-a"]);
     socket().open();
 
     connection.updateIds(["node-a", "node-b"]);
-    expect(JSON.parse(socket().sent.at(-1)!).ids).toEqual(["node-a", "node-b"]);
 
-    // 内容相同则不重复发送。
-    connection.updateIds(["node-a", "node-b"]);
-    expect(socket().sent).toHaveLength(2);
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(socket().url).toBe("wss://status.example.com/api/ws?subscribe=all");
   });
 
   it("sends a keepalive ping on the interval", () => {
@@ -180,20 +220,26 @@ describe("createWsConnection", () => {
 
 describe("buildWsUrl", () => {
   it("adds the JWT only for a cross-origin wss connection (private static deployments)", () => {
-    expect(buildWsUrl("https://status.example.com", "jwt", "theme.github.io")).toBe(
+    expect(buildWsUrl("https://status.example.com", "jwt", "theme.github.io", "all")).toBe(
       "wss://status.example.com/api/ws?subscribe=all&token=jwt",
+    );
+  });
+
+  it("puts the server id in the subscribe param for a single-server (detail page) scope", () => {
+    expect(buildWsUrl("https://status.example.com", "", "theme.github.io", "node-a")).toBe(
+      "wss://status.example.com/api/ws?subscribe=node-a",
     );
   });
 
   it("leaves it out on the same host, over plain ws, or without a token", () => {
     // 同域靠 cfsm_auth Cookie；明文 ws 上带 token 会把登录凭证暴露在链路和日志里。
-    expect(buildWsUrl("https://status.example.com", "jwt", "status.example.com")).toBe(
+    expect(buildWsUrl("https://status.example.com", "jwt", "status.example.com", "all")).toBe(
       "wss://status.example.com/api/ws?subscribe=all",
     );
-    expect(buildWsUrl("http://127.0.0.1:8787", "jwt", "localhost:5173")).toBe(
+    expect(buildWsUrl("http://127.0.0.1:8787", "jwt", "localhost:5173", "all")).toBe(
       "ws://127.0.0.1:8787/api/ws?subscribe=all",
     );
-    expect(buildWsUrl("https://status.example.com", "", "theme.github.io")).toBe(
+    expect(buildWsUrl("https://status.example.com", "", "theme.github.io", "all")).toBe(
       "wss://status.example.com/api/ws?subscribe=all",
     );
   });

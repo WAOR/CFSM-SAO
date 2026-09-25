@@ -40,6 +40,9 @@ const LOAD_HISTORY_SAMPLE_LIMIT = 360;
 const LOAD_HISTORY_RENDER_LIMIT = 720;
 const REALTIME_HISTORY_SEED_LIMIT = 120;
 const REALTIME_SAMPLE_LIMIT = 600;
+// 「实时」档真正的历史请求窗口：10 分钟。与内置主题 ServerDetail 的 REALTIME_HISTORY_HOURS 对齐，
+// 只取最近一小段做种子，实时点靠 WS 增量往上追加；后端 HISTORY_HOURS_OPTIONS 支持 0.167 档。
+const REALTIME_HISTORY_HOURS = 0.167;
 
 const CPU_KEYS = ["cpu"];
 const CPU_COLORS = [CHART_PALETTE.cpu];
@@ -425,7 +428,8 @@ export function LoadChart({
   hours: number;
   active?: boolean;
 }) {
-  const queryHours = hours === 0 ? 1 : hours;
+  // 「实时」档（hours=0）用 10 分钟窗口取种子，而不是偷偷请求 1 小时。
+  const queryHours = hours === 0 ? REALTIME_HISTORY_HOURS : hours;
   const { data, isError, isFetching, isLoading, refetch } = useLoadRecords(
     uuid,
     queryHours,
