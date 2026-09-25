@@ -4,6 +4,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerification";
 import { getSiteConfig } from "@/services/api";
+import { discardEarlyConfig } from "@/services/cfsm/http";
 import {
   getTurnstileVerified,
   setTurnstileToken,
@@ -86,6 +87,10 @@ export function TurnstileGate() {
       setVerifying(true);
       setError(null);
       try {
+        // 预取的 config 是验证前拉的（bypass、无凭证），必须先丢掉 —— 否则下面这次
+        // getSiteConfig 会直接吃到那份过期缓存，一次性 token 根本没发出去、凭证永远存不上，
+        // 首次验证通过也会报「验证未通过，请重试」。
+        discardEarlyConfig();
         // 带上一次性 token 请求 config，成功后 http 层会把返回的凭证缓存下来。
         setTurnstileToken(token);
         await getSiteConfig();

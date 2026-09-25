@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { cfsmGet, cfsmGetAll } from "@/services/cfsm/http";
+import { cfsmGet, cfsmGetAll, discardEarlyConfig } from "@/services/cfsm/http";
 import { resetApiBaseCache } from "@/services/cfsm/config";
 
 const DummyConfigSchema = z.object({
@@ -41,6 +41,27 @@ describe("Early Data Prefetching consumption", () => {
     // 消费后应被置空，防止二次重复消费旧值
     const win = window as unknown as { __EARLY_DATA__?: { config?: unknown } };
     expect(win.__EARLY_DATA__?.config).toBeNull();
+  });
+
+  it("drops the prefetched config so the post-verification read hits the network", async () => {
+    // 预取的 config 是验证前拉的（bypass、无凭证）。TurnstileGate 提交验证前必须
+    // discardEarlyConfig() —— 否则带一次性 token 的这次 getSiteConfig 会直接吃到过期缓存，
+    // token 根本没发出去、凭证永远存不上，首次验证通过也报「验证未通过，请重试」。
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
+      config: Promise.resolve({ sitename: "Stale pre-verification" }),
+    };
+    discardEarlyConfig();
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ sitename: "Fresh verified" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await cfsmGet("/api/config", DummyConfigSchema);
+    expect(result.sitename).toBe("Fresh verified");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("consumes early servers data when available and clears the reference", async () => {

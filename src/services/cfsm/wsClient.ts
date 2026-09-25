@@ -6,6 +6,9 @@ import { getJwtToken, toWebSocketBase } from "@/services/cfsm/config";
  * 协议要点（见 theme-develop.md 第 3 节）：
  * - `?subscribe=all` 建连后必须再通过通道发送 `{type:"subscribe",scope:"all",ids}`，
  *   否则服务端不会推送任何更新；
+ * - 只订阅一台（详情页）时用 `?subscribe=<serverId>`，不需要 ids，且后端对单服务器订阅
+ *   不进 250ms 合并窗口、实时直推；ids 收敛到一台时自动切到该 scope 并重连（URL 参数
+ *   只在建连时被服务端读取，无法在原连接上改）；
  * - 推送统一为 `batchUpdate`，样本对象可能落在 `data` / `payload` / `metrics` 任一字段；
  * - `ids` 最多 500 个，非法 `scope`/`ids` 会被以 close code 1008 断开——这种情况重连也没用。
  */
@@ -50,6 +53,11 @@ function sameIds(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
+/** 订阅 scope：只订阅一台（详情页）时用该 serverId，其余用全量 ids 过滤。 */
+function scopeForIds(ids: string[]): string {
+  return ids.length === 1 ? ids[0]! : "all";
+}
+
 function extractSamples(message: unknown): WsSample[] {
   if (!message || typeof message !== "object") return [];
   const payload = message as Record<string, unknown>;
@@ -84,9 +92,14 @@ function extractSamples(message: unknown): WsSample[] {
  * 浏览器原生 WebSocket 带不了 Authorization 头，只能把 JWT 放进查询参数 `token`（后端文档第 3 节）。
  * token 会进访问日志，所以只在 wss 上、且确实跨域时才带。
  */
-export function buildWsUrl(base: string, token: string, pageHost: string): string {
+export function buildWsUrl(
+  base: string,
+  token: string,
+  pageHost: string,
+  scope: string,
+): string {
   const url = new URL(`${toWebSocketBase(base)}/api/ws`);
-  url.searchParams.set("subscribe", "all");
+  url.searchParams.set("subscribe", scope);
   if (token && url.protocol === "wss:" && url.host !== pageHost) {
     url.searchParams.set("token", token);
   }
@@ -103,6 +116,9 @@ export function createWsConnection(
   handlers: WsClientHandlers,
 ): WsConnection {
   let ids = sanitizeIds(initialIds);
+  let scope = scopeForIds(ids);
+  // 当前这条 socket 建立时用的 scope，用于判断订阅是否从全量↔单台切换。
+  let connectScope = scope;
   let socket: WebSocket | null = null;
   let pingTimer: number | null = null;
   let reconnectTimer: number | null = null;
@@ -129,7 +145,7 @@ export function createWsConnection(
 
   function sendSubscribe() {
     if (socket?.readyState !== WebSocket.OPEN || ids.length === 0) return;
-    socket.send(JSON.stringify({ type: "subscribe", scope: "all", ids }));
+    socket.send(JSON.stringify({ type: "subscribe", scope, ids }));
   }
 
   function scheduleReconnect() {
@@ -147,9 +163,12 @@ export function createWsConnection(
 
   function connect() {
     if (closed) return;
+    // 记下这条连接建立时用的 scope：URL 的 subscribe 只在建连时被后端读取，
+    // 全量↔单台切换必须重连才能让 subscribe 从 all 变成 <serverId>（见文档第 3 节）。
+    connectScope = scope;
     try {
       // 每次（重）连都现算地址：期间可能登录 / 退出过，token 要跟着变。
-      socket = new WebSocket(buildWsUrl(base, getJwtToken(), window.location.host));
+      socket = new WebSocket(buildWsUrl(base, getJwtToken(), window.location.host, scope));
     } catch {
       setAvailable(false);
       scheduleReconnect();
@@ -199,11 +218,41 @@ export function createWsConnection(
 
   connect();
 
+  /**
+   * 订阅在「全量 all」和「单台 <serverId>」之间切换时，重连一条新 socket。
+   * 先摘掉旧 socket 的回调再关，避免旧连接的 onclose 触发多余的退避重连。
+   */
+  function reconnectForScopeChange() {
+    clearTimers();
+    const current = socket;
+    socket = null;
+    if (current) {
+      current.onopen = null;
+      current.onmessage = null;
+      current.onerror = null;
+      current.onclose = null;
+      try {
+        current.close();
+      } catch {
+        // 关闭旧连接失败不影响新建连接。
+      }
+    }
+    reconnectAttempts = 0;
+    connect();
+  }
+
   return {
     updateIds(nextIds: string[]) {
       const sanitized = sanitizeIds(nextIds);
       if (sameIds(ids, sanitized)) return;
       ids = sanitized;
+      scope = scopeForIds(ids);
+      // 详情页只订阅一台 → subscribe=<id>；回到全站 → subscribe=all。URL 的 subscribe
+      // 只能靠重连改，光发通道消息改不动后端建连时记下的 scope。
+      if (scope !== connectScope) {
+        reconnectForScopeChange();
+        return;
+      }
       sendSubscribe();
     },
     close() {

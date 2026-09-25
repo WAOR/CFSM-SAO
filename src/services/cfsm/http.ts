@@ -48,21 +48,27 @@ export interface RequestOptions {
   timeout?: number;
   /** 指定后端；多站部署时用于把详情/历史请求打到拥有该服务器的站点。 */
   base?: string;
+  /** 内部用：真正发请求时不带任何 Turnstile 头。凭证过期后 /api/config 走后端 bypass 重试（见 cfsmGet）。 */
+  skipTurnstileHeaders?: boolean;
 }
 
-function buildHeaders(): Record<string, string> {
+function buildHeaders(skipTurnstile = false): Record<string, string> {
   const headers: Record<string, string> = { Accept: "application/json" };
 
   const token = getJwtToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
   // 已验证凭证优先；只有还没拿到凭证时才带一次性 token。
-  const verified = getTurnstileVerified();
-  if (verified) {
-    headers["X-Turnstile-Verified"] = verified;
-  } else {
-    const turnstileToken = getTurnstileToken();
-    if (turnstileToken) headers["X-Turnstile-Token"] = turnstileToken;
+  // skipTurnstile：一个 Turnstile 头都不带，好让后端把 /api/config 当未验证请求走 bypass 路径
+  // 返回 `verified:false`（后端 index.js：带任一 Turnstile 头就不 bypass、过期凭证会 403）。
+  if (!skipTurnstile) {
+    const verified = getTurnstileVerified();
+    if (verified) {
+      headers["X-Turnstile-Verified"] = verified;
+    } else {
+      const turnstileToken = getTurnstileToken();
+      if (turnstileToken) headers["X-Turnstile-Token"] = turnstileToken;
+    }
   }
 
   return headers;
@@ -97,46 +103,33 @@ interface EarlyDataWindow {
 }
 
 /**
- * 单个后端的 GET。成功响应直接是业务对象（没有 `{status,data}` 包装），
- * 失败响应是 `{ error, code }`。
+ * 丢弃超前预取的主站 /api/config。
+ *
+ * 预取发生在新访客还没通过人机验证时（不带任何 Turnstile 头 → 后端走 bypass，响应是
+ * `verified:false`、没有凭证）。用户完成 Turnstile 验证、正要带着一次性 token 打真实请求时，
+ * 这份缓存已经过期 —— 不丢的话 cfsmGet 的消费逻辑会把它当成「这次验证的结果」直接返回，
+ * token 根本没发出去，凭证永远存不上，弹窗卡在「验证未通过，请重试」。
  */
-export async function cfsmGet<S extends z.ZodTypeAny>(
+export function discardEarlyConfig(): void {
+  if (typeof window === "undefined") return;
+  const earlyWin = window as unknown as EarlyDataWindow;
+  if (earlyWin.__EARLY_DATA__) earlyWin.__EARLY_DATA__.config = null;
+}
+
+/**
+ * 单个后端的 GET 的实际收发：拼地址、发请求、处理非 2xx、校验 schema。
+ * `options.skipTurnstileHeaders` 为真时不带任何 Turnstile 头（凭证过期后 /api/config 走 bypass 重试）。
+ */
+async function fetchAndParse<S extends z.ZodTypeAny>(
   path: string,
   schema: S,
   options?: RequestOptions,
 ): Promise<z.output<S>> {
   const base = options?.base ?? getPrimaryApiBase();
-
-  // 消费超前预取的主站 /api/config
-  if (
-    path === "/api/config" &&
-    (!options?.base || options.base === getPrimaryApiBase()) &&
-    !options?.signal &&
-    typeof window !== "undefined"
-  ) {
-    const earlyWin = window as unknown as EarlyDataWindow;
-    const earlyConfig = earlyWin.__EARLY_DATA__?.config;
-    if (earlyConfig) {
-      earlyWin.__EARLY_DATA__!.config = null;
-      try {
-        const raw = await earlyConfig;
-        if (raw) {
-          captureTurnstileVerified(raw);
-          const parsed = schema.safeParse(raw);
-          if (parsed.success) {
-            return parsed.data;
-          }
-        }
-      } catch {
-        // 异常降级至标准请求
-      }
-    }
-  }
-
   const url = `${base}${path}`;
   const resp = await fetchWithTimeout(
     url,
-    { credentials: "include", headers: buildHeaders() },
+    { credentials: "include", headers: buildHeaders(options?.skipTurnstileHeaders) },
     options?.timeout ?? DEFAULT_API_TIMEOUT_MS,
     options?.signal,
   );
@@ -172,6 +165,60 @@ export async function cfsmGet<S extends z.ZodTypeAny>(
     );
   }
   return parsed.data;
+}
+
+/**
+ * 单个后端的 GET。成功响应直接是业务对象（没有 `{status,data}` 包装），
+ * 失败响应是 `{ error, code }`。
+ */
+export async function cfsmGet<S extends z.ZodTypeAny>(
+  path: string,
+  schema: S,
+  options?: RequestOptions,
+): Promise<z.output<S>> {
+  // 消费超前预取的主站 /api/config
+  if (
+    path === "/api/config" &&
+    (!options?.base || options.base === getPrimaryApiBase()) &&
+    !options?.signal &&
+    typeof window !== "undefined"
+  ) {
+    const earlyWin = window as unknown as EarlyDataWindow;
+    const earlyConfig = earlyWin.__EARLY_DATA__?.config;
+    if (earlyConfig) {
+      earlyWin.__EARLY_DATA__!.config = null;
+      try {
+        const raw = await earlyConfig;
+        if (raw) {
+          captureTurnstileVerified(raw);
+          const parsed = schema.safeParse(raw);
+          if (parsed.success) {
+            return parsed.data;
+          }
+        }
+      } catch {
+        // 异常降级至标准请求
+      }
+    }
+  }
+
+  try {
+    return await fetchAndParse(path, schema, options);
+  } catch (error) {
+    // 凭证过期时带着旧的 X-Turnstile-Verified 请求 /api/config 会被后端 403（带了头就不走 bypass）。
+    // fetchAndParse 已把凭证清掉，这里不带任何 Turnstile 头重试一次走 bypass，稳定拿回
+    // `verified:false` + site_key —— 否则 /api/config 这次查询停在 error 态、缓存里那份还写着
+    // verified:true，TurnstileGate 就不会重新弹人机验证（对齐内置主题 fetchConfig 的 403 重试）。
+    if (
+      error instanceof ApiRequestError &&
+      error.status === 403 &&
+      path.startsWith("/api/config") &&
+      !options?.skipTurnstileHeaders
+    ) {
+      return fetchAndParse(path, schema, { ...options, skipTurnstileHeaders: true });
+    }
+    throw error;
+  }
 }
 
 /**

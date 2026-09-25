@@ -416,6 +416,34 @@ describe("Turnstile 凭证过期", () => {
 
     unsubscribe();
   });
+
+  it("retries /api/config without Turnstile headers so the gate can re-appear", async () => {
+    // 凭证过期后带旧头请求 /api/config 会 403（后端：带了任一 Turnstile 头就不走 bypass）。
+    // 主题必须清掉凭证、不带任何 Turnstile 头重试走 bypass，稳定拿回 verified:false —— 否则
+    // 这次查询停在 error 态、缓存里那份还写着 verified:true，TurnstileGate 永远不再弹验证。
+    window.localStorage.setItem("turnstile_verified", "expired-cred");
+    const bypassConfig = {
+      site_title: "S",
+      turnstile_enabled: true,
+      turnstile_site_key: "0x4AAAA",
+      verified: false,
+    };
+    fetchMock
+      .mockImplementationOnce(jsonReply({ error: "Turnstile verification failed", code: 403 }, 403))
+      .mockImplementationOnce(jsonReply(bypassConfig));
+
+    const config = await getPublic();
+
+    expect(config.verified).toBe(false);
+    expect(window.localStorage.getItem("turnstile_verified")).toBeNull();
+
+    // 第一次带过期凭证、第二次（bypass 重试）一个 Turnstile 头都不带。
+    const firstHeaders = fetchMock.mock.calls[0]![1]!.headers as Record<string, string>;
+    const retryHeaders = fetchMock.mock.calls[1]![1]!.headers as Record<string, string>;
+    expect(firstHeaders["X-Turnstile-Verified"]).toBe("expired-cred");
+    expect(retryHeaders["X-Turnstile-Verified"]).toBeUndefined();
+    expect(retryHeaders["X-Turnstile-Token"]).toBeUndefined();
+  });
 });
 
 describe("getServersSnapshot", () => {
