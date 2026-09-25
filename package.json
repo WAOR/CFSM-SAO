@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "CFSM-Theme-SAO - A restrained modern theme for CF-Server-Monitor",
-  "author": "codex&shark&shanyang",
+  "author": "WAOR",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
