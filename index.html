@@ -28,6 +28,74 @@
     <meta name="description" content="A restrained modern theme for CF-Server-Monitor." />
     <script>
       (() => {
+        // 超前核心 API 预加载：利用浏览器解析 HTML 与下载 React Bundle 的网络空档期，提前并发拉取关键数据
+        try {
+          if (typeof window !== "undefined" && typeof fetch === "function") {
+            const getMeta = (name) => {
+              const el = document.querySelector(`meta[name="${name}"]`);
+              return el ? (el.content || "").trim() : "";
+            };
+            const stripTrailing = (s) => (s || "").replace(/\/+$/, "");
+            const normalizeBase = (val) => {
+              const raw = stripTrailing(val);
+              if (!raw) return "";
+              try {
+                return stripTrailing(new URL(raw, window.location.href).origin);
+              } catch {
+                return "";
+              }
+            };
+            const rawBases = getMeta("apiBase");
+            let bases = [];
+            if (rawBases) {
+              bases = rawBases.split(",").map(normalizeBase).filter(Boolean);
+            }
+            if (bases.length === 0) {
+              bases = [stripTrailing(window.location.origin)];
+            }
+            bases = Array.from(new Set(bases));
+
+            const getStorage = (k) => {
+              try { return localStorage.getItem(k) || ""; } catch { return ""; }
+            };
+            const headers = { Accept: "application/json" };
+            const jwt = getStorage("jwt_token");
+            if (jwt) headers["Authorization"] = "Bearer " + jwt;
+            const turnstileVerified = getStorage("turnstile_verified");
+            if (turnstileVerified) {
+              headers["X-Turnstile-Verified"] = turnstileVerified;
+            } else {
+              const turnstileToken = getStorage("turnstile_token");
+              if (turnstileToken) headers["X-Turnstile-Token"] = turnstileToken;
+            }
+
+            const primaryBase = bases[0] || "";
+            // 预取主站 /api/config
+            const configPromise = fetch(primaryBase + "/api/config", {
+              credentials: "include",
+              headers,
+            }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+            // 预取各站 /api/servers
+            const serversPromises = bases.map(base => ({
+              base,
+              promise: fetch(base + "/api/servers", {
+                credentials: "include",
+                headers,
+              }).then(async r => {
+                if (!r.ok) return { base, error: new Error(`HTTP ${r.status}`) };
+                const data = await r.json();
+                return { base, data };
+              }).catch(err => ({ base, error: err })),
+            }));
+
+            window.__EARLY_DATA__ = {
+              config: configPromise,
+              servers: serversPromises,
+            };
+          }
+        } catch {}
+
         try {
           const cachedTitle = localStorage.getItem("komaritheme:sitename");
           if (cachedTitle && cachedTitle.trim()) {

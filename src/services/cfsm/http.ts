@@ -84,6 +84,18 @@ function captureTurnstileVerified(payload: unknown): void {
   if (typeof value === "string" && value) setTurnstileVerified(value);
 }
 
+interface EarlyServersItem {
+  base: string;
+  promise: Promise<{ base: string; data?: unknown; error?: unknown }>;
+}
+
+interface EarlyDataWindow {
+  __EARLY_DATA__?: {
+    config?: Promise<unknown> | null;
+    servers?: EarlyServersItem[] | null;
+  };
+}
+
 /**
  * 单个后端的 GET。成功响应直接是业务对象（没有 `{status,data}` 包装），
  * 失败响应是 `{ error, code }`。
@@ -94,6 +106,33 @@ export async function cfsmGet<S extends z.ZodTypeAny>(
   options?: RequestOptions,
 ): Promise<z.output<S>> {
   const base = options?.base ?? getPrimaryApiBase();
+
+  // 消费超前预取的主站 /api/config
+  if (
+    path === "/api/config" &&
+    (!options?.base || options.base === getPrimaryApiBase()) &&
+    !options?.signal &&
+    typeof window !== "undefined"
+  ) {
+    const earlyWin = window as unknown as EarlyDataWindow;
+    const earlyConfig = earlyWin.__EARLY_DATA__?.config;
+    if (earlyConfig) {
+      earlyWin.__EARLY_DATA__!.config = null;
+      try {
+        const raw = await earlyConfig;
+        if (raw) {
+          captureTurnstileVerified(raw);
+          const parsed = schema.safeParse(raw);
+          if (parsed.success) {
+            return parsed.data;
+          }
+        }
+      } catch {
+        // 异常降级至标准请求
+      }
+    }
+  }
+
   const url = `${base}${path}`;
   const resp = await fetchWithTimeout(
     url,
@@ -210,6 +249,40 @@ export async function cfsmGetAll<S extends z.ZodTypeAny>(
   options?: Omit<RequestOptions, "base">,
 ): Promise<MultiBaseResult<z.output<S>>[]> {
   const bases = getApiBases();
+
+  // 消费超前预取的各站 /api/servers
+  if (
+    path === "/api/servers" &&
+    !options?.signal &&
+    typeof window !== "undefined"
+  ) {
+    const earlyWin = window as unknown as EarlyDataWindow;
+    const earlyServers = earlyWin.__EARLY_DATA__?.servers;
+    if (earlyServers && Array.isArray(earlyServers) && earlyServers.length > 0) {
+      earlyWin.__EARLY_DATA__!.servers = null;
+      try {
+        const settled = await Promise.all(earlyServers.map((item) => item.promise));
+        return settled.map((res) => {
+          if (res.error || !res.data) {
+            return { base: res.base, error: res.error || new Error("No data") };
+          }
+          const parsed = schema.safeParse(res.data);
+          if (parsed.success) {
+            return { base: res.base, data: parsed.data };
+          }
+          return {
+            base: res.base,
+            error: new Error(
+              `Schema mismatch on /api/servers: ${parsed.error.issues[0]?.message ?? "unknown"}`,
+            ),
+          };
+        });
+      } catch {
+        // 异常降级至标准请求
+      }
+    }
+  }
+
   const settled = await Promise.allSettled(
     bases.map((base) => cfsmGet(path, schema, { ...options, base })),
   );

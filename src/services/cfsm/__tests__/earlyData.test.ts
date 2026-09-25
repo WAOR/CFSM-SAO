@@ -1,0 +1,69 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { cfsmGet, cfsmGetAll } from "@/services/cfsm/http";
+import { resetApiBaseCache } from "@/services/cfsm/config";
+
+const DummyConfigSchema = z.object({
+  sitename: z.string(),
+});
+
+const DummyServersSchema = z.object({
+  servers: z.array(z.object({ id: z.string() })),
+});
+
+describe("Early Data Prefetching consumption", () => {
+  const originalEarlyData = (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__;
+
+  beforeEach(() => {
+    resetApiBaseCache();
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = undefined;
+  });
+
+  afterEach(() => {
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = originalEarlyData;
+    vi.restoreAllMocks();
+  });
+
+  it("consumes early config data when available and clears the reference", async () => {
+    const earlyPromise = Promise.resolve({ sitename: "Prefetched SAO" });
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
+      config: earlyPromise,
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const result = await cfsmGet("/api/config", DummyConfigSchema);
+    expect(result.sitename).toBe("Prefetched SAO");
+    // 不应触发额外的 fetch 请求
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // 消费后应被置空，防止二次重复消费旧值
+    const win = window as unknown as { __EARLY_DATA__?: { config?: unknown } };
+    expect(win.__EARLY_DATA__?.config).toBeNull();
+  });
+
+  it("consumes early servers data when available and clears the reference", async () => {
+    const earlyServerData = { servers: [{ id: "srv-1" }] };
+    const earlyServersPromise = Promise.resolve({
+      base: window.location.origin,
+      data: earlyServerData,
+    });
+
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
+      servers: [{ base: window.location.origin, promise: earlyServersPromise }],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const results = await cfsmGetAll("/api/servers", DummyServersSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data?.servers[0]?.id).toBe("srv-1");
+    // 不应触发额外的 fetch 请求
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // 消费后应被置空
+    const win = window as unknown as { __EARLY_DATA__?: { servers?: unknown } };
+    expect(win.__EARLY_DATA__?.servers).toBeNull();
+  });
+});
