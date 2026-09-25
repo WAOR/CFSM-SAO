@@ -103,6 +103,20 @@ interface EarlyDataWindow {
 }
 
 /**
+ * 丢弃超前预取的主站 /api/config。
+ *
+ * 预取发生在新访客还没通过人机验证时（不带任何 Turnstile 头 → 后端走 bypass，响应是
+ * `verified:false`、没有凭证）。用户完成 Turnstile 验证、正要带着一次性 token 打真实请求时，
+ * 这份缓存已经过期 —— 不丢的话 cfsmGet 的消费逻辑会把它当成「这次验证的结果」直接返回，
+ * token 根本没发出去，凭证永远存不上，弹窗卡在「验证未通过，请重试」。
+ */
+export function discardEarlyConfig(): void {
+  if (typeof window === "undefined") return;
+  const earlyWin = window as unknown as EarlyDataWindow;
+  if (earlyWin.__EARLY_DATA__) earlyWin.__EARLY_DATA__.config = null;
+}
+
+/**
  * 单个后端的 GET 的实际收发：拼地址、发请求、处理非 2xx、校验 schema。
  * `options.skipTurnstileHeaders` 为真时不带任何 Turnstile 头（凭证过期后 /api/config 走 bypass 重试）。
  */
