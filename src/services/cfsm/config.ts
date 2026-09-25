@@ -108,22 +108,29 @@ export function getAdminUrl(): string {
   return `${getPrimaryApiBase()}/admin#admin`;
 }
 
+const memoryStorage = new Map<string, string>();
+
 // 统一走 window.localStorage：Node 自带的同名全局在没有 --localstorage-file 时不可用，
-// 会在测试环境里遮住 jsdom 的实现。
+// 会在测试环境里遮住 jsdom 的实现。针对无痕模式等不可写环境，增加内存降级备份。
 function readStorage(key: string): string {
   try {
-    return window.localStorage.getItem(key) ?? "";
+    const val = window.localStorage.getItem(key);
+    if (val !== null) return val;
   } catch {
-    return "";
+    // 隐私模式下读取异常，降级到内存
   }
+  return memoryStorage.get(key) ?? "";
 }
 
 function writeStorage(key: string, value: string): void {
+  if (value) memoryStorage.set(key, value);
+  else memoryStorage.delete(key);
+
   try {
     if (value) window.localStorage.setItem(key, value);
     else window.localStorage.removeItem(key);
   } catch {
-    // 隐私模式下 localStorage 不可写，降级为匿名访问即可。
+    // 隐私模式下 localStorage 不可写，内存降级已就绪保障当前会话有效。
   }
 }
 
@@ -141,6 +148,10 @@ export function getTurnstileToken(): string {
 
 export function setTurnstileToken(token: string): void {
   writeStorage(TURNSTILE_TOKEN_KEY, token);
+}
+
+export function clearTurnstileToken(): void {
+  writeStorage(TURNSTILE_TOKEN_KEY, "");
 }
 
 export function getTurnstileVerified(): string {

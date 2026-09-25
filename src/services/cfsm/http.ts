@@ -103,17 +103,27 @@ interface EarlyDataWindow {
 }
 
 /**
- * 丢弃超前预取的主站 /api/config。
+ * 丢弃超前预取的所有数据（主站 /api/config 与各站 /api/servers）。
  *
- * 预取发生在新访客还没通过人机验证时（不带任何 Turnstile 头 → 后端走 bypass，响应是
- * `verified:false`、没有凭证）。用户完成 Turnstile 验证、正要带着一次性 token 打真实请求时，
- * 这份缓存已经过期 —— 不丢的话 cfsmGet 的消费逻辑会把它当成「这次验证的结果」直接返回，
- * token 根本没发出去，凭证永远存不上，弹窗卡在「验证未通过，请重试」。
+ * 预取发生在新访客还没通过人机验证时（未带凭证）：
+ * - /api/config 响应是 verified:false、没有凭证；
+ * - /api/servers 则会被后端直接 403 拒绝。
+ * 用户在弹窗完成 Turnstile 验证后，这两份缓存均已失效。如果不丢弃：
+ * - config 会导致一次性 token 无法发出、凭证存不上；
+ * - servers 会导致首页直接消费验证前 403 失败的 Promise，出现数据同步报错。
  */
-export function discardEarlyConfig(): void {
+export function discardEarlyData(): void {
   if (typeof window === "undefined") return;
   const earlyWin = window as unknown as EarlyDataWindow;
-  if (earlyWin.__EARLY_DATA__) earlyWin.__EARLY_DATA__.config = null;
+  if (earlyWin.__EARLY_DATA__) {
+    earlyWin.__EARLY_DATA__.config = null;
+    earlyWin.__EARLY_DATA__.servers = null;
+  }
+}
+
+/** 兼容旧命名，见 {@link discardEarlyData}。 */
+export function discardEarlyConfig(): void {
+  discardEarlyData();
 }
 
 /**

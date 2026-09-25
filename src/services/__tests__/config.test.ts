@@ -2,7 +2,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clearTurnstileCredentials,
+  clearTurnstileToken,
   getStaticSiteTitle,
+  getTurnstileToken,
   getTurnstileVerified,
   setTurnstileToken,
   setTurnstileVerified,
@@ -61,5 +63,24 @@ describe("subscribeTurnstileVerified（验证一通过数据页就挂上来）",
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();
+  });
+
+  it("falls back to memory storage when localStorage throws in private browsing mode", () => {
+    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+      throw new DOMException("QuotaExceededError", "QuotaExceededError");
+    });
+    vi.spyOn(window.localStorage, "getItem").mockReturnValue(null);
+
+    setTurnstileToken("private-token");
+    expect(getTurnstileToken()).toBe("private-token");
+
+    clearTurnstileToken();
+    expect(getTurnstileToken()).toBe("");
+
+    setTurnstileVerified("private-verified-cred");
+    expect(getTurnstileVerified()).toBe("private-verified-cred");
+
+    clearTurnstileCredentials();
+    expect(getTurnstileVerified()).toBe("");
   });
 });

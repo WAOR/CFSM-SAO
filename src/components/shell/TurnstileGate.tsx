@@ -4,8 +4,9 @@ import { Spinner } from "@/components/ui/Spinner";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerification";
 import { getSiteConfig } from "@/services/api";
-import { discardEarlyConfig } from "@/services/cfsm/http";
+import { discardEarlyData } from "@/services/cfsm/http";
 import {
+  clearTurnstileToken,
   getTurnstileVerified,
   setTurnstileToken,
   subscribeTurnstileCredentialsCleared,
@@ -87,18 +88,19 @@ export function TurnstileGate() {
       setVerifying(true);
       setError(null);
       try {
-        // 预取的 config 是验证前拉的（bypass、无凭证），必须先丢掉 —— 否则下面这次
-        // getSiteConfig 会直接吃到那份过期缓存，一次性 token 根本没发出去、凭证永远存不上，
-        // 首次验证通过也会报「验证未通过，请重试」。
-        discardEarlyConfig();
+        // 预取的 config 与 servers 是验证前拉的（未通过验证），必须先丢掉 —— 否则
+        // 验证通过后重拉数据会直接吃到 403 失败的脏缓存。
+        discardEarlyData();
         // 带上一次性 token 请求 config，成功后 http 层会把返回的凭证缓存下来。
         setTurnstileToken(token);
-        await getSiteConfig();
-        if (!getTurnstileVerified()) {
+        const newConfig = await getSiteConfig();
+        // 优先认接口返回的实际 verified 状态，辅以凭证判定（兼容无痕模式 localStorage 受限）
+        if (!newConfig.verified && !getTurnstileVerified()) {
           throw new Error("验证未通过，请重试");
         }
         await queryClient.invalidateQueries();
       } catch (submitError) {
+        clearTurnstileToken();
         setError(submitError instanceof Error ? submitError.message : "验证失败");
       } finally {
         setVerifying(false);
@@ -120,8 +122,14 @@ export function TurnstileGate() {
           callback: (token) => {
             void submitToken(token);
           },
-          "error-callback": () => setError("人机验证组件加载失败"),
-          "expired-callback": () => setError("验证已过期，请重新完成验证"),
+          "error-callback": () => {
+            clearTurnstileToken();
+            setError("人机验证组件加载失败");
+          },
+          "expired-callback": () => {
+            clearTurnstileToken();
+            setError("验证已过期，请重新完成验证");
+          },
         });
       })
       .catch((loadError: unknown) => {

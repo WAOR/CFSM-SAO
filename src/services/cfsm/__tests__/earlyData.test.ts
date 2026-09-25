@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { cfsmGet, cfsmGetAll, discardEarlyConfig } from "@/services/cfsm/http";
+import { cfsmGet, cfsmGetAll, discardEarlyConfig, discardEarlyData } from "@/services/cfsm/http";
 import { resetApiBaseCache } from "@/services/cfsm/config";
 
 const DummyConfigSchema = z.object({
@@ -86,5 +86,37 @@ describe("Early Data Prefetching consumption", () => {
     // 消费后应被置空
     const win = window as unknown as { __EARLY_DATA__?: { servers?: unknown } };
     expect(win.__EARLY_DATA__?.servers).toBeNull();
+  });
+
+  it("discardEarlyData drops both prefetched config and servers so post-verification fetch hits the network", async () => {
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
+      config: Promise.resolve({ sitename: "Stale" }),
+      servers: [
+        {
+          base: window.location.origin,
+          promise: Promise.resolve({ base: window.location.origin, error: new Error("403") }),
+        },
+      ],
+    };
+
+    discardEarlyData();
+
+    const win = window as unknown as {
+      __EARLY_DATA__?: { config?: unknown; servers?: unknown };
+    };
+    expect(win.__EARLY_DATA__?.config).toBeNull();
+    expect(win.__EARLY_DATA__?.servers).toBeNull();
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ servers: [{ id: "srv-fresh" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const results = await cfsmGetAll("/api/servers", DummyServersSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data?.servers[0]?.id).toBe("srv-fresh");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
