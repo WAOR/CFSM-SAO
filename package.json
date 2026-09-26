@@ -1,7 +1,7 @@
 {
   "name": "cfsm-theme-sao",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "CFSM-Theme-SAO - A restrained modern theme for CF-Server-Monitor",
   "author": "WAOR",
