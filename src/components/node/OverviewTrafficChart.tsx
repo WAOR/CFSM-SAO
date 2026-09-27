@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatByteRateLabel } from "@/utils/format";
+import { formatByteRate, formatByteRateLabel } from "@/utils/format";
 
 interface SingleTrafficPoint {
   time: number;
@@ -66,8 +66,8 @@ function SingleTrafficCard({
   gradientBottom: string;
   haloRgba: string;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const historyRef = useRef<SingleTrafficPoint[]>([]);
   const hoverIndexRef = useRef<number | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
@@ -93,7 +93,7 @@ function SingleTrafficCard({
     }
   }, [rate]);
 
-  // Canvas 绘制曲线与波形
+  // Canvas 绘制曲线与波形函数
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -419,28 +419,42 @@ export function OverviewTrafficChart({
 }: {
   netUp: number;
   netDown: number;
-  bandwidthRating?: { level: 0 | 1 | 2 | 3; label: string } | null;
 }) {
+  const totalRate = formatByteRate(netUp + netDown);
+
   return (
-    <div className="mao-realtime-charts-grid">
-      <SingleTrafficCard
-        title="上行网络"
-        direction="up"
-        rate={netUp}
-        color="#3b82f6"
-        gradientTop="rgba(59, 130, 246, 0.22)"
-        gradientBottom="rgba(59, 130, 246, 0.01)"
-        haloRgba="rgba(59, 130, 246, 0.25)"
-      />
-      <SingleTrafficCard
-        title="下行网络"
-        direction="down"
-        rate={netDown}
-        color="#2f9e65"
-        gradientTop="rgba(47, 158, 101, 0.22)"
-        gradientBottom="rgba(47, 158, 101, 0.01)"
-        haloRgba="rgba(47, 158, 101, 0.25)"
-      />
+    <div className="mao-progress-section mao-network-section">
+      <div className="mao-progress-section-header">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <span className="mao-progress-big-num">
+            {totalRate.value}
+          </span>
+          <span className="mao-progress-unit-label">
+            {totalRate.unit} 实时总带宽
+          </span>
+        </div>
+      </div>
+
+      <div className="mao-realtime-charts-grid">
+        <SingleTrafficCard
+          title="上行网络"
+          direction="up"
+          rate={netUp}
+          color="#3b82f6"
+          gradientTop="rgba(59, 130, 246, 0.22)"
+          gradientBottom="rgba(59, 130, 246, 0.01)"
+          haloRgba="rgba(59, 130, 246, 0.25)"
+        />
+        <SingleTrafficCard
+          title="下行网络"
+          direction="down"
+          rate={netDown}
+          color="#2f9e65"
+          gradientTop="rgba(47, 158, 101, 0.22)"
+          gradientBottom="rgba(47, 158, 101, 0.01)"
+          haloRgba="rgba(47, 158, 101, 0.25)"
+        />
+      </div>
     </div>
   );
 }
