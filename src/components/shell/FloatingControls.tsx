@@ -1,9 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import {
-  AlertCircle,
   AlertTriangle,
-  Check,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -13,7 +10,6 @@ import {
   List,
   Monitor,
   Palette,
-  RefreshCw,
   Settings,
   SlidersHorizontal,
   Square,
@@ -27,7 +23,6 @@ import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { usePriceVisibility } from "@/hooks/usePriceVisibility";
-import type { PingHistoryRefreshState } from "@/hooks/usePingHistoryRefresh";
 import { getAdminUrl } from "@/services/cfsm/config";
 import type { NodeViewMode, Appearance } from "@/utils/themeSettings";
 import { clsx } from "clsx";
@@ -60,92 +55,10 @@ const APPEARANCE_META: Record<
   system: { icon: Monitor, label: "跟随系统", nextLabel: "浅色" },
 };
 
-/**
- * 刷新按钮的悬浮说明。
- *
- * 这个按钮会逐台发 `/api/history/all`，成本不该藏着 —— 标题里把节点数写出来，
- * 点之前就知道要打多少个请求。
- */
-function buildRefreshTitle({
-  status,
-  nodeCount,
-  lastResult,
-  lastRefreshedAt,
-}: PingHistoryRefreshState): string {
-  if (status === "loading") return `正在拉取 ${nodeCount} 台节点最近 1 小时的延迟历史…`;
-  if (status === "warn") return "30 分钟内已经刷新过；确实要再拉一次就再点一下";
-  if (status === "error") {
-    return lastResult && lastResult.succeeded > 0
-      ? `部分节点刷新失败（${lastResult.failed}/${lastResult.requested}），点击重试`
-      : "刷新失败，点击重试";
-  }
-
-  const base = `刷新延迟数据：拉取 ${nodeCount} 台节点最近 1 小时的真实采样`;
-  if (lastRefreshedAt == null) return base;
-
-  const at = new Date(lastRefreshedAt).toLocaleTimeString("zh-CN", { hour12: false });
-  const partial =
-    lastResult && lastResult.failed > 0 ? `，${lastResult.failed} 台失败` : "";
-  return `${base}\n上次刷新 ${at}${partial}`;
-}
-
-export interface RefreshAlertData {
-  title: string;
-  description: string;
-  variant: "default" | "warning" | "destructive";
-}
-
-/** 刷新反馈提示：遵循 shadcn Alert 规范，提供有层次的标题与描述 */
-export function buildRefreshAlert({
-  status,
-  lastResult,
-  minutesSinceLastRefresh,
-}: PingHistoryRefreshState): RefreshAlertData | null {
-  if (status === "warn") {
-    const ago =
-      minutesSinceLastRefresh == null || minutesSinceLastRefresh < 1
-        ? "刚刚"
-        : `${minutesSinceLastRefresh} 分钟前`;
-    return {
-      title: "刷新过于频繁",
-      description: `${ago}才刷新过，数据变动较小 · 再次点击仍会强制刷新`,
-      variant: "warning",
-    };
-  }
-  if (status === "done") {
-    if (!lastResult) {
-      return {
-        title: "延迟数据已更新",
-        description: "已成功同步服务器最新延迟指标",
-        variant: "default",
-      };
-    }
-    return {
-      title: "延迟数据已更新",
-      description:
-        lastResult.failed > 0
-          ? `已成功更新 ${lastResult.succeeded} 台 · ${lastResult.failed} 台失败`
-          : `已成功同步全部 ${lastResult.succeeded} 台服务器`,
-      variant: "default",
-    };
-  }
-  if (status === "error") {
-    return {
-      title: "刷新失败",
-      description: "同步节点延迟数据超时，点击刷新按钮可重试",
-      variant: "destructive",
-    };
-  }
-  return null;
-}
-
 export function FloatingControls({
   onExpandedChange,
-  pingRefresh,
 }: {
   onExpandedChange?: (expanded: boolean) => void;
-  /** 由首页持有：刷新按钮和数据自检弹窗共用同一份状态，见 `Home.tsx`。 */
-  pingRefresh: PingHistoryRefreshState;
 }) {
   const { appearance, setAppearance } = usePreferences();
   const { mode, nextMode, toggleMode } = useViewMode();
@@ -200,11 +113,6 @@ export function FloatingControls({
     };
   }, [collapsed, onExpandedChange]);
 
-  const refreshTitle = buildRefreshTitle(pingRefresh);
-  const refreshAlert = buildRefreshAlert(pingRefresh);
-  const refreshDone = pingRefresh.status === "done";
-  const refreshWarn = pingRefresh.status === "warn";
-
   const toggleControls = () => {
     // 收起快捷栏时同时结束子面板状态，避免下次展开时调色盘自动复现。
     const nextCollapsed = !collapsed;
@@ -217,20 +125,23 @@ export function FloatingControls({
     <div
       className={clsx(
         "floating-controls",
-        collapsed && "is-collapsed",
         showSyncWarning && "has-warning",
+        collapsed ? "is-collapsed" : "is-expanded",
       )}
     >
       <div className="floating-controls-inner">
-        <div className="floating-controls-row">
-          <div className="floating-controls-actions" aria-hidden={collapsed}>
+        <div className="floating-controls-bar">
+          <div
+            className="floating-controls-actions"
+            aria-hidden={collapsed}
+          >
             {settingsReady && (
               <>
                 <button
                   type="button"
                   onClick={cycleAppearance}
-                  aria-label={`外观: ${currentAppearance.label} (点击切换为${currentAppearance.nextLabel})`}
-                  title={`外观: ${currentAppearance.label} (点击切换为${currentAppearance.nextLabel})`}
+                  aria-label="切换外观风格"
+                  title={`外观：${currentAppearance.label} → ${currentAppearance.nextLabel}`}
                   tabIndex={hiddenTabIndex}
                   className={clsx(
                     "control-button grid h-9 w-9 place-items-center",
@@ -315,35 +226,6 @@ export function FloatingControls({
           </div>
           <button
             type="button"
-            className={clsx(
-              "control-button floating-controls-refresh grid h-9 w-9 place-items-center",
-              refreshDone && "is-refresh-done",
-              refreshWarn && "is-refresh-warn",
-              pingRefresh.status === "error" && "is-refresh-error",
-            )}
-            aria-label="刷新延迟数据"
-            aria-busy={pingRefresh.status === "loading"}
-            title={refreshTitle}
-            disabled={pingRefresh.nodeCount === 0 || pingRefresh.status === "loading"}
-            onClick={() => pingRefresh.refresh()}
-          >
-            {refreshDone ? (
-              <Check size={16} />
-            ) : refreshWarn ? (
-              <AlertTriangle size={16} />
-            ) : (
-              <RefreshCw
-                size={16}
-                className={
-                  pingRefresh.status === "loading"
-                    ? "floating-controls-refresh-spin"
-                    : undefined
-                }
-              />
-            )}
-          </button>
-          <button
-            type="button"
             className="control-button floating-controls-trigger grid h-9 w-9 place-items-center"
             aria-label={collapsed ? "展开快捷按钮" : "收起快捷按钮"}
             aria-expanded={!collapsed}
@@ -361,52 +243,10 @@ export function FloatingControls({
             <MetricColorPicker hidden={collapsed || !colorsOpen} />
           </Suspense>
         )}
-        {refreshAlert && !colorsOpen && (
-          <div
-            className={clsx(
-              "floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-70 max-w-85 items-start gap-3 rounded-xl border p-3 shadow-lg shadow-black/5 backdrop-blur-md transition-all animate-in fade-in-0 slide-in-from-top-1 duration-200",
-              refreshAlert.variant === "warning" && [
-                "border-amber-500/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100",
-                "[&>svg]:text-amber-600 dark:[&>svg]:text-amber-400",
-              ],
-              refreshAlert.variant === "default" && [
-                "border-emerald-500/35 bg-emerald-500/10 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-100",
-                "[&>svg]:text-emerald-600 dark:[&>svg]:text-emerald-400",
-              ],
-              refreshAlert.variant === "destructive" && [
-                "border-red-500/35 bg-red-500/10 text-red-950 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-100",
-                "[&>svg]:text-red-600 dark:[&>svg]:text-red-400",
-              ],
-            )}
-            role="alert"
-          >
-            {refreshAlert.variant === "default" ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : refreshAlert.variant === "warning" ? (
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            )}
-            <div className="flex-1 text-left min-w-0">
-              <h5 className="text-xs font-semibold tracking-tight leading-none">{refreshAlert.title}</h5>
-              <div className="mt-1 text-[11px] opacity-85 leading-normal font-normal">
-                {refreshAlert.description}
-              </div>
-            </div>
-          </div>
-        )}
-        {showSyncWarning && !collapsed && !colorsOpen && !refreshAlert && (
-          <div
-            className="floating-controls-shadcn-alert pointer-events-none relative flex w-auto min-w-70 max-w-85 items-start gap-3 rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-red-950 shadow-lg shadow-black/5 backdrop-blur-md dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-100 [&>svg]:text-red-600 dark:[&>svg]:text-red-400 animate-in fade-in-0 slide-in-from-top-1 duration-200"
-            role="alert"
-          >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div className="flex-1 text-left min-w-0">
-              <h5 className="text-xs font-semibold tracking-tight leading-none">实时状态同步异常</h5>
-              <div className="mt-1 text-[11px] opacity-85 leading-normal font-normal">
-                网络连接波动，当前展示的是最近本地缓存
-              </div>
-            </div>
+        {showSyncWarning && !collapsed && !colorsOpen && (
+          <div className="floating-controls-sync-warning pointer-events-none flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--status-offline)_32%,transparent)] bg-[color-mix(in_srgb,var(--surface-a)_90%,transparent)] px-3 py-1 text-[11px] font-medium text-(--status-offline) shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur">
+            <AlertTriangle size={12} />
+            <span>实时状态同步异常，当前展示的是最近缓存</span>
           </div>
         )}
       </div>
