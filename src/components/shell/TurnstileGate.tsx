@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { RefreshCw } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerification";
@@ -19,54 +21,10 @@ import {
  * 验证：渲染 Turnstile 组件 → 拿到一次性 token → 带着它请求 `/api/config` →
  * 响应里的 `turnstile_verified` 是加密凭证，缓存约一小时，后续请求复用（见 http.ts）。
  */
-
-const SCRIPT_URL =
-  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-
-interface TurnstileApi {
-  render: (
-    element: HTMLElement,
-    options: {
-      sitekey: string;
-      callback: (token: string) => void;
-      "error-callback"?: () => void;
-      "expired-callback"?: () => void;
-      theme?: "light" | "dark" | "auto";
-    },
-  ) => string;
-  remove: (widgetId: string) => void;
-}
-
-declare global {
-  interface Window {
-    turnstile?: TurnstileApi;
-  }
-}
-
-let scriptPromise: Promise<void> | null = null;
-
-function loadTurnstileScript(): Promise<void> {
-  if (window.turnstile) return Promise.resolve();
-  scriptPromise ??= new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = SCRIPT_URL;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => {
-      scriptPromise = null;
-      reject(new Error("Turnstile 脚本加载失败"));
-    };
-    document.head.append(script);
-  });
-  return scriptPromise;
-}
-
 export function TurnstileGate() {
   const { data: config } = usePublicConfig();
   const queryClient = useQueryClient();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const widgetIdRef = useRef<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance>(null);
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
 
@@ -82,6 +40,16 @@ export function TurnstileGate() {
 
   // 已经拿到缓存凭证或本次请求已通过验证时不打扰用户。AppShell 用同一个口径决定数据页挂不挂。
   const needsVerification = useTurnstileVerificationRequired();
+
+  const resetTurnstile = useCallback(() => {
+    clearTurnstileToken();
+    setError(null);
+    try {
+      turnstileRef.current?.reset();
+    } catch {
+      // 忽略未就绪时的重置异常
+    }
+  }, []);
 
   const submitToken = useCallback(
     async (token: string) => {
@@ -102,6 +70,11 @@ export function TurnstileGate() {
       } catch (submitError) {
         clearTurnstileToken();
         setError(submitError instanceof Error ? submitError.message : "验证失败");
+        try {
+          turnstileRef.current?.reset();
+        } catch {
+          // 忽略重置异常
+        }
       } finally {
         setVerifying(false);
       }
@@ -109,50 +82,7 @@ export function TurnstileGate() {
     [queryClient],
   );
 
-  useEffect(() => {
-    if (!needsVerification || !config) return;
-
-    let cancelled = false;
-    void loadTurnstileScript()
-      .then(() => {
-        if (cancelled || !containerRef.current || !window.turnstile) return;
-        widgetIdRef.current = window.turnstile.render(containerRef.current, {
-          sitekey: config.turnstile_site_key,
-          theme: "auto",
-          callback: (token) => {
-            void submitToken(token);
-          },
-          "error-callback": () => {
-            clearTurnstileToken();
-            setError("人机验证组件加载失败");
-          },
-          "expired-callback": () => {
-            clearTurnstileToken();
-            setError("验证已过期，请重新完成验证");
-          },
-        });
-      })
-      .catch((loadError: unknown) => {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "验证组件加载失败");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      const widgetId = widgetIdRef.current;
-      widgetIdRef.current = null;
-      if (widgetId && window.turnstile) {
-        try {
-          window.turnstile.remove(widgetId);
-        } catch {
-          // 组件已被卸载时忽略。
-        }
-      }
-    };
-  }, [config, needsVerification, submitToken]);
-
-  if (!needsVerification) return null;
+  if (!needsVerification || !config?.turnstile_site_key) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-(--bg-0)/90 backdrop-blur-sm">
@@ -165,12 +95,52 @@ export function TurnstileGate() {
             本站开启了 Cloudflare Turnstile 验证，通过后即可查看节点数据。
           </p>
         </div>
-        <div ref={containerRef} />
-        {verifying && <Spinner size={18} />}
+
+        <div className="flex min-h-[65px] items-center justify-center">
+          <Turnstile
+            ref={turnstileRef}
+            siteKey={config.turnstile_site_key}
+            options={{
+              theme: "auto",
+              retry: "auto",
+              retryInterval: 5000,
+              refreshExpired: "auto",
+            }}
+            onSuccess={(token) => {
+              void submitToken(token);
+            }}
+            onError={() => {
+              clearTurnstileToken();
+              setError("人机验证异常，正在尝试自动恢复或请点击重试");
+            }}
+            onExpire={() => {
+              clearTurnstileToken();
+              setError("验证已过期，请重新完成验证");
+            }}
+          />
+        </div>
+
+        {verifying && (
+          <div className="flex items-center gap-2 text-[12px] text-(--text-secondary)">
+            <Spinner size={16} />
+            <span>正在校验凭证...</span>
+          </div>
+        )}
+
         {error && (
-          <p role="alert" className="text-[12px] text-(--status-error)">
-            {error}
-          </p>
+          <div className="flex flex-col items-center gap-2">
+            <p role="alert" className="text-[12px] text-(--status-error)">
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={resetTurnstile}
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) transition-colors cursor-pointer"
+            >
+              <RefreshCw size={13} />
+              重新验证
+            </button>
+          </div>
         )}
       </div>
     </div>
