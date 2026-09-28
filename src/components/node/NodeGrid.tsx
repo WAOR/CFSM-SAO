@@ -12,6 +12,7 @@ import {
   Pencil,
   Server,
   Sparkles,
+  Timer,
   X,
 } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
@@ -29,11 +30,8 @@ import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useViewMode } from "@/hooks/useViewMode";
 import { usePriceVisibility } from "@/hooks/usePriceVisibility";
-import {
-  formatBytes,
-  formatByteRate,
-  formatByteRateLabel,
-} from "@/utils/format";
+import { getNodeMetricsSnapshot } from "@/services/wsStore";
+import { formatBytes } from "@/utils/format";
 import { calculateCostSummary, getExchangeRates } from "@/utils/cost";
 import { useHiddenNodeUuids } from "@/hooks/useVisibleNodes";
 import {
@@ -101,6 +99,27 @@ interface HomeOverview {
   diskPct: number;
   totalTcpConn: number;
   totalUdpConn: number;
+  maxUptimeSeconds: number;
+  recentRebootNode: { name: string; seconds: number } | null;
+}
+
+function formatRebootAgo(seconds: number): { value: string; unit: string; fullText: string } {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return { value: "—", unit: "", fullText: "—" };
+  }
+  if (seconds < 60) {
+    return { value: "刚刚", unit: "", fullText: "刚刚" };
+  }
+  const days = Math.floor(seconds / 86400);
+  if (days >= 1) {
+    return { value: String(days), unit: "天前", fullText: `${days}天前` };
+  }
+  const hours = Math.floor(seconds / 3600);
+  if (hours >= 1) {
+    return { value: String(hours), unit: "小时前", fullText: `${hours}小时前` };
+  }
+  const minutes = Math.max(1, Math.floor(seconds / 60));
+  return { value: String(minutes), unit: "分钟前", fullText: `${minutes}分钟前` };
 }
 
 function HomeBrand({ siteName }: { siteName: string }) {
@@ -245,8 +264,12 @@ function HomeOverviewCards({
   const totalConnections = overview.totalTcpConn + overview.totalUdpConn;
   const [ramUsedValue, ramUsedUnit] = formatBytes(overview.totalRamUsed).split(" ");
   const [diskUsedValue, diskUsedUnit] = formatBytes(overview.totalDiskUsed).split(" ");
-  const totalBandwidth = overview.netUp + overview.netDown;
-  const bandwidthRate = formatByteRate(totalBandwidth);
+  const recentReboot = overview.recentRebootNode
+    ? {
+        name: overview.recentRebootNode.name,
+        ...formatRebootAgo(overview.recentRebootNode.seconds),
+      }
+    : null;
 
   const onlinePct =
     overview.totalNodes > 0 ? (overview.onlineNodes / overview.totalNodes) * 100 : 0;
@@ -441,20 +464,36 @@ function HomeOverviewCards({
             </div>
           </div>
 
-          {/* 5. 实时带宽 (合并实时上行与实时下行) */}
-          <div className="mao-stat-card" data-metric="bandwidth">
+          {/* 5. 最近重启 (全网最近重启时长 & 节点名称) */}
+          <div className="mao-stat-card" data-metric="uptime">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Activity size={15} className="mao-stat-icon text-(--speed-high,var(--accent-500))" />
-                <span className="mao-stat-label">实时带宽</span>
+                <Timer size={15} className="mao-stat-icon text-(--status-success,var(--accent-500))" />
+                <span className="mao-stat-label">最近重启</span>
               </div>
             </div>
-            <div className="mao-stat-value mao-stat-highlight">
-              {bandwidthRate.value} <span className="mao-stat-unit">{bandwidthRate.unit}</span>
+            <div className="mao-stat-value">
+              {recentReboot ? (
+                <>
+                  {recentReboot.value}{" "}
+                  {recentReboot.unit && (
+                    <span className="mao-stat-unit">{recentReboot.unit}</span>
+                  )}
+                </>
+              ) : (
+                "—"
+              )}
             </div>
             <div className="mao-stat-footer">
-              <span className="mao-stat-caption" title={`实时上行: ${formatByteRateLabel(overview.netUp)} · 实时下行: ${formatByteRateLabel(overview.netDown)}`}>
-                ↑ {formatByteRateLabel(overview.netUp)} · ↓ {formatByteRateLabel(overview.netDown)}
+              <span
+                className="mao-stat-caption truncate"
+                title={
+                  recentReboot
+                    ? `最近重启设备: ${recentReboot.name} · ${recentReboot.fullText}`
+                    : "暂无在线设备"
+                }
+              >
+                {recentReboot ? recentReboot.name : "暂无在线设备"}
               </span>
             </div>
           </div>
@@ -737,6 +776,26 @@ export function NodeGrid() {
     const ramPct = totalRamTotal > 0 ? (totalRamUsed / totalRamTotal) * 100 : 0;
     const diskPct = totalDiskTotal > 0 ? (totalDiskUsed / totalDiskTotal) * 100 : 0;
 
+    let maxUptimeSeconds = 0;
+    let minUptimeSeconds = Number.POSITIVE_INFINITY;
+    let recentRebootNode: { name: string; seconds: number } | null = null;
+
+    for (const meta of visibleMeta) {
+      const metrics = getNodeMetricsSnapshot(meta.uuid);
+      if (metrics && metrics.online === true && Number.isFinite(metrics.uptime) && metrics.uptime > 0) {
+        if (metrics.uptime > maxUptimeSeconds) {
+          maxUptimeSeconds = metrics.uptime;
+        }
+        if (metrics.uptime < minUptimeSeconds) {
+          minUptimeSeconds = metrics.uptime;
+          recentRebootNode = {
+            name: meta.name?.trim() || meta.uuid,
+            seconds: metrics.uptime,
+          };
+        }
+      }
+    }
+
     return {
       totalNodes: visibleNodes.length,
       onlineNodes,
@@ -754,8 +813,10 @@ export function NodeGrid() {
       diskPct,
       totalTcpConn,
       totalUdpConn,
+      maxUptimeSeconds,
+      recentRebootNode,
     };
-  }, [visibleNodes]);
+  }, [visibleNodes, visibleMeta]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
   const hasNodes = visibleMeta.length > 0;
   const loggedIn = Boolean(me?.logged_in);

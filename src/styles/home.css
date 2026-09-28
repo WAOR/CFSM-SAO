@@ -915,6 +915,10 @@
   --metric-accent: var(--speed-high);
 }
 
+.overview-card[data-metric="uptime"] {
+  --metric-accent: var(--status-success);
+}
+
 .overview-card[data-metric="asset"] {
   --metric-accent: var(--accent-500);
 }
