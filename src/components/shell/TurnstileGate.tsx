@@ -96,7 +96,7 @@ export function TurnstileGate() {
           </p>
         </div>
 
-        <div className="flex min-h-[65px] items-center justify-center">
+        <div className="flex min-h-16.25 items-center justify-center">
           <Turnstile
             ref={turnstileRef}
             siteKey={config.turnstile_site_key}
