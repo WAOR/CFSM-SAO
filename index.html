@@ -97,7 +97,7 @@
         } catch {}
 
         try {
-          const cachedTitle = localStorage.getItem("komaritheme:sitename");
+          const cachedTitle = localStorage.getItem("cfsmtheme:sitename") || localStorage.getItem("komaritheme:sitename");
           if (cachedTitle && cachedTitle.trim()) {
             document.title = cachedTitle.trim();
             const setMeta = (sel, val) => {
@@ -108,7 +108,7 @@
             setMeta('meta[property="og:title"]', cachedTitle.trim());
             setMeta('meta[name="twitter:title"]', cachedTitle.trim());
           }
-          const cachedDesc = localStorage.getItem("komaritheme:description");
+          const cachedDesc = localStorage.getItem("cfsmtheme:description") || localStorage.getItem("komaritheme:description");
           if (cachedDesc && cachedDesc.trim()) {
             const setMeta = (sel, val) => {
               const el = document.querySelector(sel);
@@ -245,15 +245,15 @@
         } catch {}
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-7GWA96Vs.js"></script>
+    <script type="module" crossorigin src="./assets/index-6NKcwYJM.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-Cyuzqnbw.js">
     <link rel="modulepreload" crossorigin href="./assets/charts-lRTmaCY8.js">
     <link rel="modulepreload" crossorigin href="./assets/react-CfATAyk4.js">
     <link rel="modulepreload" crossorigin href="./assets/query-B2KnTXgC.js">
-    <link rel="modulepreload" crossorigin href="./assets/validation-FBnilo1y.js">
+    <link rel="modulepreload" crossorigin href="./assets/validation-ByCAF8jQ.js">
     <link rel="stylesheet" crossorigin href="./assets/charts-CnsZ1jie.css">
-    <link rel="stylesheet" crossorigin href="./assets/index-DpFCcGH0.css">
-    <meta name="theme-version" content="SAO v1.0.5" />
+    <link rel="stylesheet" crossorigin href="./assets/index-Dk0OCcEV.css">
+    <meta name="theme-version" content="SAO v1.0.6" />
   </head>
   <body>
     <div id="root" class="relative z-30"></div>
