@@ -5,7 +5,7 @@ import type {
   SysConfig,
   TrafficTrendSample,
 } from "@/types/cfsm";
-import { getServersSnapshot, type ServersSnapshot } from "@/services/api";
+import { getServersSnapshot, getServerDetail, type ServersSnapshot } from "@/services/api";
 import {
   emptyNodeMetrics,
   isServerOnline,
@@ -99,11 +99,7 @@ const ONLINE_RECHECK_INTERVAL_MS = 15_000;
 
 /**
  * 页面进了后台多久之后断开实时连接、暂停轮询。
- *
- * 后端只要还有一个前端 WebSocket 连着，就让**所有**探针按 `wss_report_interval`（通常 2 秒）上报，
- * 一个都没有时才退回 60 秒以上（MetricsBroadcaster `_getAgentNextWssReportAfterMs`）—— 一个忘在后台的
- * 标签页就能让全站探针一直高频上报，吃的是站长的 Workers / DO 额度。后端文档也要求页面隐藏时主动断开。
- * 不一隐藏就断：来回切标签页每次都要重连、再补一次 `/api/servers`，给个缓冲。
+ * 隐藏 30 秒后断开 WS 止损，避免全站探针长期高频上报；保留 30 秒缓冲以防短暂切屏重复断连。
  */
 export const HIDDEN_REALTIME_PAUSE_DELAY_MS = 30_000;
 /** 后台「前端实时连接超时」的上限（分钟），与后端 normalizeFrontendWsTimeoutMinutes 同口径。 */
@@ -1233,21 +1229,39 @@ function suspendRealtime() {
   commit(state, { storeStatus: true });
 }
 
+async function syncSingleServer(uuid: string): Promise<void> {
+  try {
+    const server = await getServerDetail(uuid);
+    const now = Date.now();
+    const current = state.rawByUuid[uuid];
+    const merged = current ? mergeServerPatch(current, server as unknown as Record<string, unknown>) : server;
+    const nextRawByUuid = { ...state.rawByUuid, [uuid]: merged };
+    const applied = applyRawUpdates(nextRawByUuid, new Set([uuid]), now);
+    commit({
+      ...state,
+      rawByUuid: nextRawByUuid,
+      metaByUuid: { ...state.metaByUuid, [uuid]: toNodeInfo(merged) },
+      metricsByUuid: applied.touchedMetrics.length > 0 ? applied.nextMetricsByUuid : state.metricsByUuid,
+      trafficTrends: applied.touchedTrafficTrends.length > 0 ? applied.nextTrafficTrends : state.trafficTrends,
+    });
+  } catch {
+    // 忽略单台同步异常
+  }
+}
+
 /**
- * 恢复实时：**立刻按暂停前那份节点表把连接建回去，同时补一次 `/api/servers`**。
- *
- * 暂停期间没有前端连着，后端让全站探针退回 60 秒一报，要等前端的订阅到了才通知探针提速（新版探针收到就补报）。
- * 早先照后端文档「先补 REST 再连 WS」串行做，连接得等快照回来才建，而 `/api/servers` 冷的时候很慢 ——
- * 2026-09-13 线上实测：先快照后连接，切回后 6.4 秒才有数据；连接先走 1.7 秒。快照还测到过 8.3 秒，
- * 超过 SERVERS_REQUEST_TIMEOUT_MS 整次作废，连接要等下一次轮询成功才建。内置主题也是切回来直接重连。
- * 快照回来时 updateWsSubscriptions 在同一条连接上改 ids（节点增删），不重连；快照比实时值旧时
- * performServersSync 只取 WS 不下发的字段。补不上时 5 秒轮询会接着试。
- * **只拉 `/api/servers`，绝不碰 `/api/history/all`** —— 首页硬约束：历史只能由人点刷新触发。
+ * 恢复实时：**立刻把连接建回去，并按当前页面类型补一次 REST**。
+ * - 详情页：只补当前节点 GET /api/server?id=<id>
+ * - 首页：补全站 GET /api/servers
  */
 function resumeRealtime() {
   if (!started || realtimePaused()) return;
   if (latestBaseByServerId.size > 0) updateWsSubscriptions(latestBaseByServerId);
-  void syncServers().catch(() => {});
+  if (realtimeFocusUuid) {
+    void syncSingleServer(realtimeFocusUuid);
+  } else {
+    void syncServers().catch(() => {});
+  }
 }
 
 function pauseRealtimeForHidden() {

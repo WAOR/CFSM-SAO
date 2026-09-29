@@ -7,7 +7,8 @@ export function usePublicConfig() {
   return useQuery<PublicConfig>({
     queryKey: ["public"],
     queryFn: ({ signal }) => getPublic({ signal }),
-    staleTime: 60_000,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
   });
 }
 

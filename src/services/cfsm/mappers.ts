@@ -135,17 +135,22 @@ function toNullableNumber(value: unknown): number | null {
 export const PING_TIMEOUT_VALUE = -1;
 
 /**
- * 一条线路一轮探测的延迟。
- *
- * 后端 2026-09-07 起的口径（theme-develop.md 末尾）：`false` / 字段缺失 = 没配置、没上报或没取样，
- * 不显示；`ping: null` 加上有数值的丢包（全超时时是 100）= 这一轮全部超时。两者经 toNullableNumber
- * 都读成 null 的话，超时就被当成「没数据」：首页那格留空而不是涂红、卡片丢包率偏低、详情页丢包带
- * 看不到（官方前端 2026-09-08 的 fba07dc 修的是同一类问题）。所以延迟读不出数时要看同一轮的丢包。
+ * 官方规范三态判定：
+ * - false 或未返回：未配置 / 未采样，不显示（返回 null）
+ * - null：本轮探测超时，记录为 PING_TIMEOUT_VALUE (-1)
+ * - 0 或有效数字：正常数值（包含 0% 丢包必须正常显示）
  */
-function probeLatency(ping: unknown, loss: number | null): number | null {
+export function probeLatency(ping: unknown, loss: unknown): number | null {
+  if (ping === false || ping === undefined) return null;
   const value = toNullableNumber(ping);
   if (value != null) return value;
-  return loss != null && loss > 0 ? PING_TIMEOUT_VALUE : null;
+  const lossNum = toNullableNumber(loss);
+  return lossNum != null && lossNum > 0 ? PING_TIMEOUT_VALUE : null;
+}
+
+export function probeLoss(rawLoss: unknown, rawPing: unknown): number | null {
+  if (rawLoss === false || (rawPing === false && rawLoss === undefined)) return null;
+  return toNullableNumber(rawLoss);
 }
 
 /**
@@ -340,8 +345,10 @@ export function toNodeInfo(server: CfsmServer): NodeInfo {
 function carrierPingFrom(row: Record<string, unknown>): CarrierPingSnapshot {
   const ping = { ...EMPTY_CARRIER_PING };
   for (const task of CARRIER_TASKS) {
-    const loss = toNullableNumber(row[task.lossField]);
-    ping[task.key] = probeLatency(row[task.field], loss);
+    const rawPing = row[task.field];
+    const rawLoss = row[task.lossField];
+    const loss = probeLoss(rawLoss, rawPing);
+    ping[task.key] = probeLatency(rawPing, loss);
     ping[CARRIER_LOSS_KEYS[task.key]] = loss;
   }
   return ping;
@@ -375,10 +382,10 @@ export function parseLatencyWindow(server: CfsmServer): PingLiveSample[] {
     const loss = lossByTs.get(time);
     const ping = { ...EMPTY_CARRIER_PING };
     for (const key of CARRIER_KEYS) {
-      // 窗口点里的键和 CARRIER_KEYS 同名（ct/cu/cm/bd/node_1..4）；老后端没有的读成 null。
-      const lossValue = loss ? toNullableNumber(loss[key]) : null;
-      // 超时那一格 ping 是 null、loss 是 100：要读成超时，见 probeLatency。
-      ping[key] = probeLatency(point[key], lossValue);
+      const rawPing = (point as Record<string, unknown>)[key];
+      const rawLoss = loss ? (loss as Record<string, unknown>)[key] : undefined;
+      const lossValue = probeLoss(rawLoss, rawPing);
+      ping[key] = probeLatency(rawPing, lossValue);
       ping[CARRIER_LOSS_KEYS[key]] = lossValue;
     }
     out.push({ time, ping });
@@ -588,8 +595,7 @@ export function historyRowToLoadRecord(row: HistoryRow, client: string): LoadRec
     temp: 0,
     disk: row.disk_used * MIB,
     disk_total: row.disk_total * MIB,
-    // 后端两种下发形态都见过：嵌套的 disk 对象与扁平的 disk_read_bps 字段。
-    // 两者都没有说明探针没采集，保持 null 让图表退回显示已用空间。
+    // 优先嵌套的 disk 对象，兼容旧版平铺字段。
     disk_read: toNullableNumber(row.disk?.read_bps ?? row.disk_read_bps),
     disk_write: toNullableNumber(row.disk?.write_bps ?? row.disk_write_bps),
     net_in: row.net_in_speed,
@@ -614,8 +620,10 @@ export function historyRowsToPingRecords(rows: HistoryRow[], client: string): Pi
     const time = normalizeTimestamp(row.timestamp);
     if (time <= 0) continue;
     for (const task of CARRIER_TASKS) {
-      const loss = toNullableNumber(row[task.lossField]);
-      const value = probeLatency(row[task.field], loss);
+      const rawPing = row[task.field];
+      const rawLoss = row[task.lossField];
+      const loss = probeLoss(rawLoss, rawPing);
+      const value = probeLatency(rawPing, loss);
       if (value == null) continue;
       out.push({
         task_id: task.id,

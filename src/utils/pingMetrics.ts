@@ -84,7 +84,11 @@ export function formatPingTooltipValue(
   latencyMs: number | null,
   lossPct: number | null,
 ): string {
+  const isTimeout = latencyMs != null && latencyMs < 0;
   const hasLoss = lossPct != null && lossPct > 0;
+  if (isTimeout) {
+    return hasLoss ? `超时 (${formatPingLoss(lossPct)} 丢包)` : "超时";
+  }
   if (latencyMs == null) return hasLoss ? `丢包 ${formatPingLoss(lossPct)}` : "—";
   const latency = `${latencyMs.toFixed(1)} ms`;
   return hasLoss ? `丢包 ${formatPingLoss(lossPct)} · ${latency}` : latency;

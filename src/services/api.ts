@@ -84,8 +84,21 @@ export function normalizeHistoryHours(hours: number): number {
  * 站点配置
  * ------------------------------------------------------------------ */
 
-export async function getSiteConfig(options?: RequestOptions) {
-  return cfsmGet("/api/config", SiteConfigSchema, options);
+let siteConfigPromise: Promise<z.output<typeof SiteConfigSchema>> | null = null;
+
+export async function getSiteConfig(options?: RequestOptions & { skipCache?: boolean }) {
+  if (options?.skipCache || !siteConfigPromise) {
+    siteConfigPromise = cfsmGet("/api/config", SiteConfigSchema, options).catch((err) => {
+      siteConfigPromise = null;
+      throw err;
+    });
+  }
+  return siteConfigPromise;
+}
+
+/** 供 Turnstile 验证或配置失效时主动重置配置缓存。 */
+export function invalidateSiteConfigCache(): void {
+  siteConfigPromise = null;
 }
 
 /**
@@ -111,6 +124,7 @@ function resolveThemeOptions(fetched: Record<string, unknown>): Record<string, u
 /** 测试用。 */
 export function resetRecentThemeOptionsWrite(): void {
   recentThemeOptionsWrite = null;
+  siteConfigPromise = null;
 }
 
 /** `POST /api/theme_options` 的响应体（`{ success, theme_options, message }`）。 */

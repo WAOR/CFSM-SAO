@@ -5,7 +5,7 @@ import { RefreshCw } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useTurnstileVerificationRequired } from "@/hooks/useTurnstileVerification";
-import { getSiteConfig } from "@/services/api";
+import { getSiteConfig, invalidateSiteConfigCache } from "@/services/api";
 import { discardEarlyData } from "@/services/cfsm/http";
 import {
   clearTurnstileToken,
@@ -33,6 +33,7 @@ export function TurnstileGate() {
   useEffect(
     () =>
       subscribeTurnstileCredentialsCleared(() => {
+        invalidateSiteConfigCache();
         void queryClient.invalidateQueries({ queryKey: ["public"] });
       }),
     [queryClient],
@@ -59,6 +60,7 @@ export function TurnstileGate() {
         // 预取的 config 与 servers 是验证前拉的（未通过验证），必须先丢掉 —— 否则
         // 验证通过后重拉数据会直接吃到 403 失败的脏缓存。
         discardEarlyData();
+        invalidateSiteConfigCache();
         // 带上一次性 token 请求 config，成功后 http 层会把返回的凭证缓存下来。
         setTurnstileToken(token);
         const newConfig = await getSiteConfig();
