@@ -31,14 +31,14 @@ function devHostAssets(): Plugin {
         const candidatePaths: string[] = [];
         if (reqPath.startsWith("/flags/")) {
           candidatePaths.push(
-            path.resolve(process.cwd(), "public/assets/flags", `${baseName.toUpperCase()}${ext}`),
-            path.resolve(process.cwd(), "public/assets/flags", `${baseName.toLowerCase()}${ext}`),
-            path.resolve(process.cwd(), "public/assets/flags", fileName),
+            path.resolve(process.cwd(), "dev-resources/flags", `${baseName.toUpperCase()}${ext}`),
+            path.resolve(process.cwd(), "dev-resources/flags", `${baseName.toLowerCase()}${ext}`),
+            path.resolve(process.cwd(), "dev-resources/flags", fileName),
           );
         } else if (reqPath.startsWith("/os-icons/")) {
           candidatePaths.push(
-            path.resolve(process.cwd(), "public/assets/os-icons", fileName),
-            path.resolve(process.cwd(), "public/assets/os-icons", `${baseName.toLowerCase()}${ext}`),
+            path.resolve(process.cwd(), "dev-resources/os-icons", fileName),
+            path.resolve(process.cwd(), "dev-resources/os-icons", `${baseName.toLowerCase()}${ext}`),
           );
         }
 

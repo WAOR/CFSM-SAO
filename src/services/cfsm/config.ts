@@ -103,9 +103,9 @@ export function hostAssetUrl(path: string): string {
   return `${base}${normalized}`;
 }
 
-/** 管理后台固定由内置默认主题接管，第三方主题只能跳转过去。 */
+/** 管理后台固定由内置默认主题接管，第三方主题只能跳转过去（必须跳 /admin#/admin）。 */
 export function getAdminUrl(): string {
-  return `${getPrimaryApiBase()}/admin#admin`;
+  return `${getPrimaryApiBase()}/admin#/admin`;
 }
 
 const memoryStorage = new Map<string, string>();

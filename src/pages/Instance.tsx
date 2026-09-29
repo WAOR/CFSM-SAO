@@ -15,11 +15,9 @@ import { useNodeMeta, useNodeStoreStatus, useRealtimeFocus } from "@/hooks/useNo
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { ANONYMOUS_MAX_HISTORY_HOURS } from "@/services/api";
 
-// 1 小时：详情页每打开一次就是一趟 /api/history/all 全量行，默认档位越短后端读的行越少。
-const DEFAULT_PING_HOURS = 1;
-// 负载图默认停在「1 小时」：默认发起的就是 hours=1 这一档，选中的按钮也应是「1 小时」，
-// 别默认到「实时」却偷偷请求 hours=1（实时档真正的请求窗口见 LoadChart 的 REALTIME_HISTORY_HOURS）。
-const DEFAULT_LOAD_HOURS = 1;
+// 0.167（10 分钟）：官方规范铁律要求详情页默认 10 分钟历史曲线，大幅降低 D1 行读取。
+const DEFAULT_PING_HOURS = 0.167;
+const DEFAULT_LOAD_HOURS = 0.167;
 /** `/api/history/all` 的 hours 上限。 */
 const MAX_HISTORY_HOURS = 168;
 type TimeRangeOption = ReturnType<typeof buildLoadTimeRangeOptions>[number];

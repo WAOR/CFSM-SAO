@@ -559,9 +559,9 @@ function CompactNodeInfoStrip({
           {isPriceVisible ? (
             <CompactInfoRow
               icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
-              // 后端 price 为空/0/-1 都表示免费，小卡片直接写「免费」而不是留白。
-              value={renewalPrice || "免费"}
-              color={renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
+              // 官方数据规范：0 或 -1 为免费，空白表示未设置（未设置时显示破折号或留空）。
+              value={renewalPrice || (node.price === 0 || node.price === -1 ? "免费" : "—")}
+              color={renewalPrice || node.price === 0 || node.price === -1 ? "var(--status-success)" : "var(--text-tertiary)"}
             />
           ) : (
             <CompactInfoRow

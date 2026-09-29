@@ -164,6 +164,9 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
     turnstile_enabled: config.turnstile_enabled,
     turnstile_site_key: config.turnstile_site_key,
     verified: config.verified,
+    backgroundImage: config.background_image,
+    customHead: config.custom_head,
+    customBody: config.custom_body,
     // 站点级的主题设置（本机覆盖叠在它上面）。刚保存过就先信自己写进去的，见 THEME_OPTIONS_WRITE_TRUST_MS。
     theme_settings: resolveThemeOptions(config.theme_options),
     latencyWindow: config.latency_window,
@@ -510,7 +513,7 @@ async function fetchHistoryRows(
 
 export async function getLoadRecords(
   uuid: string,
-  hours = 6,
+  hours = 0.167,
   options?: RequestOptions,
 ): Promise<LoadRecordsResponse> {
   const rows = await fetchHistoryRows(uuid, hours, options);
@@ -532,7 +535,7 @@ export async function getLoadRecords(
  */
 export async function getPingRecords(
   uuid: string,
-  hours = 6,
+  hours = 0.167,
   options?: RequestOptions,
 ): Promise<PingRecordsResponse> {
   const rows = await fetchHistoryRows(uuid, hours, options);
@@ -621,9 +624,9 @@ function percentile(sortedValues: number[], fraction: number): number | null {
 export function saveThemeSettings(): Promise<void> {
   return Promise.reject(
     new ApiRequestError(
-      "第三方主题不能写入后端设置，请在 /admin#admin 中修改",
+      "第三方主题不能写入后端设置，请在 /admin#/admin 中修改",
       403,
-      "/admin#admin",
+      "/admin#/admin",
     ),
   );
 }

@@ -168,11 +168,12 @@ describe("toNodeInfo", () => {
     expect(info.expired_at).toBe("2026-12-31");
   });
 
-  it("keeps -1 as the backend's explicit free marker", () => {
-    // 归零的话卡片只会留白，显示不出「免费」。
+  it("keeps -1 or 0 as the backend's explicit free marker, empty as unset", () => {
+    // 0 或 -1 表示免费，空白表示未设置（null）
     expect(toNodeInfo(server({ price: "-1" })).price).toBe(-1);
-    expect(toNodeInfo(server({ price: "" })).price).toBe(0);
-    expect(toNodeInfo(server({ price: "-3" })).price).toBe(0);
+    expect(toNodeInfo(server({ price: "0" })).price).toBe(0);
+    expect(toNodeInfo(server({ price: "" })).price).toBeNull();
+    expect(toNodeInfo(server({ price: "-3" })).price).toBeNull();
   });
 
   it("keeps IP reachability as a flag, since no address is exposed", () => {

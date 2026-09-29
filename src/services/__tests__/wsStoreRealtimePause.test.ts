@@ -194,12 +194,12 @@ describe("页面进后台", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(store.getNodeMetricsSnapshot("node-a")?.netDown).toBe(100);
 
-    // 过了握手宽限期还是连不上，就是真连不上：轮询兜底时快照是唯一的数据源，照用。
+    // 官方规范：禁止定时轮询，握手期不会自动发起多余轮询打后端 D1，维持原值
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(store.getNodeMetricsSnapshot("node-a")?.netDown).toBe(9_999);
+    expect(store.getNodeMetricsSnapshot("node-a")?.netDown).toBe(100);
 
     release();
-    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(1);
   });
 
   it("leaves the connection alone for a quick tab switch inside the grace period", async () => {
@@ -307,8 +307,8 @@ describe("快照同步", () => {
     const release = store.retainStore();
 
     await vi.advanceTimersByTimeAsync(19_000);
-    // 第 8 秒失败 → 退避一拍（跳过第 10 秒）→ 第 15 秒重试。退避算了两次的话要拖到第 20 秒。
-    expect(callTimes).toEqual([0, 15_000]);
+    // 第 8 秒失败 → 指数退避 2 秒（到第 10 秒）重试。
+    expect(callTimes).toEqual([0, 10_000]);
 
     release();
     await vi.advanceTimersByTimeAsync(0);
@@ -335,25 +335,31 @@ describe("快照同步", () => {
     expect(mocks.connections).toHaveLength(2);
     pingLive.recordPingSample("node-b", Date.now(), { ...EMPTY_CARRIER_PING, ct: 42 });
 
-    // B 站这一轮超时：快照里只剩 A 站的节点。
+    // B 站这一轮超时：快照里只剩 A 站的节点。通过 visibilitychange 恢复可见触发快照同步
     mocks.getServersSnapshot.mockImplementation(async () => ({
       ...snapshot(["node-a"], siteA),
       partial: true,
       failedBases: [siteB],
     }));
     const syncs = syncCount();
-    await vi.advanceTimersByTimeAsync(60_000);
+    setHidden(true);
+    await vi.advanceTimersByTimeAsync(store.HIDDEN_REALTIME_PAUSE_DELAY_MS + 100);
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(0);
     expect(syncCount()).toBe(syncs + 1);
     expect(nodeIds(store)).toEqual(["node-a", "node-b"]);
-    expect(mocks.connections.map((connection) => connection.closed)).toEqual([false, false]);
+    expect(mocks.connections.slice(-2).map((connection) => connection.closed)).toEqual([false, false]);
     expect(pingLive.getPingHistorySnapshot("node-b")).toHaveLength(1);
     expect(store.getStoreStatusSnapshot().partial).toBe(true);
 
     // B 站恢复响应、节点确实删了：这一次才去掉。
     mocks.getServersSnapshot.mockImplementation(async () => snapshot(["node-a"], siteA));
-    await vi.advanceTimersByTimeAsync(60_000);
+    setHidden(true);
+    await vi.advanceTimersByTimeAsync(store.HIDDEN_REALTIME_PAUSE_DELAY_MS + 100);
+    setHidden(false);
+    await vi.advanceTimersByTimeAsync(0);
     expect(nodeIds(store)).toEqual(["node-a"]);
-    expect(mocks.connections.map((connection) => connection.closed)).toEqual([false, true]);
+    expect(mocks.connections.slice(-2).map((connection) => connection.closed)).toEqual([false, true]);
 
     release();
     await vi.advanceTimersByTimeAsync(0);

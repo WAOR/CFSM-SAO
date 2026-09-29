@@ -27,9 +27,9 @@ import { normalizeBillingCycle } from "@/utils/billing";
 /** 格式化紧凑卡片隐藏价格时的精简账单周期（如 年付 / 月付，2~3个字符避免超宽截断）。 */
 export function formatCompactBillingCycle(
   billingCycle: string | number | null | undefined,
-  price?: number,
+  price?: number | null,
 ): string {
-  if (price === -1) return "免费";
+  if (price === -1 || price === 0) return "免费";
   const cycle = normalizeBillingCycle(billingCycle);
   switch (cycle.kind) {
     case "lifetime":

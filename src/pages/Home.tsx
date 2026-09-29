@@ -37,7 +37,7 @@ export function Home() {
   const [searchParams] = useSearchParams();
   const isThemeManageView = searchParams.get("view") === "theme-manage";
 
-  // 主题设置只写本机浏览器，不需要登录态；管理后台入口另行跳转 /admin#admin。
+  // 主题设置只写本机浏览器，不需要登录态；管理后台入口另行跳转 /admin#/admin。
   if (isThemeManageView) {
     return (
       <Suspense

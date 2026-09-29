@@ -94,14 +94,7 @@ interface NodeTrafficTrend {
 const POLL_REFRESH_INTERVAL_MS = 5_000;
 /** 新建的 WebSocket 给一个轮询周期握手，期间不算「连不上」，见 {@link realtimeKnownUnavailable}。 */
 const WS_CONNECT_GRACE_MS = POLL_REFRESH_INTERVAL_MS;
-/**
- * WebSocket 正常时仍定期全量对齐，用于捕获元数据变更与节点增删。
- *
- * 后端 `/api/servers` 有服务端缓存（站长口径 30 秒；实测同一份字节至少冻结 24 秒，加随机
- * query 参数也绕不过，说明缓存在 Worker 里而不是 CDN），拉得比缓存周期还密只是拿回同一份。
- */
-const FULL_REFRESH_INTERVAL_MS = 60_000;
-/** 离线是"超过阈值没有上报"，没有事件驱动，只能定时重算。 */
+/** 离线是"超过阈值没有上报"，没有事件驱动，纯前端定时重算。 */
 const ONLINE_RECHECK_INTERVAL_MS = 15_000;
 
 /**
@@ -875,8 +868,8 @@ interface PendingNode {
 const WS_RATE_WINDOW = 12;
 const wsPendingByServer = new Map<string, PendingNode>();
 let wsTickTimer: number | null = null;
-/** 细粒度轮询：到点的节点在同一拍里合成一次提交，避免每台各自触发渲染。 */
-const WS_TICK_MS = 100;
+/** 官方规范铁律：首页渲染最多每秒一次。样本先积攒到内存，最多每 1 秒批量合并提交一次。 */
+const WS_TICK_MS = 1000;
 
 /**
  * 诊断开关：URL 带 `?wsdebug=1` 时，把每次提交的节点数、以及各节点的到达节奏打到控制台。
@@ -1254,7 +1247,6 @@ function suspendRealtime() {
 function resumeRealtime() {
   if (!started || realtimePaused()) return;
   if (latestBaseByServerId.size > 0) updateWsSubscriptions(latestBaseByServerId);
-  lastFullRefreshAt = Date.now();
   void syncServers().catch(() => {});
 }
 
@@ -1328,10 +1320,6 @@ export function focusRealtimeNode(uuid: string): () => void {
  * 生命周期
  * ------------------------------------------------------------------ */
 
-// 连续失败时指数退避(5s→10s→…→75s)，避免后端不可用期间持续打注定失败的请求。
-const BOOTSTRAP_MAX_BACKOFF_TICKS = 15;
-let bootstrapBackoffTicks = 0;
-let bootstrapSkipTicks = 0;
 let bootstrapPromise: Promise<void> | null = null;
 
 /**
@@ -1346,27 +1334,30 @@ function bootstrap(): Promise<void> {
   return bootstrapPromise;
 }
 
+let bootstrapAttempts = 0;
+let bootstrapRetryTimer: number | null = null;
+
 async function runBootstrap() {
   try {
     await syncServers();
-    bootstrapBackoffTicks = 0;
-    bootstrapSkipTicks = 0;
+    bootstrapAttempts = 0;
   } catch {
-    bootstrapBackoffTicks = Math.min(
-      bootstrapBackoffTicks > 0 ? bootstrapBackoffTicks * 2 : 1,
-      BOOTSTRAP_MAX_BACKOFF_TICKS,
-    );
-    bootstrapSkipTicks = bootstrapBackoffTicks;
+    bootstrapAttempts += 1;
+    // 失败时最多有限指数退避重试 3 次，避免无限制打后端 D1
+    if (bootstrapAttempts <= 3 && started && !hydrated) {
+      const delay = Math.min(10000, 2000 * 2 ** (bootstrapAttempts - 1));
+      bootstrapRetryTimer = window.setTimeout(() => {
+        bootstrapRetryTimer = null;
+        if (started && !hydrated) void bootstrap();
+      }, delay);
+    }
   }
 }
 
 let started = false;
 let retainCount = 0;
 let stopTimer: number | null = null;
-let pollTimer: number | null = null;
-let fullRefreshTimer: number | null = null;
 let onlineTimer: number | null = null;
-let lastFullRefreshAt = 0;
 
 function ensureStarted() {
   if (started) return;
@@ -1378,30 +1369,8 @@ function ensureStarted() {
   if (document.hidden) handleVisibilityChange();
   void bootstrap();
 
-  pollTimer = window.setInterval(() => {
-    // 后台暂停 / 连接到时限期间一律不打后端：`/api/servers` 本身也会让后端把前端标成「正在看」。
-    if (realtimePaused()) return;
-    if (!hydrated) {
-      if (bootstrapSkipTicks > 0) {
-        bootstrapSkipTicks -= 1;
-        return;
-      }
-      void bootstrap();
-      return;
-    }
-    // WebSocket 正常推送时不需要轮询，交给全量刷新定时器。
-    if (realtimeConnected) return;
-    void syncServers().catch(() => {});
-  }, POLL_REFRESH_INTERVAL_MS);
-
-  fullRefreshTimer = window.setInterval(() => {
-    if (!hydrated || realtimePaused()) return;
-    const now = Date.now();
-    if (now - lastFullRefreshAt < FULL_REFRESH_INTERVAL_MS) return;
-    lastFullRefreshAt = now;
-    void syncServers().catch(() => {});
-  }, FULL_REFRESH_INTERVAL_MS);
-
+  // 官方规范铁律：/api/servers 禁止任何 setInterval 轮询！
+  // 离线判定纯前端由 onlineTimer 在本地内存根据 (Date.now() - last_updated) < 5 分钟计算。
   onlineTimer = window.setInterval(refreshOnlineFlags, ONLINE_RECHECK_INTERVAL_MS);
 }
 
@@ -1431,6 +1400,10 @@ function stopStore() {
     window.clearTimeout(stopTimer);
     stopTimer = null;
   }
+  if (bootstrapRetryTimer != null) {
+    window.clearTimeout(bootstrapRetryTimer);
+    bootstrapRetryTimer = null;
+  }
   syncController?.abort();
   syncController = null;
   closeAllConnections();
@@ -1441,11 +1414,9 @@ function stopStore() {
   hiddenPaused = false;
   sessionExpired = false;
   latestBaseByServerId = new Map();
-  for (const timer of [pollTimer, fullRefreshTimer, onlineTimer]) {
-    if (timer != null) window.clearInterval(timer);
+  if (onlineTimer != null) {
+    window.clearInterval(onlineTimer);
   }
-  pollTimer = null;
-  fullRefreshTimer = null;
   onlineTimer = null;
   if (scrollIdleTimer != null) {
     window.clearTimeout(scrollIdleTimer);
@@ -1461,9 +1432,7 @@ function stopStore() {
   nodeInfoError = false;
   partialSites = false;
   started = false;
-  lastFullRefreshAt = 0;
-  bootstrapBackoffTicks = 0;
-  bootstrapSkipTicks = 0;
+  bootstrapAttempts = 0;
 }
 
 function subscribeSet(listeners: Set<Listener>, listener: Listener): () => void {

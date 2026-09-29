@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatBillingCycle, formatRenewalPrice } from "@/utils/billing";
 
-function inDays(days: number) {
-  return new Date(Date.now() + days * 86_400_000).toISOString();
-}
-
 describe("formatBillingCycle", () => {
   it("maps known day-counts to labels", () => {
     expect(formatBillingCycle(30)).toBe("月");
@@ -63,13 +59,12 @@ describe("formatRenewalPrice", () => {
     expect(formatRenewalPrice({ price: -1, currency: "¥", billing_cycle: 365 })).toBe("免费");
   });
 
-  it("renders zero prices as free only for long-term expiry", () => {
+  it("renders zero and -1 prices as free, null as unset", () => {
     expect(
       formatRenewalPrice({
-        price: 0,
+        price: -1,
         currency: "¥",
         billing_cycle: 365,
-        expired_at: inDays(40_000),
       }),
     ).toBe("免费");
     expect(
@@ -77,7 +72,13 @@ describe("formatRenewalPrice", () => {
         price: 0,
         currency: "¥",
         billing_cycle: 365,
-        expired_at: inDays(30),
+      }),
+    ).toBe("免费");
+    expect(
+      formatRenewalPrice({
+        price: null,
+        currency: "¥",
+        billing_cycle: 365,
       }),
     ).toBeNull();
   });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { usePreferences } from "@/hooks/usePreferences";
+import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
   applyBackgroundCache,
@@ -49,6 +50,7 @@ function useSaveDataPreference() {
 /** 图片由 body 伪元素首帧绘制；真实 DOM 只负责桌面视频及其播放生命周期。 */
 export function BackgroundLayer() {
   const { resolvedAppearance } = usePreferences();
+  const { data: publicConfig } = usePublicConfig();
   const {
     enableBackgroundImage,
     backgroundMediaType,
@@ -60,6 +62,10 @@ export function BackgroundLayer() {
     surfaceOpacity,
     isReady,
   } = useThemeSettings();
+
+  const siteBgImage = publicConfig?.backgroundImage?.trim() || "";
+  const effectiveBackgroundImage = backgroundImage || siteBgImage;
+  const effectiveEnableBackgroundImage = enableBackgroundImage || Boolean(siteBgImage);
   const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY, true);
   const hasCoarsePointer = useMediaQuery(COARSE_POINTER_QUERY, true);
   const reducedMotion = useMediaQuery(REDUCED_MOTION_QUERY, true);
@@ -74,7 +80,7 @@ export function BackgroundLayer() {
     [backgroundAlignment],
   );
   const videoUrl = resolveBackgroundVideoSource({
-    enabled: isReady && enableBackgroundImage,
+    enabled: isReady && effectiveEnableBackgroundImage,
     mediaType: backgroundMediaType,
     videoUrl: backgroundVideo,
     videoUrlDark: backgroundVideoDark,
@@ -93,9 +99,9 @@ export function BackgroundLayer() {
   const backgroundCache = useMemo(
     () =>
       buildBackgroundCache({
-        enableBackgroundImage,
+        enableBackgroundImage: effectiveEnableBackgroundImage,
         backgroundMediaType,
-        backgroundImage,
+        backgroundImage: effectiveBackgroundImage,
         backgroundImageMobile,
         backgroundVideo,
         backgroundVideoDark,
@@ -103,9 +109,9 @@ export function BackgroundLayer() {
         surfaceOpacity,
       }),
     [
-      enableBackgroundImage,
+      effectiveEnableBackgroundImage,
       backgroundMediaType,
-      backgroundImage,
+      effectiveBackgroundImage,
       backgroundImageMobile,
       backgroundVideo,
       backgroundVideoDark,

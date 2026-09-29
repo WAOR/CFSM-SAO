@@ -15,10 +15,10 @@ const OS_NAME_SPLIT_REGEX = /[\s/]+/;
  * 统一落到 os-unknown。URL 在渲染时才拼，模块初始化阶段不依赖 window。
  */
 function osIconUrl(file: string, stage: number) {
-  if (stage % 2 === 0) {
+  if (stage === 0) {
     return hostAssetUrl(`/os-icons/${file}`);
   }
-  return `/assets/os-icons/${file}`;
+  return hostAssetUrl("/os-icons/os-unknown.svg");
 }
 
 const OS_CONFIGS: OsConfig[] = [

@@ -148,8 +148,15 @@ export function createWsConnection(
     socket.send(JSON.stringify({ type: "subscribe", scope, ids }));
   }
 
+  const MAX_RECONNECT_ATTEMPTS = 15;
+
   function scheduleReconnect() {
     if (closed || reconnectTimer != null) return;
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn(`[LuminaPlus] WebSocket 达到最大重连次数限制 (${MAX_RECONNECT_ATTEMPTS})，停止自动重连`);
+      setAvailable(false);
+      return;
+    }
     const delay = Math.min(
       RECONNECT_MAX_DELAY_MS,
       RECONNECT_BASE_DELAY_MS * 2 ** Math.min(reconnectAttempts, 5),

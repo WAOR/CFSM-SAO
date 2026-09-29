@@ -241,6 +241,10 @@ export const SiteConfigSchema = z
     turnstile_login_enabled: z.boolean().default(false),
     turnstile_site_key: looseString.default(""),
     site_title: looseString.default(""),
+    background_image: looseString.nullish().transform((v) => v ?? ""),
+    custom_head: looseString.nullish().transform((v) => v ?? ""),
+    custom_body: looseString.nullish().transform((v) => v ?? ""),
+    default_language: looseString.nullish().transform((v) => v ?? ""),
     display_mode: looseString.default(""),
     /** 后台「外观设置 → 默认外观」：auto / dark / light。主题设置没写默认外观时拿它垫底。 */
     preferred_theme: looseString.default(""),
@@ -352,7 +356,7 @@ export interface NodeInfo {
   swap_total: number;
   disk_total: number;
   weight: number;
-  price: number;
+  price: number | null;
   billing_cycle: string;
   auto_renewal: boolean;
   currency: string;
@@ -671,6 +675,9 @@ export interface PublicConfig {
   turnstile_enabled: boolean;
   turnstile_site_key: string;
   verified: boolean;
+  backgroundImage?: string;
+  customHead?: string;
+  customBody?: string;
   theme_settings: Record<string, unknown>;
   sys: SysConfig;
   /** 后端下发的首页延迟窗口口径；缺席时前端从数据自推跨度。见 `SiteConfigSchema.latency_window`。 */

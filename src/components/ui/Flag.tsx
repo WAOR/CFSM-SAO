@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getDisplayRegionCode } from "@/utils/geo";
+import { hostAssetUrl } from "@/services/cfsm/config";
 
 interface FlagProps {
   region?: string | null;
@@ -43,11 +44,11 @@ export function Flag({ region, size = 14 }: FlagProps) {
     );
   }
 
-  // 纯正圆旗帜：直接使用本地打包的 Circle Flags 圆形矢量图标集，失败时兜底至 xx.svg（未知地区圆形图标）
+  // 旗帜走后端默认皮肤静态资源（/flags/<code>.svg），不打包进主题产物
   const src =
     failStage === 0
-      ? `/assets/flags/${flagCode.toLowerCase()}.svg`
-      : "/assets/flags/xx.svg";
+      ? hostAssetUrl(`/flags/${flagCode.toLowerCase()}.svg`)
+      : hostAssetUrl("/flags/xx.svg");
 
   return (
     <span
