@@ -744,6 +744,11 @@
   }
 }
 
+.instance-segmented.is-even {
+  display: flex;
+  width: 100%;
+}
+
 .instance-segmented.is-prominent.is-even button,
 .instance-segmented.is-even button {
   flex: 1 1 0;
@@ -1562,10 +1567,21 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.instance-segmented::-webkit-scrollbar {
+  display: none;
 }
 
 .instance-segmented.is-scrollable {
   overflow-x: auto;
+}
+
+.instance-segmented.is-even {
+  display: flex;
+  width: 100%;
 }
 
 .instance-segmented button,
