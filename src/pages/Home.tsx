@@ -1,16 +1,10 @@
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { NodeGrid } from "@/components/node/NodeGrid";
 import { FloatingControls } from "@/components/shell/FloatingControls";
-import { Spinner } from "@/components/ui/Spinner";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-
-import { safeLazy } from "@/utils/safeLazy";
-
-const ThemeManage = safeLazy(() =>
-  import("@/pages/ThemeManage").then((module) => ({ default: module.ThemeManage })),
-);
+import { ThemeManage } from "@/pages/ThemeManage";
 
 function HomeDashboard() {
   const [controlsExpanded, setControlsExpanded] = useState(false);
@@ -41,17 +35,7 @@ export function Home() {
 
   // 主题设置只写本机浏览器，不需要登录态；管理后台入口另行跳转 /admin#/admin。
   if (isThemeManageView) {
-    return (
-      <Suspense
-        fallback={
-          <div className="flex min-h-[60vh] items-center justify-center">
-            <Spinner size={24} />
-          </div>
-        }
-      >
-        <ThemeManage />
-      </Suspense>
-    );
+    return <ThemeManage />;
   }
 
   return <HomeDashboard />;

@@ -129,8 +129,7 @@ jobs:
             git -C "${workdir}" remote add origin "${remote}"
           fi
 
-          # 换成本次产物：删掉除 .git 外的所有旧文件，再整包拷入。
-          find "${workdir}" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          # 覆盖更新入口文件 index.html 并拷入新静态资源，保留 assets/ 中带 hash 的历史资源防止在线用户切路由时报 404
           cp -R dist/. "${workdir}/"
 
           cd "${workdir}"
