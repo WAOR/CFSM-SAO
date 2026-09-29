@@ -1,6 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
-import { BackgroundLayer } from "./BackgroundLayer";
 import { TurnstileGate } from "./TurnstileGate";
 import { SiteFooter } from "./SiteFooter";
 import { RealtimeSessionPrompt } from "./RealtimeSessionPrompt";
@@ -61,7 +60,6 @@ export function AppShell() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <BackgroundLayer />
       <TurnstileGate />
       {/* SAO 风格顶部导航 Bar 框架 */}
       <header className="mao-top-nav-bar">

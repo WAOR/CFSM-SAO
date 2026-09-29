@@ -1,14 +1,5 @@
 import type { ThemeSettings } from "@/types/cfsm";
 import {
-  DEFAULT_BACKGROUND_ALIGNMENT,
-  DEFAULT_BACKGROUND_VIDEO_URL,
-  DEFAULT_SURFACE_OPACITY,
-  normalizeBackgroundAlignment,
-  normalizeBackgroundUrl,
-  normalizeBackgroundVideoUrl,
-  normalizeSurfaceOpacity,
-} from "@/utils/background";
-import {
   DEFAULT_COST_RATE_API_URL,
   normalizeCostIgnoredNodes,
   normalizeCostPremiums,
@@ -44,7 +35,6 @@ import {
 
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
-export type BackgroundMediaType = "image" | "video";
 
 export interface ResolvedThemeSettings {
   defaultAppearance: Appearance;
@@ -93,14 +83,6 @@ export interface ResolvedThemeSettings {
   costIgnoredNodes: string[];
   costPremiums: Record<string, CostPremiumEntry>;
   costRateApiUrl: string;
-  enableBackgroundImage: boolean;
-  backgroundMediaType: BackgroundMediaType;
-  backgroundImage: string;
-  backgroundImageMobile: string;
-  backgroundVideo: string;
-  backgroundVideoDark: string;
-  backgroundAlignment: string;
-  surfaceOpacity: number;
 }
 
 export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
@@ -145,14 +127,6 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   costIgnoredNodes: [],
   costPremiums: {},
   costRateApiUrl: DEFAULT_COST_RATE_API_URL,
-  enableBackgroundImage: true,
-  backgroundMediaType: "image",
-  backgroundImage: "",
-  backgroundImageMobile: "",
-  backgroundVideo: DEFAULT_BACKGROUND_VIDEO_URL,
-  backgroundVideoDark: "",
-  backgroundAlignment: DEFAULT_BACKGROUND_ALIGNMENT,
-  surfaceOpacity: DEFAULT_SURFACE_OPACITY,
 };
 
 /** 首页默认分组：只收非空字符串，长度掐在合理范围内（分组名来自后端）。 */
@@ -299,14 +273,5 @@ export function normalizeThemeSettings(
     costIgnoredNodes: normalizeCostIgnoredNodes(settings?.costIgnoredNodes),
     costPremiums: normalizeCostPremiums(settings?.costPremiums),
     costRateApiUrl: normalizeCostRateApiUrl(settings?.costRateApiUrl),
-    enableBackgroundImage: enabledUnlessFalse(settings?.enableBackgroundImage),
-    backgroundMediaType: settings?.backgroundMediaType === "video" ? "video" : "image",
-    backgroundImage: normalizeBackgroundUrl(settings?.backgroundImage),
-    backgroundImageMobile: normalizeBackgroundUrl(settings?.backgroundImageMobile),
-    backgroundVideo:
-      normalizeBackgroundVideoUrl(settings?.backgroundVideo) || DEFAULT_BACKGROUND_VIDEO_URL,
-    backgroundVideoDark: normalizeBackgroundVideoUrl(settings?.backgroundVideoDark),
-    backgroundAlignment: normalizeBackgroundAlignment(settings?.backgroundAlignment),
-    surfaceOpacity: normalizeSurfaceOpacity(settings?.surfaceOpacity),
   };
 }

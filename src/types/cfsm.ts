@@ -530,13 +530,6 @@ export interface ThemeSettings {
     number | { amount?: number; paidCny?: number; acquiredAt?: string }
   >;
   costRateApiUrl?: string;
-  surfaceOpacity?: number;
-  enableBackgroundImage?: boolean;
-  backgroundMediaType?: "image" | "video";
-  backgroundImage?: string;
-  backgroundImageMobile?: string;
-  backgroundVideo?: string;
-  backgroundVideoDark?: string;
   showPriceForGuests?: boolean;
 }
 
