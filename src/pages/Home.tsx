@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { NodeGrid } from "@/components/node/NodeGrid";
 import { FloatingControls } from "@/components/shell/FloatingControls";
@@ -6,7 +6,9 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 
-const ThemeManage = lazy(() =>
+import { safeLazy } from "@/utils/safeLazy";
+
+const ThemeManage = safeLazy(() =>
   import("@/pages/ThemeManage").then((module) => ({ default: module.ThemeManage })),
 );
 

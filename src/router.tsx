@@ -1,18 +1,19 @@
 import { createHashRouter, Navigate, useParams } from "react-router-dom";
-import { lazy, Suspense, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { RouteErrorFallback } from "@/components/shell/ErrorBoundary";
 import { Spinner } from "@/components/ui/Spinner";
 import { loadAssetsPage } from "@/services/assetsPageLoader";
 import { Home } from "@/pages/Home";
+import { safeLazy } from "@/utils/safeLazy";
 
-const Instance = lazy(() =>
+const Instance = safeLazy(() =>
   import("@/pages/Instance").then((m) => ({ default: m.Instance })),
 );
-const Assets = lazy(() =>
+const Assets = safeLazy(() =>
   loadAssetsPage().then((m) => ({ default: m.Assets })),
 );
-const NotFound = lazy(() =>
+const NotFound = safeLazy(() =>
   import("@/pages/NotFound").then((m) => ({ default: m.NotFound })),
 );
 

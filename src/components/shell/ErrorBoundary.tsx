@@ -1,6 +1,7 @@
 import { Component, useEffect, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 import { readViewModeHint, useViewMode } from "@/hooks/useViewMode";
+import { isChunkLoadError } from "@/utils/safeLazy";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -74,14 +75,32 @@ function ErrorFallback({
   message?: string;
   diagnostics?: string;
 }) {
+  const isChunkError = isChunkLoadError(message);
+  const displayTitle = isChunkError ? "检测到主题新版本" : title;
+  const displayMessage = isChunkError
+    ? "主题静态资源已更新，正在载入最新版本... 若未自动刷新，请点击下方刷新按钮。"
+    : message || "可以刷新页面，或返回首页重新进入。";
+
+  useEffect(() => {
+    if (isChunkError && typeof window !== "undefined") {
+      const reloadKey = "cfsm_chunk_reload_boundary";
+      const now = Date.now();
+      const last = Number(sessionStorage.getItem(reloadKey) || "0");
+      if (now - last > 10_000) {
+        sessionStorage.setItem(reloadKey, String(now));
+        window.location.reload();
+      }
+    }
+  }, [isChunkError]);
+
   return (
     <div className="theme-error-shell">
       <section className="theme-error-card" role="alert">
         <div>
           <p className="theme-error-kicker">CFSM-Theme-SAO</p>
-          <h1 className="theme-error-title">{title}</h1>
+          <h1 className="theme-error-title">{displayTitle}</h1>
           <p className="theme-error-message">
-            {message || "可以刷新页面，或返回首页重新进入。"}
+            {displayMessage}
           </p>
         </div>
         {diagnostics && (
