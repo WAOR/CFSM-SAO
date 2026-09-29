@@ -7,7 +7,7 @@ export function SiteFooter() {
   const themeVersion = pkg.version ? `v${pkg.version}` : "";
 
   return (
-    <footer className="w-full py-6 mt-auto text-center select-none text-[12px] text-(--text-tertiary)">
+    <footer className="w-full pt-1 pb-3 mt-auto text-center select-none text-[12px] text-(--text-tertiary)">
       <div className="mx-auto flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4">
         <span>
           Powered by{" "}

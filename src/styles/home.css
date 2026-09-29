@@ -825,7 +825,7 @@
   border-radius: 22px;
   background: var(--surface-elev, #eaecf0);
   padding: clamp(16px, 2vw, 24px);
-  margin-bottom: 24px;
+  margin-bottom: 8px;
   box-shadow: none;
   position: relative;
   z-index: 1;
