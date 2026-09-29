@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { hostAssetUrl } from "@/services/cfsm/config";
 import { getDisplayRegionCode } from "@/utils/geo";
 
 interface FlagProps {
@@ -15,9 +14,9 @@ export function Flag({ region, size = 14 }: FlagProps) {
     return (
       <span
         aria-hidden
-        className="inline-block rounded-[3px] shrink-0"
+        className="inline-block rounded-full shrink-0"
         style={{
-          width: size + 8,
+          width: size,
           height: size,
           background: "var(--border-subtle)",
         }}
@@ -33,10 +32,10 @@ export function Flag({ region, size = 14 }: FlagProps) {
       <span
         role="img"
         aria-label={alt}
-        className="inline-block rounded-[3px] shrink-0"
+        className="inline-block rounded-full shrink-0"
         title={alt}
         style={{
-          width: size + 8,
+          width: size,
           height: size,
           background: "var(--border-subtle)",
         }}
@@ -44,17 +43,17 @@ export function Flag({ region, size = 14 }: FlagProps) {
     );
   }
 
-  // 首选用后端官方提供的 /flags/xx.svg，失败时回退到主题 assets/flags/XX.svg
+  // 纯正圆旗帜：直接使用本地打包的 Circle Flags 圆形矢量图标集，失败时兜底至 xx.svg（未知地区圆形图标）
   const src =
     failStage === 0
-      ? hostAssetUrl(`/flags/${flagCode.toLowerCase()}.svg`)
-      : `/assets/flags/${flagCode}.svg`;
+      ? `/assets/flags/${flagCode.toLowerCase()}.svg`
+      : "/assets/flags/xx.svg";
 
   return (
     <span
-      className="inline-flex items-center shrink-0"
+      className="inline-flex items-center justify-center shrink-0 rounded-full overflow-hidden select-none"
       style={{
-        width: size + 8,
+        width: size,
         height: size,
         lineHeight: 0,
       }}
@@ -63,10 +62,11 @@ export function Flag({ region, size = 14 }: FlagProps) {
         src={src}
         alt={alt}
         loading="lazy"
+        className="w-full h-full rounded-full pointer-events-none"
         style={{
           width: "100%",
           height: "100%",
-          objectFit: "contain",
+          objectFit: "cover",
           display: "block",
         }}
         onError={() => setFailStage((prev) => prev + 1)}
@@ -74,3 +74,4 @@ export function Flag({ region, size = 14 }: FlagProps) {
     </span>
   );
 }
+
