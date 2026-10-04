@@ -352,9 +352,12 @@ export function ClusterHeatmap({
       </div>
 
       {/* GitHub 风格的规整机架方块矩阵（横竖间距等宽，定高无痕滚动） */}
-      <div ref={wrapRef} className="mao-heatmap-wrap">
+      <div
+        ref={wrapRef}
+        className={`mao-heatmap-wrap${bootPhase !== "idle" ? " is-booting" : ""}`}
+      >
         <div
-          className="mao-heatmap-grid"
+          className={`mao-heatmap-grid${bootPhase !== "idle" ? " is-booting" : ""}`}
           role="grid"
           aria-label="服务器集群机架热力矩阵"
         >

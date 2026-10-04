@@ -761,7 +761,7 @@
   gap: 3.5px;
   width: 100%;
   box-sizing: border-box;
-  padding: 3px 4px;
+  padding: 5px 6px;
   max-height: 145px;
   /* 独占版面时容纳 5~6 行饱满 GitHub 大方块（100-120台），高度充裕自由 */
   overflow-y: auto;
@@ -769,6 +769,12 @@
   scrollbar-width: none !important;
   /* Firefox 彻底隐藏滚动条 */
   -ms-overflow-style: none !important;
+}
+
+/* 开屏动效期间取消滚动裁剪容器，确保文字与光束发散光晕完整舒展不被横线或边框截断 */
+.mao-heatmap-grid.is-booting,
+.mao-heatmap-wrap.is-booting .mao-heatmap-grid {
+  overflow: visible !important;
 }
 
 .mao-heatmap-grid::-webkit-scrollbar {
@@ -867,14 +873,14 @@
 
 .mao-heatmap-cell.is-empty-slot {
   background: rgba(0, 0, 0, 0.035);
-  border: 1px dashed rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
   cursor: default;
   opacity: 0.65;
 }
 
 :root[data-appearance="dark"] .mao-heatmap-cell.is-empty-slot {
   background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 /* SAO 正体开屏点阵动效：统一重置所有槽位与节点的底色、边框、透明度与动画，杜绝深浅不一 */
