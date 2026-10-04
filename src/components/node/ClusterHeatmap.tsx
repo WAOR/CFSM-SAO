@@ -236,6 +236,7 @@ export function ClusterHeatmap({
 
   const lastTouchTimeRef = useRef<number>(0);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [tooltipTrigger, setTooltipTrigger] = useState<"mouse" | "touch">("mouse");
 
   // 点击外部区域时自动关闭当前展开的移动端悬浮卡
   useEffect(() => {
@@ -329,6 +330,7 @@ export function ClusterHeatmap({
       (typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches);
 
     if (isTouchInteraction) {
+      setTooltipTrigger("touch");
       // 移动端：若当前尚未展示该方块的悬浮卡，第一次点击先展开悬浮卡
       if (activeKey !== key) {
         setActiveKey(key);
@@ -352,6 +354,7 @@ export function ClusterHeatmap({
   ) => {
     // 忽略移动端轻触所合成触发的 mouseenter
     if (Date.now() - lastTouchTimeRef.current < 500) return;
+    setTooltipTrigger("mouse");
     showNodeTooltip(e.currentTarget, node);
     setActiveKey(`node-${node.uuid}`);
   };
@@ -361,6 +364,7 @@ export function ClusterHeatmap({
     slot: MockSlot,
   ) => {
     if (Date.now() - lastTouchTimeRef.current < 500) return;
+    setTooltipTrigger("mouse");
     showMockSlotTooltip(e.currentTarget, slot);
     setActiveKey(`mock-${slot.slotNumber}`);
   };
@@ -375,6 +379,7 @@ export function ClusterHeatmap({
       (typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches);
 
     if (isTouchInteraction) {
+      setTooltipTrigger("touch");
       if (activeKey === key) {
         setActiveKey(null);
         setHoverInfo(null);
@@ -390,6 +395,7 @@ export function ClusterHeatmap({
     slotIndex: number,
   ) => {
     if (Date.now() - lastTouchTimeRef.current < 500) return;
+    setTooltipTrigger("mouse");
     showEmptySlotTooltip(e.currentTarget, slotIndex);
     setActiveKey(`empty-${slotIndex}`);
   };
@@ -404,6 +410,7 @@ export function ClusterHeatmap({
       (typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches);
 
     if (isTouchInteraction) {
+      setTooltipTrigger("touch");
       if (activeKey === key) {
         setActiveKey(null);
         setHoverInfo(null);
@@ -622,7 +629,7 @@ export function ClusterHeatmap({
                 )}
                 <div className="mao-tooltip-tip">
                   <span>
-                    {activeKey?.startsWith("node-")
+                    {tooltipTrigger === "touch"
                       ? "再次点击方块直达节点卡片"
                       : "点击方块直达节点卡片"}
                   </span>
