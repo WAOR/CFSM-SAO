@@ -57,6 +57,36 @@ const DARK_DEPTH_CACHE_KEY = "cfsm-luminaplus:dark-depth";
 const HEX = /^#[0-9a-f]{6}$/;
 /** 本机覆盖里「这个颜色不用站点色、回到主题默认色」的写法。 */
 const UNSET_COLOR = "";
+
+export const DEFAULT_METRIC_COLORS: Record<"light" | "dark", Record<MetricColorKey, string>> = {
+  light: {
+    cpu: "#3b82f6",
+    memory: "#8b5cf6",
+    disk: "#e97b35",
+    load: "#ec4899",
+    swap: "#6366f1",
+    speedIdle: "#3aa76a",
+    speedLow: "#d9992b",
+    speedHigh: "#e07a35",
+    speedMax: "#d6463d",
+    trafficUp: "#3b82f6",
+    trafficDown: "#2f9e65",
+  },
+  dark: {
+    cpu: "#3b82f6",
+    memory: "#8b5cf6",
+    disk: "#f97316",
+    load: "#ec4899",
+    swap: "#6366f1",
+    speedIdle: "#10b981",
+    speedLow: "#f59e0b",
+    speedHigh: "#f97316",
+    speedMax: "#ef4444",
+    trafficUp: "#3b82f6",
+    trafficDown: "#10b981",
+  },
+};
+
 export const DEFAULT_DARK_DEPTH = 0;
 
 export interface PaletteDraft {
@@ -359,13 +389,11 @@ export function useMetricColorsEditor({ syncsToSite = false }: { syncsToSite?: b
     [commit],
   );
 
-  // 「恢复」= 跟随站点预设的这个颜色；站点没设（或登录站长在改站点配色）才回到主题默认色。
+  // 「恢复」= 移除该指标的自定义色，彻底回到主题默认色
   const resetColor = useCallback(
     (key: MetricColorKey) => {
       const colors = { ...draftRef.current.colors };
-      const siteColor = syncsToSiteRef.current ? undefined : sitePaletteRef.current.colors[key];
-      if (siteColor) colors[key] = siteColor;
-      else delete colors[key];
+      delete colors[key];
       commit({ ...draftRef.current, colors });
     },
     [commit],
@@ -378,14 +406,9 @@ export function useMetricColorsEditor({ syncsToSite = false }: { syncsToSite?: b
     [commit],
   );
 
-  // 「全部重置」= 丢掉本机覆盖、整份跟随站点预设（配色与暗色深度）；登录站长是整份回到主题默认。
+  // 「全部重置」= 清空所有自定义指标色，彻底回到主题默认色
   const resetAll = useCallback(() => {
-    if (syncsToSiteRef.current) {
-      commit({ colors: {}, darkDepth: DEFAULT_DARK_DEPTH });
-      return;
-    }
-    const site = sitePaletteRef.current;
-    commit({ colors: { ...site.colors }, darkDepth: site.darkDepth });
+    commit({ colors: {}, darkDepth: DEFAULT_DARK_DEPTH });
   }, [commit]);
 
   return {
