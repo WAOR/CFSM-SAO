@@ -86,4 +86,37 @@ describe("ClusterHeatmap Component", () => {
     expect(html).toContain("高吞吐");
     expect(html).toContain("初号机紫");
   });
+
+  it("fills empty slots with simulated data when mockFill is true", () => {
+    const nodes = [createMockNode({ uuid: "n-1", online: true })];
+
+    const htmlNormal = renderToStaticMarkup(
+      <ClusterHeatmap
+        nodes={nodes}
+        onlinePct={100}
+        onlineNodes={1}
+        offlineNodes={0}
+        totalNodes={1}
+        mockFill={false}
+      />,
+    );
+    expect(htmlNormal).toContain("is-empty-slot");
+    expect(htmlNormal).not.toContain("is-mock-cell");
+    expect(htmlNormal).toContain("机架 100 槽");
+
+    const htmlMock = renderToStaticMarkup(
+      <ClusterHeatmap
+        nodes={nodes}
+        onlinePct={100}
+        onlineNodes={1}
+        offlineNodes={0}
+        totalNodes={1}
+        mockFill={true}
+      />,
+    );
+    expect(htmlMock).not.toContain("is-empty-slot");
+    expect(htmlMock).toContain("is-mock-cell");
+    expect(htmlMock).toContain("机架模拟槽位 #");
+    expect(htmlMock).toContain("机架 100 槽");
+  });
 });

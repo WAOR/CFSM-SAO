@@ -282,6 +282,8 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     mobileNodeViewMode: settings.mobileNodeViewMode,
     clusterOverviewMode: settings.clusterOverviewMode,
     matrixColorTheme: settings.matrixColorTheme,
+    matrixMockFill: settings.matrixMockFill,
+    matrixBootAnimation: settings.matrixBootAnimation,
     homepagePingBindings: settings.homepagePingBindings,
     homepageDefaultPingTaskId: settings.homepageDefaultPingTaskId,
     enableHomepageMultiPing: settings.enableHomepageMultiPing,
@@ -1560,84 +1562,140 @@ export function ThemeManage() {
                     );
                   })}
                 </div>
+              </InstancePanel>
 
-                {/* 矩阵配色风格切换（经典标准 vs EVA 初号机） */}
-                <div className="mt-4 pt-3.5 border-t border-(--hairline)">
-                  <div className="flex items-center justify-between gap-3 mb-2.5">
-                    <div>
-                      <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
-                        <span>方格矩阵配色风格</span>
-                        {(draft.matrixColorTheme ?? "default") === "eva" ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                            UNIT-01
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
-                            CLASSIC
-                          </span>
-                        )}
+              {/* 当选择「方格矩阵」展示模式时，在下方动态呈现专属方格矩阵设置卡 */}
+              {draft.clusterOverviewMode === "nodes" && (
+                <InstancePanel
+                  id="set-matrix-settings"
+                  kicker="矩阵"
+                  title="方格矩阵设置"
+                  aside={<LayoutGrid size={16} />}
+                >
+                  {/* 1. 矩阵配色风格切换（经典标准 vs EVA 初号机） */}
+                  <div>
+                    <div className="flex items-center justify-between gap-3 mb-2.5">
+                      <div>
+                        <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
+                          <span>方格矩阵配色风格</span>
+                          {(draft.matrixColorTheme ?? "default") === "eva" ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                              UNIT-01
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                              CLASSIC
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-(--text-muted) mt-0.5">
+                          定制方块热力矩阵的主题色阶。EVA 初号机版采用标志性机体紫、荧光绿、警告橙与暴走红。
+                        </p>
                       </div>
-                      <p className="text-[11px] text-(--text-muted) mt-0.5">
-                        定制方块热力矩阵的主题色阶。EVA 初号机版采用标志性机体紫、荧光绿、警告橙与暴走红。
-                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => patch("matrixColorTheme", "default")}
+                        data-active={(draft.matrixColorTheme ?? "default") === "default" ? "true" : "false"}
+                        aria-pressed={(draft.matrixColorTheme ?? "default") === "default"}
+                        className="setting-color-theme-card"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#34d399]" />
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#10b981]" />
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#f59e0b]" />
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-(--text-primary) block">经典标准</span>
+                            <span className="text-[10px] text-(--text-muted) block">绿 · 橙 · 红 常规监控色阶</span>
+                          </div>
+                        </div>
+                        <div className="setting-color-theme-radio" aria-hidden="true">
+                          {(draft.matrixColorTheme ?? "default") === "default" && (
+                            <div className="setting-color-theme-radio-dot" />
+                          )}
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => patch("matrixColorTheme", "eva")}
+                        data-active={(draft.matrixColorTheme ?? "default") === "eva" ? "true" : "false"}
+                        aria-pressed={(draft.matrixColorTheme ?? "default") === "eva"}
+                        className="setting-color-theme-card is-eva"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#7c3aed]" />
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#00ff66]" />
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#f97316]" />
+                            <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-(--text-primary) block">EVA 初号机</span>
+                            <span className="text-[10px] text-(--text-muted) block">机体紫 · 荧光绿 · 暴走红</span>
+                          </div>
+                        </div>
+                        <div className="setting-color-theme-radio" aria-hidden="true">
+                          {(draft.matrixColorTheme ?? "default") === "eva" && (
+                            <div className="setting-color-theme-radio-dot" />
+                          )}
+                        </div>
+                      </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => patch("matrixColorTheme", "default")}
-                      data-active={(draft.matrixColorTheme ?? "default") === "default" ? "true" : "false"}
-                      aria-pressed={(draft.matrixColorTheme ?? "default") === "default"}
-                      className="setting-color-theme-card"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#34d399]" />
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#10b981]" />
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#f59e0b]" />
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
+                  {/* 2. SAO 主题开场动画 */}
+                  <div className="mt-4 pt-3.5 border-t border-(--hairline)">
+                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
+                          <span>SAO 主题开场动画</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
+                            BOOT INTRO
+                          </span>
                         </div>
-                        <div className="min-w-0">
-                          <span className="text-xs font-medium text-(--text-primary) block">经典标准</span>
-                          <span className="text-[10px] text-(--text-muted) block">绿 · 橙 · 红 常规监控色阶</span>
-                        </div>
+                        <p className="text-[11px] text-(--text-muted) mt-0.5">
+                          开启后，进入首页时方格矩阵将播放光束横扫显现正体 SAO 点阵文字并呼吸三下后切入实时集群数据；关闭后直接呈现真实节点。
+                        </p>
                       </div>
-                      <div className="setting-color-theme-radio" aria-hidden="true">
-                        {(draft.matrixColorTheme ?? "default") === "default" && (
-                          <div className="setting-color-theme-radio-dot" />
-                        )}
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => patch("matrixColorTheme", "eva")}
-                      data-active={(draft.matrixColorTheme ?? "default") === "eva" ? "true" : "false"}
-                      aria-pressed={(draft.matrixColorTheme ?? "default") === "eva"}
-                      className="setting-color-theme-card is-eva"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#7c3aed]" />
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#00ff66]" />
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#f97316]" />
-                          <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-xs font-medium text-(--text-primary) block">EVA 初号机</span>
-                          <span className="text-[10px] text-(--text-muted) block">机体紫 · 荧光绿 · 暴走红</span>
-                        </div>
-                      </div>
-                      <div className="setting-color-theme-radio" aria-hidden="true">
-                        {(draft.matrixColorTheme ?? "default") === "eva" && (
-                          <div className="setting-color-theme-radio-dot" />
-                        )}
-                      </div>
-                    </button>
+                      <input
+                        type="checkbox"
+                        checked={draft.matrixBootAnimation ?? true}
+                        onChange={(event) => patch("matrixBootAnimation", event.target.checked)}
+                        className="h-4 w-4 shrink-0 accent-(--accent-500)"
+                      />
+                    </label>
                   </div>
-                </div>
-              </InstancePanel>
+
+                  {/* 3. 模拟数据填充空闲机位插槽 */}
+                  <div className="mt-4 pt-3.5 border-t border-(--hairline)">
+                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
+                          <span>模拟数据填充空闲机位插槽</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-600 dark:text-blue-300 border border-blue-500/30">
+                            MOCK FILL
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-(--text-muted) mt-0.5">
+                          开启后，机架方格矩阵中未接入服务器的闲置插槽将使用随机比例的「空闲待机」与「活跃传输」模拟数据填满。每次刷新页面将自动变换空闲待机和活跃传输槽位位置。
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={draft.matrixMockFill ?? false}
+                        onChange={(event) => patch("matrixMockFill", event.target.checked)}
+                        className="h-4 w-4 shrink-0 accent-(--accent-500)"
+                      />
+                    </label>
+                  </div>
+                </InstancePanel>
+              )}
 
               <InstancePanel
                 id="set-home-sort"

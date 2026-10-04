@@ -122,4 +122,17 @@ describe("站点预设与本机覆盖的合并口径", () => {
     expect(normalizeThemeSettings({ matrixColorTheme: "eva" }).matrixColorTheme).toBe("eva");
     expect(normalizeThemeSettings({ matrixColorTheme: "invalid" as never }).matrixColorTheme).toBe("default");
   });
+
+  it("normalizes matrixMockFill correctly", () => {
+    expect(normalizeThemeSettings({ matrixMockFill: true }).matrixMockFill).toBe(true);
+    expect(normalizeThemeSettings({ matrixMockFill: false }).matrixMockFill).toBe(false);
+    expect(normalizeThemeSettings({ matrixMockFill: "yes" as never }).matrixMockFill).toBe(false);
+    expect(normalizeThemeSettings({}).matrixMockFill).toBe(false);
+  });
+
+  it("normalizes matrixBootAnimation correctly", () => {
+    expect(normalizeThemeSettings({ matrixBootAnimation: true }).matrixBootAnimation).toBe(true);
+    expect(normalizeThemeSettings({ matrixBootAnimation: false }).matrixBootAnimation).toBe(false);
+    expect(normalizeThemeSettings({}).matrixBootAnimation).toBe(true);
+  });
 });

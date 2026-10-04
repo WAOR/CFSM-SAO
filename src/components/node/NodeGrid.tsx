@@ -227,6 +227,8 @@ function HomeOverviewCards({
   nameByUuid,
   clusterOverviewMode = "classic",
   matrixColorTheme = "default",
+  matrixMockFill = false,
+  matrixBootAnimation = true,
 }: {
   overview: HomeOverview;
   costSummary: { remainingCny: number; totalOriginalPriceCny?: number } | null;
@@ -246,6 +248,8 @@ function HomeOverviewCards({
   nameByUuid: Map<string, string>;
   clusterOverviewMode?: ClusterOverviewMode;
   matrixColorTheme?: MatrixColorTheme;
+  matrixMockFill?: boolean;
+  matrixBootAnimation?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [renewalPopoverOpen, setRenewalPopoverOpen] = useState(false);
@@ -664,6 +668,8 @@ function HomeOverviewCards({
                   offlineNodes={overview.offlineNodes}
                   totalNodes={overview.totalNodes}
                   colorTheme={matrixColorTheme}
+                  mockFill={matrixMockFill}
+                  bootAnimation={matrixBootAnimation}
                 />
               </div>
             </div>
@@ -1106,6 +1112,8 @@ export function NodeGrid() {
           nameByUuid={nameByUuid}
           clusterOverviewMode={themeSettings.clusterOverviewMode}
           matrixColorTheme={themeSettings.matrixColorTheme}
+          matrixMockFill={themeSettings.matrixMockFill}
+          matrixBootAnimation={themeSettings.matrixBootAnimation}
         />
       )}
     </>

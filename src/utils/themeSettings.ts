@@ -44,6 +44,8 @@ export interface ResolvedThemeSettings {
   mobileNodeViewMode: NodeViewMode;
   clusterOverviewMode: ClusterOverviewMode;
   matrixColorTheme: MatrixColorTheme;
+  matrixMockFill: boolean;
+  matrixBootAnimation: boolean;
   enableAdminButton: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
@@ -95,6 +97,8 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   mobileNodeViewMode: "compact",
   clusterOverviewMode: "classic",
   matrixColorTheme: "default",
+  matrixMockFill: false,
+  matrixBootAnimation: true,
   enableAdminButton: true,
   showPingChart: true,
   homepagePingBindings: {},
@@ -224,6 +228,14 @@ function normalizeMatrixColorTheme(
   return isMatrixColorTheme(value) ? value : fallback;
 }
 
+function normalizeMatrixMockFill(value: unknown): boolean {
+  return value === true;
+}
+
+export function normalizeMatrixBootAnimation(value: unknown): boolean {
+  return value !== false;
+}
+
 function enabledUnlessFalse(value: unknown) {
   return value !== false;
 }
@@ -264,6 +276,8 @@ export function normalizeThemeSettings(
     ),
     clusterOverviewMode: normalizeClusterOverviewMode(settings?.clusterOverviewMode),
     matrixColorTheme: normalizeMatrixColorTheme(settings?.matrixColorTheme),
+    matrixMockFill: normalizeMatrixMockFill(settings?.matrixMockFill),
+    matrixBootAnimation: normalizeMatrixBootAnimation(settings?.matrixBootAnimation),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),

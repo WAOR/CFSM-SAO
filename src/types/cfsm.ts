@@ -513,6 +513,10 @@ export interface ThemeSettings {
   clusterOverviewMode?: "classic" | "nodes";
   /** 机架方格矩阵配色风格：经典标准绿橙红（default）、EVA 初号机紫绿橙红（eva）。 */
   matrixColorTheme?: "default" | "eva";
+  /** 模拟数据填充空闲机位插槽。 */
+  matrixMockFill?: boolean;
+  /** 是否启用方格矩阵 SAO 主题开场动画（默认开启）。 */
+  matrixBootAnimation?: boolean;
   homeGroupOrder?: string[];
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic" | "price";

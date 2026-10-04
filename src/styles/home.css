@@ -539,8 +539,6 @@
 
 .mao-progress-container[data-palette="eva"] .mao-status-pill.is-healthy .mao-status-dot {
   background: #00ff66;
-  box-shadow: 0 0 6px rgba(0, 255, 102, 0.7);
-  animation: bandwidth-pulse-eva-1 2.5s ease-in-out infinite;
 }
 
 .mao-progress-container[data-palette="eva"] .mao-status-pill.is-warning {
@@ -557,8 +555,6 @@
 
 .mao-progress-container[data-palette="eva"] .mao-status-pill.is-warning .mao-status-dot {
   background: #f97316;
-  box-shadow: 0 0 6px rgba(249, 115, 22, 0.7);
-  animation: bandwidth-pulse-eva-2 2s ease-in-out infinite;
 }
 
 .mao-status-dot {
@@ -879,6 +875,125 @@
 :root[data-appearance="dark"] .mao-heatmap-cell.is-empty-slot {
   background: rgba(255, 255, 255, 0.035);
   border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* SAO 正体开屏点阵动效：统一重置所有槽位与节点的底色、边框、透明度与动画，杜绝深浅不一 */
+.mao-heatmap-cell.is-sao-pixel,
+.mao-heatmap-cell.is-sao-bg,
+.mao-heatmap-cell.is-sao-unlit,
+.mao-heatmap-cell.is-sao-beam {
+  border-style: solid !important;
+  border-width: 1px !important;
+  animation: none !important;
+  transform: none !important;
+}
+
+.mao-heatmap-cell.is-sao-pixel::after,
+.mao-heatmap-cell.is-sao-bg::after,
+.mao-heatmap-cell.is-sao-unlit::after,
+.mao-heatmap-cell.is-sao-beam::after {
+  display: none !important;
+}
+
+/* 1. 光束横扫列 */
+.mao-heatmap-cell.is-sao-beam {
+  background: #ffffff !important;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 5px #ff9600 !important;
+  border-color: #ffffff !important;
+  opacity: 1 !important;
+  transform: scale(1.08) !important;
+  transition: transform 60ms ease;
+  z-index: 5;
+}
+
+:root[data-palette="eva"] .mao-heatmap-cell.is-sao-beam,
+.mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-beam,
+.mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-beam {
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 6px #7c3aed !important;
+}
+
+/* 2. 正体 SAO 文字像素：统一纯色、完全不透明（opacity: 1）、无虚线、高亮光晕 */
+.mao-heatmap-cell.is-sao-pixel {
+  background: #ff9600 !important;
+  box-shadow: 0 0 9px rgba(255, 150, 0, 0.65), 0 0 2px rgba(255, 220, 100, 0.95) !important;
+  border-color: rgba(255, 220, 100, 0.9) !important;
+  opacity: 1 !important;
+  z-index: 2;
+}
+
+.mao-heatmap-cell.is-sao-pixel.is-sao-glow {
+  animation: sao-boot-pulse 0.6s ease-in-out infinite !important;
+}
+
+/* 3. EVA 初号机配色：文字采用初号机标志性紫色 (#7c3aed)，配以初号机紫光晕与荧光绿微光边框 */
+:root[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel,
+.mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel,
+.mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel {
+  background: #7c3aed !important;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.85), 0 0 3px #00ff66 !important;
+  border-color: #c084fc !important;
+  opacity: 1 !important;
+}
+
+:root[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel.is-sao-glow,
+.mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel.is-sao-glow,
+.mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel.is-sao-glow {
+  animation: sao-boot-pulse-eva 0.6s ease-in-out infinite !important;
+}
+
+/* 4. 背景已扫过非文字像素：统统清除离线红光/高载黄光/虚线干扰，呈现干净统一的暗调底色 */
+.mao-heatmap-cell.is-sao-bg {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.05) !important;
+  box-shadow: none !important;
+  opacity: 0.28 !important;
+}
+
+:root[data-appearance="dark"] .mao-heatmap-cell.is-sao-bg {
+  background: rgba(255, 255, 255, 0.025) !important;
+  border-color: rgba(255, 255, 255, 0.035) !important;
+  opacity: 0.22 !important;
+}
+
+/* 5. 未被光束扫到的区域：暗淡静止，不透光、无阴影、不闪烁 */
+.mao-heatmap-cell.is-sao-unlit {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  opacity: 0.16 !important;
+}
+
+:root[data-appearance="dark"] .mao-heatmap-cell.is-sao-unlit {
+  background: rgba(255, 255, 255, 0.015) !important;
+  border-color: transparent !important;
+  opacity: 0.12 !important;
+}
+
+/* 6. 平滑溶解过渡 */
+.mao-heatmap-cell.is-sao-dissolve {
+  transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes sao-boot-pulse {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 6px rgba(255, 150, 0, 0.5);
+  }
+  50% {
+    filter: brightness(1.28);
+    box-shadow: 0 0 15px rgba(255, 165, 0, 0.95), 0 0 3px rgba(255, 240, 180, 0.95);
+  }
+}
+
+@keyframes sao-boot-pulse-eva {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 6px rgba(124, 58, 237, 0.6);
+  }
+  50% {
+    filter: brightness(1.3);
+    box-shadow: 0 0 16px rgba(168, 85, 247, 0.95), 0 0 4px #00ff66;
+  }
 }
 
 /* 选中高亮状态：仅方块微亮并显现外置外框 */
@@ -2370,8 +2485,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .overview-card-rating.is-bandwidth-badge .mao-status-dot,
-  .mao-progress-container[data-palette="eva"] .mao-status-pill .mao-status-dot {
+  .overview-card-rating.is-bandwidth-badge .mao-status-dot {
     animation: none;
   }
 }
