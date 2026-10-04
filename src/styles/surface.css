@@ -851,6 +851,189 @@
   line-height: 1.55;
 }
 
+/* 设置项卡片式选择网格（2个选项平分整行，撑满面板版面） */
+.setting-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .setting-mode-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.setting-mode-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  text-align: left;
+  padding: 14px 16px 16px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  min-height: 96px;
+  outline: none;
+}
+
+.setting-mode-card:hover {
+  border-color: color-mix(in srgb, var(--accent-500) 45%, var(--hairline));
+  background: color-mix(in srgb, var(--accent-500) 4%, var(--surface-sunken));
+  transform: translateY(-1px);
+}
+
+.setting-mode-card[data-active="true"] {
+  background: color-mix(in srgb, var(--accent-500) 10%, var(--surface-sunken));
+  border-color: var(--accent-500);
+  box-shadow: 0 0 0 1px var(--accent-500), 0 4px 12px -2px color-mix(in srgb, var(--accent-500) 25%, transparent);
+}
+
+.setting-mode-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.setting-mode-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.setting-mode-card[data-active="true"] .setting-mode-card-title {
+  color: var(--accent-500);
+}
+
+.setting-mode-card-radio {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 160ms ease;
+  background: var(--surface-sunken);
+}
+
+.setting-mode-card:hover .setting-mode-card-radio {
+  border-color: color-mix(in srgb, var(--accent-500) 50%, var(--hairline));
+}
+
+.setting-mode-card[data-active="true"] .setting-mode-card-radio {
+  border-color: var(--accent-500);
+  background: var(--accent-500);
+}
+
+.setting-mode-card-radio-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.setting-mode-card[data-active="true"] .setting-mode-card-radio-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.setting-mode-card-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.setting-mode-card[data-active="true"] .setting-mode-card-desc {
+  color: var(--text-secondary);
+}
+
+/* 矩阵配色风格切换卡片（清晰可见的边框与激活高亮，浅色/深色模式全面适配） */
+.setting-color-theme-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-sunken);
+  border: 1.5px solid var(--border-color);
+  cursor: pointer;
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  outline: none;
+  width: 100%;
+}
+
+:root:not([data-appearance="dark"]) .setting-color-theme-card {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: #f8fafc;
+}
+
+.setting-color-theme-card:hover {
+  border-color: color-mix(in srgb, var(--accent-500) 50%, var(--border-color));
+  transform: translateY(-1px);
+}
+
+.setting-color-theme-card[data-active="true"] {
+  border-color: var(--accent-500);
+  background: color-mix(in srgb, var(--accent-500) 10%, var(--surface-sunken));
+  box-shadow: 0 0 0 1px var(--accent-500), 0 3px 10px -2px color-mix(in srgb, var(--accent-500) 25%, transparent);
+}
+
+.setting-color-theme-card.is-eva[data-active="true"] {
+  border-color: #8b5cf6;
+  background: color-mix(in srgb, #7c3aed 10%, var(--surface-sunken));
+  box-shadow: 0 0 0 1px #8b5cf6, 0 3px 12px -2px rgba(124, 58, 237, 0.35);
+}
+
+.setting-color-theme-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 140ms ease;
+}
+
+:root[data-appearance="dark"] .setting-color-theme-radio {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.setting-color-theme-card[data-active="true"] .setting-color-theme-radio {
+  border-color: var(--accent-500);
+  background: var(--accent-500);
+}
+
+.setting-color-theme-card.is-eva[data-active="true"] .setting-color-theme-radio {
+  border-color: #8b5cf6;
+  background: #7c3aed;
+}
+
+.setting-color-theme-radio-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
 .theme-manage-button {
   display: inline-flex;
   align-items: center;

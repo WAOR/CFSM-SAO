@@ -24,6 +24,7 @@ import {
   Grid3x3,
   LayoutGrid,
   LayoutTemplate,
+  Layers,
   List,
   ListFilter,
   Moon,
@@ -279,6 +280,8 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     defaultAppearance: settings.defaultAppearance,
     desktopNodeViewMode: settings.desktopNodeViewMode,
     mobileNodeViewMode: settings.mobileNodeViewMode,
+    clusterOverviewMode: settings.clusterOverviewMode,
+    matrixColorTheme: settings.matrixColorTheme,
     homepagePingBindings: settings.homepagePingBindings,
     homepageDefaultPingTaskId: settings.homepageDefaultPingTaskId,
     enableHomepageMultiPing: settings.enableHomepageMultiPing,
@@ -1506,6 +1509,133 @@ export function ThemeManage() {
                   <p className="mt-1.5 text-xs text-(--text-muted)">
                     自定义首页顶部问候语显示的专属昵称（例如 <code>jerry</code>）。留空时将自动同步面板后端配置的真实用户名。
                   </p>
+                </div>
+              </InstancePanel>
+
+              <InstancePanel
+                id="set-cluster-overview-mode"
+                kicker="集群"
+                title="集群状态展示模式"
+                aside={<Activity size={16} />}
+              >
+                <p className="text-xs text-(--text-muted) mb-3 leading-relaxed">
+                  设置首页右侧「集群状态」核心卡片的默认展示形式。访客在首页亦可通过卡片右上角按钮自由手动切换。
+                </p>
+                <div className="setting-mode-cards">
+                  {[
+                    {
+                      value: "classic" as const,
+                      label: "经典布局",
+                      desc: "上方展示节点在线率与状态条，下方展示实时上下行带宽双曲线图，适用于全面综合监控。",
+                      icon: Layers,
+                    },
+                    {
+                      value: "nodes" as const,
+                      label: "方格矩阵",
+                      desc: "整屏展示机架式方格矩阵，专注排查每台机器的负载与健康状态，适用于节点排查与大集群。",
+                      icon: LayoutGrid,
+                    },
+                  ].map(({ value, label, desc, icon: ModeIcon }) => {
+                    const isActive = (draft.clusterOverviewMode ?? "nodes") === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => patch("clusterOverviewMode", value)}
+                        data-active={isActive ? "true" : "false"}
+                        aria-pressed={isActive}
+                        className="setting-mode-card"
+                      >
+                        <div className="setting-mode-card-head">
+                          <div className="setting-mode-card-title">
+                            <ModeIcon size={15} />
+                            <span>{label}</span>
+                          </div>
+                          <div className="setting-mode-card-radio" aria-hidden="true">
+                            <div className="setting-mode-card-radio-dot" />
+                          </div>
+                        </div>
+                        <div className="setting-mode-card-desc">{desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 矩阵配色风格切换（经典标准 vs EVA 初号机） */}
+                <div className="mt-4 pt-3.5 border-t border-(--hairline)">
+                  <div className="flex items-center justify-between gap-3 mb-2.5">
+                    <div>
+                      <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
+                        <span>方格矩阵配色风格</span>
+                        {(draft.matrixColorTheme ?? "default") === "eva" ? (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                            UNIT-01
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
+                            CLASSIC
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-(--text-muted) mt-0.5">
+                        定制方块热力矩阵的主题色阶。EVA 初号机版采用标志性机体紫、荧光绿、警告橙与暴走红。
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => patch("matrixColorTheme", "default")}
+                      data-active={(draft.matrixColorTheme ?? "default") === "default" ? "true" : "false"}
+                      aria-pressed={(draft.matrixColorTheme ?? "default") === "default"}
+                      className="setting-color-theme-card"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#34d399]" />
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#10b981]" />
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#f59e0b]" />
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-medium text-(--text-primary) block">经典标准</span>
+                          <span className="text-[10px] text-(--text-muted) block">绿 · 橙 · 红 常规监控色阶</span>
+                        </div>
+                      </div>
+                      <div className="setting-color-theme-radio" aria-hidden="true">
+                        {(draft.matrixColorTheme ?? "default") === "default" && (
+                          <div className="setting-color-theme-radio-dot" />
+                        )}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => patch("matrixColorTheme", "eva")}
+                      data-active={(draft.matrixColorTheme ?? "default") === "eva" ? "true" : "false"}
+                      aria-pressed={(draft.matrixColorTheme ?? "default") === "eva"}
+                      className="setting-color-theme-card is-eva"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#7c3aed]" />
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#00ff66]" />
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#f97316]" />
+                          <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-medium text-(--text-primary) block">EVA 初号机</span>
+                          <span className="text-[10px] text-(--text-muted) block">机体紫 · 荧光绿 · 暴走红</span>
+                        </div>
+                      </div>
+                      <div className="setting-color-theme-radio" aria-hidden="true">
+                        {(draft.matrixColorTheme ?? "default") === "eva" && (
+                          <div className="setting-color-theme-radio-dot" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
                 </div>
               </InstancePanel>
 

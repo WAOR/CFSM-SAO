@@ -14,11 +14,11 @@ import { useMetricColorsSync } from "@/hooks/useMetricColors";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { getAdminUrl } from "@/services/cfsm/config";
 import { HomeSkeleton } from "./HomeSkeleton";
-
 export function AppShell() {
   useAppearance();
   useSiteMetadata();
   useMetricColorsSync();
+
   const { pathname, search } = useLocation();
   const publicConfig = usePublicConfig();
   const auth = useAuth();
@@ -45,8 +45,10 @@ export function AppShell() {
     !auth.isPending &&
     auth.data?.logged_in !== true;
   const awaitingVerification = isDataRoute && needsVerification;
-  const isHomeDashboard =
-    normalizedPath === "/" && new URLSearchParams(search).get("view") !== "theme-manage";
+  const isThemeManage =
+    new URLSearchParams(search).get("view") === "theme-manage" ||
+    (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "theme-manage");
+  const isHomeDashboard = normalizedPath === "/" && !isThemeManage;
   const canHydrateHome =
     isHomeDashboard &&
     !isCheckingAccess &&

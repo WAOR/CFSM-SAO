@@ -35,8 +35,23 @@ function HomeDashboard() {
 }
 
 export function Home() {
-  const [searchParams] = useSearchParams();
-  const isThemeManageView = searchParams.get("view") === "theme-manage";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const windowView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
+  const isThemeManageView = searchParams.get("view") === "theme-manage" || windowView === "theme-manage";
+
+  // 若用户直接在浏览器 URL (而非 hash) 传入了 ?view=theme-manage，自动将其同步入 hash 路由
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const windowParams = new URLSearchParams(window.location.search);
+      if (windowParams.get("view") === "theme-manage" && searchParams.get("view") !== "theme-manage") {
+        const next = new URLSearchParams(searchParams);
+        windowParams.forEach((val, key) => {
+          next.set(key, val);
+        });
+        setSearchParams(next, { replace: true });
+      }
+    }
+  }, [searchParams, setSearchParams]);
 
   // 主题设置只写本机浏览器，不需要登录态；管理后台入口另行跳转 /admin#/admin。
   if (isThemeManageView) {

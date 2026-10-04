@@ -108,4 +108,18 @@ describe("站点预设与本机覆盖的合并口径", () => {
       showConnections: true,
     });
   });
+
+  it("normalizes clusterOverviewMode correctly across all valid options", () => {
+    expect(normalizeThemeSettings({ clusterOverviewMode: "classic" }).clusterOverviewMode).toBe("classic");
+    expect(normalizeThemeSettings({ clusterOverviewMode: "nodes" }).clusterOverviewMode).toBe("nodes");
+    expect(normalizeThemeSettings({ clusterOverviewMode: "traffic" as never }).clusterOverviewMode).toBe("classic");
+    expect(normalizeThemeSettings({ clusterOverviewMode: "carousel" as never }).clusterOverviewMode).toBe("nodes");
+    expect(normalizeThemeSettings({ clusterOverviewMode: "invalid" as never }).clusterOverviewMode).toBe("nodes");
+  });
+
+  it("normalizes matrixColorTheme correctly", () => {
+    expect(normalizeThemeSettings({ matrixColorTheme: "default" }).matrixColorTheme).toBe("default");
+    expect(normalizeThemeSettings({ matrixColorTheme: "eva" }).matrixColorTheme).toBe("eva");
+    expect(normalizeThemeSettings({ matrixColorTheme: "invalid" as never }).matrixColorTheme).toBe("default");
+  });
 });

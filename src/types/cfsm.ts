@@ -490,6 +490,8 @@ export const EMPTY_CARRIER_PING: CarrierPingSnapshot = Object.freeze(
   ]),
 ) as CarrierPingSnapshot;
 
+export type MatrixColorTheme = "default" | "eva";
+
 export interface ThemeSettings {
   defaultAppearance?: "system" | "light" | "dark";
   desktopNodeViewMode?: "large" | "compact" | "mini" | "list";
@@ -507,6 +509,10 @@ export interface ThemeSettings {
   showGroupTabs?: boolean;
   showRegionBar?: boolean;
   showCardGroup?: boolean;
+  /** 首页右侧集群状态卡片的展示模式：经典上下双层（classic）、机架方格矩阵（nodes）。 */
+  clusterOverviewMode?: "classic" | "nodes";
+  /** 机架方格矩阵配色风格：经典标准绿橙红（default）、EVA 初号机紫绿橙红（eva）。 */
+  matrixColorTheme?: "default" | "eva";
   homeGroupOrder?: string[];
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic" | "price";

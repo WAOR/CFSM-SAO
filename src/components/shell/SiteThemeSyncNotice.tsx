@@ -33,7 +33,9 @@ export function SiteThemeSyncNotice() {
   const [showSuccess, setShowSuccess] = useState(false);
   const previousPhase = useRef(status.phase);
   const { search } = useLocation();
-  const onSettingsPage = new URLSearchParams(search).get("view") === "theme-manage";
+  const onSettingsPage =
+    new URLSearchParams(search).get("view") === "theme-manage" ||
+    (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "theme-manage");
 
   useEffect(() => startSiteThemeAutoSync(), []);
 

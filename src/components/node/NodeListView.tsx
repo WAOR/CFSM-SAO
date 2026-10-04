@@ -282,6 +282,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
 
   return (
     <Link
+      id={`node-card-${uuid}`}
       to={`/server/${encodeURIComponent(uuid)}`}
       className={clsx("node-list-row", isOffline && "is-offline")}
       title={detailLabels.title}

@@ -35,11 +35,15 @@ import {
 
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
+export type ClusterOverviewMode = "classic" | "nodes";
+export type MatrixColorTheme = "default" | "eva";
 
 export interface ResolvedThemeSettings {
   defaultAppearance: Appearance;
   desktopNodeViewMode: NodeViewMode;
   mobileNodeViewMode: NodeViewMode;
+  clusterOverviewMode: ClusterOverviewMode;
+  matrixColorTheme: MatrixColorTheme;
   enableAdminButton: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
@@ -89,6 +93,8 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   defaultAppearance: "system",
   desktopNodeViewMode: "large",
   mobileNodeViewMode: "compact",
+  clusterOverviewMode: "nodes",
+  matrixColorTheme: "default",
   enableAdminButton: true,
   showPingChart: true,
   homepagePingBindings: {},
@@ -194,6 +200,30 @@ function normalizeMobileNodeViewMode(
   return mode === "list" ? fallback : mode;
 }
 
+export function isClusterOverviewMode(value: unknown): value is ClusterOverviewMode {
+  return value === "classic" || value === "nodes";
+}
+
+function normalizeClusterOverviewMode(
+  value: unknown,
+  fallback: ClusterOverviewMode = DEFAULT_THEME_SETTINGS.clusterOverviewMode,
+): ClusterOverviewMode {
+  if (value === "traffic") return "classic";
+  if (value === "carousel") return "nodes";
+  return isClusterOverviewMode(value) ? value : fallback;
+}
+
+export function isMatrixColorTheme(value: unknown): value is MatrixColorTheme {
+  return value === "default" || value === "eva";
+}
+
+function normalizeMatrixColorTheme(
+  value: unknown,
+  fallback: MatrixColorTheme = DEFAULT_THEME_SETTINGS.matrixColorTheme,
+): MatrixColorTheme {
+  return isMatrixColorTheme(value) ? value : fallback;
+}
+
 function enabledUnlessFalse(value: unknown) {
   return value !== false;
 }
@@ -232,6 +262,8 @@ export function normalizeThemeSettings(
       settings?.mobileNodeViewMode,
       DEFAULT_THEME_SETTINGS.mobileNodeViewMode,
     ),
+    clusterOverviewMode: normalizeClusterOverviewMode(settings?.clusterOverviewMode),
+    matrixColorTheme: normalizeMatrixColorTheme(settings?.matrixColorTheme),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),

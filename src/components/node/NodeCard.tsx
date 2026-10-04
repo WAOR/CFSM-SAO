@@ -104,6 +104,7 @@ export const NodeCard = memo(function NodeCard({
 
   return (
     <article
+      id={`node-card-${uuid}`}
       className={clsx("server-card", isOffline && "is-offline")}
     >
       <div className="server-card-content">
