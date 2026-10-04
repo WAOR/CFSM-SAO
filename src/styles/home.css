@@ -1004,13 +1004,15 @@
 
 /* 选中高亮状态：仅方块微亮并显现外置外框 */
 .mao-heatmap-cell:not(.is-empty-slot):hover,
-.mao-heatmap-cell:not(.is-empty-slot):focus-visible {
+.mao-heatmap-cell:not(.is-empty-slot):focus-visible,
+.mao-heatmap-cell:not(.is-empty-slot).is-active {
   filter: brightness(1.05);
   z-index: 10;
 }
 
 .mao-heatmap-cell:not(.is-empty-slot):hover::after,
-.mao-heatmap-cell:not(.is-empty-slot):focus-visible::after {
+.mao-heatmap-cell:not(.is-empty-slot):focus-visible::after,
+.mao-heatmap-cell:not(.is-empty-slot).is-active::after {
   opacity: 1;
 }
 

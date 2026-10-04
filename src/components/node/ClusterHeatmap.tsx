@@ -234,7 +234,81 @@ export function ClusterHeatmap({
     return "";
   };
 
-  const handleCellClick = (uuid: string) => {
+  const lastTouchTimeRef = useRef<number>(0);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+
+  // 点击外部区域时自动关闭当前展开的移动端悬浮卡
+  useEffect(() => {
+    if (!activeKey) return;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (wrapRef.current && target && !wrapRef.current.contains(target)) {
+        setActiveKey(null);
+        setHoverInfo(null);
+      }
+    };
+    document.addEventListener("touchstart", handleOutsideClick, { passive: true });
+    document.addEventListener("click", handleOutsideClick);
+    return () => {
+      document.removeEventListener("touchstart", handleOutsideClick);
+      document.removeEventListener("click", handleOutsideClick);
+    };
+  }, [activeKey]);
+
+  const calcTooltipCoords = (target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const wrapRect = wrapRef.current?.getBoundingClientRect();
+    if (!wrapRect) return null;
+
+    const rawX = rect.left - wrapRect.left + rect.width / 2;
+    const clampedX = Math.max(115, Math.min(wrapRect.width - 115, rawX));
+    const cellTopInWrap = rect.top - wrapRect.top;
+    const isNearTop = cellTopInWrap < 42;
+    const placement: "top" | "bottom" = isNearTop ? "bottom" : "top";
+    const y = isNearTop ? rect.bottom - wrapRect.top + 6 : rect.top - wrapRect.top - 6;
+
+    return { x: clampedX, y, placement };
+  };
+
+  const showNodeTooltip = (target: HTMLElement, node: HomeNodeSummary) => {
+    const coords = calcTooltipCoords(target);
+    if (!coords) return;
+    setHoverInfo({
+      node,
+      name: nameByUuid?.get(node.uuid) || node.uuid,
+      x: coords.x,
+      y: coords.y,
+      placement: coords.placement,
+    });
+  };
+
+  const showMockSlotTooltip = (target: HTMLElement, slot: MockSlot) => {
+    const coords = calcTooltipCoords(target);
+    if (!coords) return;
+    setHoverInfo({
+      name: `机位插槽 #${slot.slotNumber}`,
+      x: coords.x,
+      y: coords.y,
+      placement: coords.placement,
+      isMock: true,
+      mockSlot: slot,
+    });
+  };
+
+  const showEmptySlotTooltip = (target: HTMLElement, slotIndex: number) => {
+    const coords = calcTooltipCoords(target);
+    if (!coords) return;
+    setHoverInfo({
+      name: `机位插槽 #${slotIndex}`,
+      x: coords.x,
+      y: coords.y,
+      placement: coords.placement,
+      isEmpty: true,
+      slotIndex,
+    });
+  };
+
+  const scrollToNodeCard = (uuid: string) => {
     const el = document.getElementById(`node-card-${uuid}`);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -245,84 +319,105 @@ export function ClusterHeatmap({
     }
   };
 
+  const handleCellClick = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    node: HomeNodeSummary,
+  ) => {
+    const key = `node-${node.uuid}`;
+    const isTouchInteraction =
+      Date.now() - lastTouchTimeRef.current < 800 ||
+      (typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches);
+
+    if (isTouchInteraction) {
+      // 移动端：若当前尚未展示该方块的悬浮卡，第一次点击先展开悬浮卡
+      if (activeKey !== key) {
+        setActiveKey(key);
+        showNodeTooltip(e.currentTarget, node);
+        return;
+      }
+      // 移动端：已处于展示状态下再次点击相同方块，跳转直达对应卡片
+      scrollToNodeCard(node.uuid);
+      setActiveKey(null);
+      setHoverInfo(null);
+      return;
+    }
+
+    // 桌面端（带 hover 的鼠标操作）：点击直接直达
+    scrollToNodeCard(node.uuid);
+  };
+
   const handleCellMouseEnter = (
     e: React.MouseEvent<HTMLButtonElement>,
     node: HomeNodeSummary,
   ) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const wrapRect = wrapRef.current?.getBoundingClientRect();
-    if (!wrapRect) return;
-
-    const rawX = rect.left - wrapRect.left + rect.width / 2;
-    // 约束 X 坐标在 [115, wrapWidth - 115] 之间，防止悬浮卡片在边缘被裁切
-    const clampedX = Math.max(115, Math.min(wrapRect.width - 115, rawX));
-    const cellTopInWrap = rect.top - wrapRect.top;
-    // 若方块处于靠顶端，则将浮层放置在方块正下方，否则放置在方块上方
-    const isNearTop = cellTopInWrap < 42;
-    const placement = isNearTop ? "bottom" : "top";
-    const y = isNearTop ? rect.bottom - wrapRect.top + 6 : rect.top - wrapRect.top - 6;
-
-    setHoverInfo({
-      node,
-      name: nameByUuid?.get(node.uuid) || node.uuid,
-      x: clampedX,
-      y,
-      placement,
-    });
+    // 忽略移动端轻触所合成触发的 mouseenter
+    if (Date.now() - lastTouchTimeRef.current < 500) return;
+    showNodeTooltip(e.currentTarget, node);
+    setActiveKey(`node-${node.uuid}`);
   };
 
   const handleMockSlotMouseEnter = (
     e: React.MouseEvent<HTMLButtonElement>,
     slot: MockSlot,
   ) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const wrapRect = wrapRef.current?.getBoundingClientRect();
-    if (!wrapRect) return;
+    if (Date.now() - lastTouchTimeRef.current < 500) return;
+    showMockSlotTooltip(e.currentTarget, slot);
+    setActiveKey(`mock-${slot.slotNumber}`);
+  };
 
-    const rawX = rect.left - wrapRect.left + rect.width / 2;
-    const clampedX = Math.max(115, Math.min(wrapRect.width - 115, rawX));
-    const cellTopInWrap = rect.top - wrapRect.top;
-    const isNearTop = cellTopInWrap < 42;
-    const placement = isNearTop ? "bottom" : "top";
-    const y = isNearTop ? rect.bottom - wrapRect.top + 6 : rect.top - wrapRect.top - 6;
+  const handleMockSlotClick = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    slot: MockSlot,
+  ) => {
+    const key = `mock-${slot.slotNumber}`;
+    const isTouchInteraction =
+      Date.now() - lastTouchTimeRef.current < 800 ||
+      (typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches);
 
-    setHoverInfo({
-      name: `机位插槽 #${slot.slotNumber}`,
-      x: clampedX,
-      y,
-      placement,
-      isMock: true,
-      mockSlot: slot,
-    });
+    if (isTouchInteraction) {
+      if (activeKey === key) {
+        setActiveKey(null);
+        setHoverInfo(null);
+      } else {
+        setActiveKey(key);
+        showMockSlotTooltip(e.currentTarget, slot);
+      }
+    }
   };
 
   const handleEmptySlotMouseEnter = (
     e: React.MouseEvent<HTMLDivElement>,
     slotIndex: number,
   ) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const wrapRect = wrapRef.current?.getBoundingClientRect();
-    if (!wrapRect) return;
+    if (Date.now() - lastTouchTimeRef.current < 500) return;
+    showEmptySlotTooltip(e.currentTarget, slotIndex);
+    setActiveKey(`empty-${slotIndex}`);
+  };
 
-    const rawX = rect.left - wrapRect.left + rect.width / 2;
-    const clampedX = Math.max(115, Math.min(wrapRect.width - 115, rawX));
-    const cellTopInWrap = rect.top - wrapRect.top;
-    const isNearTop = cellTopInWrap < 42;
-    const placement = isNearTop ? "bottom" : "top";
-    const y = isNearTop ? rect.bottom - wrapRect.top + 6 : rect.top - wrapRect.top - 6;
+  const handleEmptySlotClick = (
+    e: React.MouseEvent<HTMLDivElement>,
+    slotIndex: number,
+  ) => {
+    const key = `empty-${slotIndex}`;
+    const isTouchInteraction =
+      Date.now() - lastTouchTimeRef.current < 800 ||
+      (typeof window !== "undefined" && window.matchMedia?.("(hover: none)").matches);
 
-    setHoverInfo({
-      name: `机位插槽 #${slotIndex}`,
-      x: clampedX,
-      y,
-      placement,
-      isEmpty: true,
-      slotIndex,
-    });
+    if (isTouchInteraction) {
+      if (activeKey === key) {
+        setActiveKey(null);
+        setHoverInfo(null);
+      } else {
+        setActiveKey(key);
+        showEmptySlotTooltip(e.currentTarget, slotIndex);
+      }
+    }
   };
 
   const handleCellMouseLeave = () => {
+    if (Date.now() - lastTouchTimeRef.current < 500) return;
     setHoverInfo(null);
+    setActiveKey(null);
   };
 
   const isBooting = bootPhase !== "idle" && bootPhase !== "dissolve";
@@ -355,6 +450,9 @@ export function ClusterHeatmap({
       <div
         ref={wrapRef}
         className={`mao-heatmap-wrap${bootPhase !== "idle" ? " is-booting" : ""}`}
+        onTouchStartCapture={() => {
+          lastTouchTimeRef.current = Date.now();
+        }}
       >
         <div
           className={`mao-heatmap-grid${bootPhase !== "idle" ? " is-booting" : ""}`}
@@ -366,13 +464,14 @@ export function ClusterHeatmap({
             const { statusClass, badgeText } = resolveNodeThroughputStatus(node);
             const nodeName = nameByUuid?.get(node.uuid) || node.uuid;
             const bootClass = getBootAnimationClass(idx);
+            const isActive = activeKey === `node-${node.uuid}`;
 
             return (
               <button
                 key={node.uuid}
                 type="button"
-                className={`mao-heatmap-cell ${statusClass} ${bootClass}`}
-                onClick={() => !isBooting && handleCellClick(node.uuid)}
+                className={`mao-heatmap-cell ${statusClass} ${bootClass}${isActive ? " is-active" : ""}`}
+                onClick={(e) => !isBooting && handleCellClick(e, node)}
                 onMouseEnter={(e) => !isBooting && handleCellMouseEnter(e, node)}
                 onMouseLeave={handleCellMouseLeave}
                 aria-label={`${nodeName}: ${badgeText}`}
@@ -388,12 +487,14 @@ export function ClusterHeatmap({
                   slot.status === "active" ? "is-medium-load" : "is-low-load";
                 const badgeText = slot.status === "active" ? "活跃传输" : "空闲待机";
                 const bootClass = getBootAnimationClass(idx);
+                const isActive = activeKey === `mock-${slot.slotNumber}`;
 
                 return (
                   <button
                     key={`mock-slot-${slot.slotNumber}`}
                     type="button"
-                    className={`mao-heatmap-cell ${statusClass} is-mock-cell ${bootClass}`}
+                    className={`mao-heatmap-cell ${statusClass} is-mock-cell ${bootClass}${isActive ? " is-active" : ""}`}
+                    onClick={(e) => !isBooting && handleMockSlotClick(e, slot)}
                     onMouseEnter={(e) => !isBooting && handleMockSlotMouseEnter(e, slot)}
                     onMouseLeave={handleCellMouseLeave}
                     aria-label={`机架模拟槽位 #${slot.slotNumber}: ${badgeText}`}
@@ -404,11 +505,13 @@ export function ClusterHeatmap({
                 const idx = nodes.length + i;
                 const slotNumber = nodes.length + i + 1;
                 const bootClass = getBootAnimationClass(idx);
+                const isActive = activeKey === `empty-${slotNumber}`;
 
                 return (
                   <div
                     key={`empty-slot-${i}`}
-                    className={`mao-heatmap-cell is-empty-slot ${bootClass}`}
+                    className={`mao-heatmap-cell is-empty-slot ${bootClass}${isActive ? " is-active" : ""}`}
+                    onClick={(e) => !isBooting && handleEmptySlotClick(e, slotNumber)}
                     onMouseEnter={(e) => !isBooting && handleEmptySlotMouseEnter(e, slotNumber)}
                     onMouseLeave={handleCellMouseLeave}
                     aria-label={`机架空槽 #${slotNumber}`}
@@ -518,7 +621,11 @@ export function ClusterHeatmap({
                   </div>
                 )}
                 <div className="mao-tooltip-tip">
-                  <span>点击方块直达节点卡片</span>
+                  <span>
+                    {activeKey?.startsWith("node-")
+                      ? "再次点击方块直达节点卡片"
+                      : "点击方块直达节点卡片"}
+                  </span>
                   <span aria-hidden="true">↗</span>
                 </div>
               </>
