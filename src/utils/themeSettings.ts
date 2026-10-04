@@ -93,7 +93,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   defaultAppearance: "system",
   desktopNodeViewMode: "large",
   mobileNodeViewMode: "compact",
-  clusterOverviewMode: "nodes",
+  clusterOverviewMode: "classic",
   matrixColorTheme: "default",
   enableAdminButton: true,
   showPingChart: true,

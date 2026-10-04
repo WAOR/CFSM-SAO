@@ -1536,7 +1536,7 @@ export function ThemeManage() {
                       icon: LayoutGrid,
                     },
                   ].map(({ value, label, desc, icon: ModeIcon }) => {
-                    const isActive = (draft.clusterOverviewMode ?? "nodes") === value;
+                    const isActive = (draft.clusterOverviewMode ?? "classic") === value;
                     return (
                       <button
                         key={value}

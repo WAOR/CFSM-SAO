@@ -114,7 +114,7 @@ describe("站点预设与本机覆盖的合并口径", () => {
     expect(normalizeThemeSettings({ clusterOverviewMode: "nodes" }).clusterOverviewMode).toBe("nodes");
     expect(normalizeThemeSettings({ clusterOverviewMode: "traffic" as never }).clusterOverviewMode).toBe("classic");
     expect(normalizeThemeSettings({ clusterOverviewMode: "carousel" as never }).clusterOverviewMode).toBe("nodes");
-    expect(normalizeThemeSettings({ clusterOverviewMode: "invalid" as never }).clusterOverviewMode).toBe("nodes");
+    expect(normalizeThemeSettings({ clusterOverviewMode: "invalid" as never }).clusterOverviewMode).toBe("classic");
   });
 
   it("normalizes matrixColorTheme correctly", () => {

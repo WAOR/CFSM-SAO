@@ -225,7 +225,7 @@ function HomeOverviewCards({
   loggedIn,
   visibleNodes,
   nameByUuid,
-  clusterOverviewMode = "nodes",
+  clusterOverviewMode = "classic",
   matrixColorTheme = "default",
 }: {
   overview: HomeOverview;
