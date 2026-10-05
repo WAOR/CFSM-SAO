@@ -69,11 +69,26 @@ export function MatrixPatternEditor({
     setPixels(getPatternPixelSet(value));
   }, [value]);
 
-  // 组件卸载时清理定时器
+  // 组件卸载时清理定时器与释放监听
   useEffect(() => {
     return () => {
       if (previewTimerRef.current) clearInterval(previewTimerRef.current);
       if (appliedTimerRef.current) clearTimeout(appliedTimerRef.current);
+    };
+  }, []);
+
+  // 鼠标与触摸全局弹起监听：确保松开按键后立即终止绘制状态，绝不随着鼠标滑动连带误触
+  useEffect(() => {
+    const handleRelease = () => {
+      isMouseDownRef.current = false;
+    };
+    window.addEventListener("mouseup", handleRelease);
+    window.addEventListener("touchend", handleRelease);
+    window.addEventListener("touchcancel", handleRelease);
+    return () => {
+      window.removeEventListener("mouseup", handleRelease);
+      window.removeEventListener("touchend", handleRelease);
+      window.removeEventListener("touchcancel", handleRelease);
     };
   }, []);
 
@@ -106,8 +121,12 @@ export function MatrixPatternEditor({
     });
   };
 
-  // 拖拽划过其他格子
-  const handleCellEnter = (index: number) => {
+  // 拖拽划过其他格子（加入 e.buttons 原生按键防错校验）
+  const handleCellEnter = (index: number, e?: React.MouseEvent) => {
+    if (e && e.buttons !== undefined && e.buttons !== 1) {
+      isMouseDownRef.current = false;
+      return;
+    }
     if (!isMouseDownRef.current || isPreviewing) return;
     setPixels((prev) => {
       const mode = drawModeRef.current;
@@ -321,6 +340,9 @@ export function MatrixPatternEditor({
         ref={gridContainerRef}
         className={`mao-pattern-canvas ${colorTheme === "eva" ? "is-eva" : ""}`}
         data-palette={colorTheme}
+        onMouseUp={() => {
+          isMouseDownRef.current = false;
+        }}
         onMouseLeave={() => {
           isMouseDownRef.current = false;
         }}
@@ -344,10 +366,16 @@ export function MatrixPatternEditor({
                 e.preventDefault();
                 handleCellDown(idx);
               }}
-              onMouseEnter={() => handleCellEnter(idx)}
+              onMouseUp={() => {
+                isMouseDownRef.current = false;
+              }}
+              onMouseEnter={(e) => handleCellEnter(idx, e)}
               onTouchStart={(e) => {
                 e.preventDefault();
                 handleCellDown(idx);
+              }}
+              onTouchEnd={() => {
+                isMouseDownRef.current = false;
               }}
               aria-label={`第 ${Math.floor(idx / GRID_COLUMNS) + 1} 行，第 ${(idx % GRID_COLUMNS) + 1} 列: ${
                 isLit ? "已点亮" : "未点亮"
