@@ -901,21 +901,20 @@
   display: none !important;
 }
 
-/* 1. 光束横扫列 */
+/* 1. 光束横扫列：纯净高亮激光扫掠，去除几何放大突跳（杜绝第0列缩放抽搐） */
 .mao-heatmap-cell.is-sao-beam {
   background: #ffffff !important;
-  box-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 5px #ff9600 !important;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 5px #ff9600 !important;
   border-color: #ffffff !important;
   opacity: 1 !important;
-  transform: scale(1.08) !important;
-  transition: transform 60ms ease;
+  transform: none !important;
   z-index: 5;
 }
 
 :root[data-palette="eva"] .mao-heatmap-cell.is-sao-beam,
 .mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-beam,
 .mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-beam {
-  box-shadow: 0 0 14px rgba(255, 255, 255, 0.95), 0 0 6px #7c3aed !important;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 6px #7c3aed !important;
 }
 
 /* 2. 正体 SAO 文字像素：统一纯色、完全不透明（opacity: 1）、无虚线、高亮光晕 */
@@ -947,18 +946,20 @@
   animation: sao-boot-pulse-eva 0.6s ease-in-out infinite !important;
 }
 
-/* 4. 背景已扫过非文字像素：统统清除离线红光/高载黄光/虚线干扰，呈现干净统一的暗调底色 */
+/* 4. 背景已扫过非文字像素：统统清除离线红光/高载黄光/虚线干扰，呈现干净统一的暗调底色，光束离开时有柔和余晖渐隐 */
 .mao-heatmap-cell.is-sao-bg {
   background: rgba(0, 0, 0, 0.04) !important;
   border-color: rgba(0, 0, 0, 0.05) !important;
   box-shadow: none !important;
   opacity: 0.28 !important;
+  transition: background-color 0.16s ease-out, opacity 0.16s ease-out, box-shadow 0.16s ease-out !important;
 }
 
 :root[data-appearance="dark"] .mao-heatmap-cell.is-sao-bg {
   background: rgba(255, 255, 255, 0.025) !important;
   border-color: rgba(255, 255, 255, 0.035) !important;
   opacity: 0.22 !important;
+  transition: background-color 0.16s ease-out, opacity 0.16s ease-out, box-shadow 0.16s ease-out !important;
 }
 
 /* 5. 未被光束扫到的区域：暗淡静止，不透光、无阴影、不闪烁 */
@@ -2992,4 +2993,158 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+}
+
+/* 开屏点阵图案交互绘制器 */
+.mao-pattern-editor {
+  margin-top: 10px;
+  padding: 11px 13px;
+  background: var(--bg-card);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+
+:root[data-appearance="dark"] .mao-pattern-editor {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mao-pattern-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 120ms ease;
+  user-select: none;
+}
+
+.mao-pattern-action-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--theme-accent, #3b82f6);
+  background: color-mix(in srgb, var(--theme-accent, #3b82f6) 8%, transparent);
+}
+
+.mao-pattern-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mao-pattern-action-btn.is-play {
+  color: var(--theme-accent, #3b82f6);
+  border-color: color-mix(in srgb, var(--theme-accent, #3b82f6) 30%, transparent);
+  background: color-mix(in srgb, var(--theme-accent, #3b82f6) 10%, transparent);
+}
+
+.mao-pattern-action-btn.is-play:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--theme-accent, #3b82f6) 20%, transparent);
+}
+
+.mao-pattern-canvas {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 3.5px;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  user-select: none;
+  touch-action: none;
+}
+
+:root[data-appearance="dark"] .mao-pattern-canvas {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.mao-pattern-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: background-color 100ms ease, transform 100ms ease, box-shadow 100ms ease;
+}
+
+:root[data-appearance="dark"] .mao-pattern-cell:not(.is-lit) {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.mao-pattern-cell:hover {
+  transform: scale(1.12);
+  z-index: 2;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root[data-appearance="dark"] .mao-pattern-cell:not(.is-lit):hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 点亮状态（默认经典配色：与首页 SAO 完全一致的暖金橘黄色 #ff9600） */
+.mao-pattern-cell.is-lit {
+  background: #ff9600 !important;
+  border-color: rgba(255, 220, 100, 0.9) !important;
+  box-shadow: 0 0 8px rgba(255, 150, 0, 0.65), 0 0 2px rgba(255, 220, 100, 0.95) !important;
+}
+
+/* 点亮状态（EVA 初号机配色：与首页完全一致的机体紫 #7c3aed） */
+.mao-pattern-canvas.is-eva .mao-pattern-cell.is-lit {
+  background: #7c3aed !important;
+  border-color: #c084fc !important;
+  box-shadow: 0 0 8px rgba(124, 58, 237, 0.75), 0 0 2px #00ff66 !important;
+}
+
+/* 动效预览横扫光束：纯光效平滑扫掠，无尺寸抽搐 */
+.mao-pattern-cell.is-scan-beam {
+  background: #ffffff !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.95), 0 0 4px #ff9600 !important;
+  transform: none;
+  z-index: 5;
+}
+
+.mao-pattern-canvas.is-eva .mao-pattern-cell.is-scan-beam {
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.95), 0 0 5px #7c3aed !important;
+}
+
+.mao-pattern-cell.is-unlit {
+  opacity: 0.25;
+  transition: background-color 0.16s ease-out, opacity 0.16s ease-out, box-shadow 0.16s ease-out;
+}
+
+.mao-pattern-cell.is-preview-pulse {
+  animation: sao-boot-pulse 0.6s ease-in-out infinite;
+}
+
+.mao-pattern-canvas.is-eva .mao-pattern-cell.is-preview-pulse {
+  animation: sao-boot-pulse-eva 0.6s ease-in-out infinite;
+}
+
+.mao-preset-chip {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--hairline);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 120ms ease;
+  user-select: none;
+}
+
+.mao-preset-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--theme-accent, #3b82f6);
+}
+
+.mao-preset-chip.is-active {
+  background: color-mix(in srgb, var(--theme-accent, #3b82f6) 12%, transparent);
+  border-color: color-mix(in srgb, var(--theme-accent, #3b82f6) 40%, transparent);
+  color: var(--theme-accent, #3b82f6);
+  font-weight: 600;
 }

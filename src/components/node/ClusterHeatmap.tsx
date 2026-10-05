@@ -1,7 +1,15 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { Flag } from "@/components/ui/Flag";
 import { formatByteRateLabel } from "@/utils/format";
+import {
+  GRID_COLUMNS,
+  MIN_RACK_ROWS,
+  DEFAULT_PATTERN_SET,
+  getPatternPixelSet,
+} from "@/utils/matrixPatterns";
 import type { HomeNodeSummary } from "@/services/wsStore";
+
+export const SAO_PIXEL_INDICES = DEFAULT_PATTERN_SET;
 
 interface ClusterHeatmapProps {
   nodes: HomeNodeSummary[];
@@ -13,6 +21,7 @@ interface ClusterHeatmapProps {
   colorTheme?: "default" | "eva";
   mockFill?: boolean;
   bootAnimation?: boolean;
+  customPattern?: number[] | null;
 }
 
 interface MockSlot {
@@ -35,27 +44,6 @@ interface HoverState {
   isMock?: boolean;
   mockSlot?: MockSlot;
 }
-
-// 恢复经典 20 列饱满大方格：单块尺寸约 20px，在独占版面下高度舒展，极具 GitHub 风格
-const GRID_COLUMNS = 20;
-// 默认铺满 5 行标准机架矩阵（即 100 槽），确保在节点少时也能用精致虚线槽位完整撑起状态卡片，
-// 与实时网络吞吐双折线图卡片高度严格齐平对齐，避免上下大面积空旷留白与切换时跳高。
-const MIN_RACK_ROWS = 5;
-
-// 20 列 × 5 行点阵正体 "S A O"
-// S: 列 2..5; A: 列 7..11; O: 列 13..17
-export const SAO_PIXEL_INDICES = new Set<number>([
-  // 行 0 (0..19)
-  2, 3, 4, 5,       8, 9, 10,             14, 15, 16,
-  // 行 1 (20..39)
-  22,               27, 31,               33, 37,
-  // 行 2 (40..59)
-  42, 43, 44, 45,   47, 48, 49, 50, 51,   53, 57,
-  // 行 3 (60..79)
-  65,               67, 71,               73, 77,
-  // 行 4 (80..99)
-  82, 83, 84, 85,   87, 91,               94, 95, 96,
-]);
 
 // 网络吞吐阶梯定义（以字节每秒 B/s 为基准）：
 // - 空闲待机 (idle): max(netUp, netDown) < 500 KB/s
@@ -124,12 +112,19 @@ export function ClusterHeatmap({
   colorTheme = "default",
   mockFill = false,
   bootAnimation = true,
+  customPattern = null,
 }: ClusterHeatmapProps) {
   const [hoverInfo, setHoverInfo] = useState<HoverState | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  const litPixelSet = useMemo(() => {
+    return getPatternPixelSet(customPattern);
+  }, [customPattern]);
+
   // 开屏横扫点阵动效状态机
-  const [bootPhase, setBootPhase] = useState<"idle" | "scan" | "hold" | "dissolve">("idle");
+  const [bootPhase, setBootPhase] = useState<"idle" | "scan" | "hold" | "dissolve">(() =>
+    bootAnimation ? "scan" : "idle",
+  );
   const [scanCol, setScanCol] = useState<number>(-1);
 
   useEffect(() => {
@@ -143,7 +138,7 @@ export function ClusterHeatmap({
     const interval = setInterval(() => {
       setScanCol(current);
       current++;
-      if (current >= GRID_COLUMNS) {
+      if (current > GRID_COLUMNS) {
         clearInterval(interval);
         setBootPhase("hold");
         // 呼吸三下（每次 600ms，共 1800ms）后进入平滑溶解阶段
@@ -218,15 +213,15 @@ export function ClusterHeatmap({
     if (bootPhase === "idle") return "";
     if (cellIndex >= 100) return "is-sao-unlit";
     const col = cellIndex % GRID_COLUMNS;
-    const isSao = SAO_PIXEL_INDICES.has(cellIndex);
+    const isLit = litPixelSet.has(cellIndex);
 
     if (bootPhase === "scan") {
       if (col === scanCol) return "is-sao-beam";
-      if (col < scanCol) return isSao ? "is-sao-pixel" : "is-sao-bg";
+      if (col < scanCol) return isLit ? "is-sao-pixel" : "is-sao-bg";
       return "is-sao-unlit";
     }
     if (bootPhase === "hold") {
-      return isSao ? "is-sao-pixel is-sao-glow" : "is-sao-bg";
+      return isLit ? "is-sao-pixel is-sao-glow" : "is-sao-bg";
     }
     if (bootPhase === "dissolve") {
       return "is-sao-dissolve";

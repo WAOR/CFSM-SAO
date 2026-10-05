@@ -39,6 +39,7 @@ import { clsx } from "clsx";
 import { InstancePanel } from "@/components/instance/InstancePanel";
 import { Spinner } from "@/components/ui/Spinner";
 import { Flag } from "@/components/ui/Flag";
+import { MatrixPatternEditor } from "@/components/matrix/MatrixPatternEditor";
 import { useCarrierNames, usePublicConfig } from "@/hooks/usePublicConfig";
 import { useHourlyClock } from "@/hooks/useClock";
 import { useAllPingLineOverrides } from "@/hooks/usePingOverview";
@@ -284,6 +285,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     matrixColorTheme: settings.matrixColorTheme,
     matrixMockFill: settings.matrixMockFill,
     matrixBootAnimation: settings.matrixBootAnimation,
+    matrixCustomPattern: settings.matrixCustomPattern,
     homepagePingBindings: settings.homepagePingBindings,
     homepageDefaultPingTaskId: settings.homepageDefaultPingTaskId,
     enableHomepageMultiPing: settings.enableHomepageMultiPing,
@@ -1660,7 +1662,7 @@ export function ThemeManage() {
                           </span>
                         </div>
                         <p className="text-[11px] text-(--text-muted) mt-0.5">
-                          开启后，进入首页时方格矩阵将播放光束横扫显现正体 SAO 点阵文字并呼吸三下后切入实时集群数据；关闭后直接呈现真实节点。
+                          开启后，进入首页时方格矩阵将播放光束横扫显现专属点阵文字并呼吸三下后切入实时集群数据；关闭后直接呈现真实节点。
                         </p>
                       </div>
                       <input
@@ -1670,6 +1672,15 @@ export function ThemeManage() {
                         className="h-4 w-4 shrink-0 accent-(--accent-500)"
                       />
                     </label>
+
+                    {/* 开场点阵图案自定义画布（仅在开启开场动画时展开） */}
+                    {(draft.matrixBootAnimation ?? true) && (
+                      <MatrixPatternEditor
+                        value={draft.matrixCustomPattern}
+                        onChange={(pattern) => patch("matrixCustomPattern", pattern)}
+                        colorTheme={draft.matrixColorTheme ?? "default"}
+                      />
+                    )}
                   </div>
 
                   {/* 3. 模拟数据填充空闲机位插槽 */}

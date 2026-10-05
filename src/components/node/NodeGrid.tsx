@@ -229,6 +229,7 @@ function HomeOverviewCards({
   matrixColorTheme = "default",
   matrixMockFill = false,
   matrixBootAnimation = true,
+  matrixCustomPattern = null,
 }: {
   overview: HomeOverview;
   costSummary: { remainingCny: number; totalOriginalPriceCny?: number } | null;
@@ -250,6 +251,7 @@ function HomeOverviewCards({
   matrixColorTheme?: MatrixColorTheme;
   matrixMockFill?: boolean;
   matrixBootAnimation?: boolean;
+  matrixCustomPattern?: number[] | null;
 }) {
   const queryClient = useQueryClient();
   const [renewalPopoverOpen, setRenewalPopoverOpen] = useState(false);
@@ -670,6 +672,7 @@ function HomeOverviewCards({
                   colorTheme={matrixColorTheme}
                   mockFill={matrixMockFill}
                   bootAnimation={matrixBootAnimation}
+                  customPattern={matrixCustomPattern}
                 />
               </div>
             </div>
@@ -1114,6 +1117,7 @@ export function NodeGrid() {
           matrixColorTheme={themeSettings.matrixColorTheme}
           matrixMockFill={themeSettings.matrixMockFill}
           matrixBootAnimation={themeSettings.matrixBootAnimation}
+          matrixCustomPattern={themeSettings.matrixCustomPattern}
         />
       )}
     </>

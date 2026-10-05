@@ -517,6 +517,8 @@ export interface ThemeSettings {
   matrixMockFill?: boolean;
   /** 是否启用方格矩阵 SAO 主题开场动画（默认开启）。 */
   matrixBootAnimation?: boolean;
+  /** 自定义方格矩阵开场点阵图案（0~99的像素序号数组），为 null 或空时回退为默认 SAO。 */
+  matrixCustomPattern?: number[] | null;
   homeGroupOrder?: string[];
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic" | "price";

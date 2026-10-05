@@ -135,4 +135,13 @@ describe("站点预设与本机覆盖的合并口径", () => {
     expect(normalizeThemeSettings({ matrixBootAnimation: false }).matrixBootAnimation).toBe(false);
     expect(normalizeThemeSettings({}).matrixBootAnimation).toBe(true);
   });
+
+  it("normalizes matrixCustomPattern correctly", () => {
+    expect(normalizeThemeSettings({ matrixCustomPattern: [1, 2, 3] }).matrixCustomPattern).toEqual([1, 2, 3]);
+    expect(normalizeThemeSettings({ matrixCustomPattern: [99, 0, 50] }).matrixCustomPattern).toEqual([0, 50, 99]);
+    expect(normalizeThemeSettings({ matrixCustomPattern: [] }).matrixCustomPattern).toEqual([]);
+    expect(normalizeThemeSettings({ matrixCustomPattern: [-1, 100, 200] }).matrixCustomPattern).toEqual([]);
+    expect(normalizeThemeSettings({ matrixCustomPattern: "invalid" as never }).matrixCustomPattern).toBeNull();
+    expect(normalizeThemeSettings({}).matrixCustomPattern).toBeNull();
+  });
 });

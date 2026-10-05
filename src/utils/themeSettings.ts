@@ -46,6 +46,7 @@ export interface ResolvedThemeSettings {
   matrixColorTheme: MatrixColorTheme;
   matrixMockFill: boolean;
   matrixBootAnimation: boolean;
+  matrixCustomPattern: number[] | null;
   enableAdminButton: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
@@ -99,6 +100,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   matrixColorTheme: "default",
   matrixMockFill: false,
   matrixBootAnimation: true,
+  matrixCustomPattern: null,
   enableAdminButton: true,
   showPingChart: true,
   homepagePingBindings: {},
@@ -236,6 +238,14 @@ export function normalizeMatrixBootAnimation(value: unknown): boolean {
   return value !== false;
 }
 
+export function normalizeMatrixCustomPattern(val: unknown): number[] | null {
+  if (!Array.isArray(val)) return null;
+  const valid = val.filter(
+    (n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < 100,
+  );
+  return Array.from(new Set(valid)).sort((a, b) => a - b);
+}
+
 function enabledUnlessFalse(value: unknown) {
   return value !== false;
 }
@@ -278,6 +288,7 @@ export function normalizeThemeSettings(
     matrixColorTheme: normalizeMatrixColorTheme(settings?.matrixColorTheme),
     matrixMockFill: normalizeMatrixMockFill(settings?.matrixMockFill),
     matrixBootAnimation: normalizeMatrixBootAnimation(settings?.matrixBootAnimation),
+    matrixCustomPattern: normalizeMatrixCustomPattern(settings?.matrixCustomPattern),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
