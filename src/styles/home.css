@@ -777,10 +777,23 @@
   height: 0 !important;
 }
 
-/* 开屏动效期间取消滚动裁剪容器，确保文字与光束发散光晕完整舒展不被横线或边框截断 */
+/* 开屏动效期间取消滚动裁剪容器，确保文字与光束发散光晕完整舒展不被横线或边框截断；同时引入网格整体优雅淡入 */
 .mao-heatmap-grid.is-booting,
 .mao-heatmap-wrap.is-booting .mao-heatmap-grid {
   overflow: visible !important;
+}
+
+.mao-heatmap-grid.is-booting {
+  animation: mao-grid-boot-fade 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes mao-grid-boot-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .mao-heatmap-cell {
@@ -792,7 +805,10 @@
   cursor: pointer;
   outline: none !important;
   position: relative;
-  transition: filter 120ms ease, opacity 120ms ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: padding-box;
+  transition: background-color 360ms ease, border-color 360ms ease, box-shadow 360ms ease, filter 120ms ease, opacity 120ms ease;
 }
 
 :root[data-appearance="dark"] .mao-heatmap-cell {
@@ -3123,6 +3139,10 @@
 .mao-pattern-cell {
   aspect-ratio: 1 / 1;
   border-radius: 2px;
+  padding: 0;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
   background: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: pointer;
