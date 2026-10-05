@@ -144,4 +144,20 @@ describe("站点预设与本机覆盖的合并口径", () => {
     expect(normalizeThemeSettings({ matrixCustomPattern: "invalid" as never }).matrixCustomPattern).toBeNull();
     expect(normalizeThemeSettings({}).matrixCustomPattern).toBeNull();
   });
+
+  it("normalizes matrixUserPresets correctly", () => {
+    const raw = [
+      { id: "1", name: "  设计A  ", indices: [5, 2, 2, 99, 105, -1], createdAt: 12345 },
+      { id: "2", invalid: true },
+    ];
+    const normalized = normalizeThemeSettings({ matrixUserPresets: raw as never }).matrixUserPresets;
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0]).toEqual({
+      id: "1",
+      name: "设计A",
+      indices: [2, 5, 99],
+      createdAt: 12345,
+    });
+  });
 });
+

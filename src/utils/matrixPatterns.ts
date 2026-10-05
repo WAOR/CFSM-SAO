@@ -63,15 +63,8 @@ export const PATTERN_PRESETS: Record<string, PatternPreset> = {
 export const DEFAULT_PATTERN = PATTERN_PRESETS.sao.indices;
 export const DEFAULT_PATTERN_SET = new Set<number>(DEFAULT_PATTERN);
 
-/**
- * 用户自定义点阵预设
- */
-export interface UserMatrixPreset {
-  id: string;
-  name: string;
-  indices: number[];
-  createdAt: number;
-}
+import type { UserMatrixPreset } from "@/types/cfsm";
+export type { UserMatrixPreset };
 
 export const USER_PRESETS_STORAGE_KEY = "cfsm-sao:matrix-user-presets";
 export const MAX_USER_PRESETS = 12;

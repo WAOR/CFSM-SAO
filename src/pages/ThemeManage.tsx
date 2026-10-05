@@ -286,6 +286,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     matrixMockFill: settings.matrixMockFill,
     matrixBootAnimation: settings.matrixBootAnimation,
     matrixCustomPattern: settings.matrixCustomPattern,
+    matrixUserPresets: settings.matrixUserPresets,
     homepagePingBindings: settings.homepagePingBindings,
     homepageDefaultPingTaskId: settings.homepageDefaultPingTaskId,
     enableHomepageMultiPing: settings.enableHomepageMultiPing,
@@ -1677,8 +1678,16 @@ export function ThemeManage() {
                     {(draft.matrixBootAnimation ?? true) && (
                       <MatrixPatternEditor
                         value={draft.matrixCustomPattern}
-                        onChange={(pattern) => patch("matrixCustomPattern", pattern)}
+                        userPresets={draft.matrixUserPresets}
                         colorTheme={draft.matrixColorTheme ?? "default"}
+                        onApply={(pattern) => {
+                          patch("matrixCustomPattern", pattern);
+                          setMessage("已将点阵图案应用到首页并同步云端");
+                        }}
+                        onSaveUserPresets={(presets) => {
+                          patch("matrixUserPresets", presets);
+                          setMessage("用户预设已更新并同步云端");
+                        }}
                       />
                     )}
                   </div>

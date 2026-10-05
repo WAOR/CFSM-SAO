@@ -492,6 +492,14 @@ export const EMPTY_CARRIER_PING: CarrierPingSnapshot = Object.freeze(
 
 export type MatrixColorTheme = "default" | "eva";
 
+/** 用户自定义点阵预设（云端存储） */
+export interface UserMatrixPreset {
+  id: string;
+  name: string;
+  indices: number[];
+  createdAt: number;
+}
+
 export interface ThemeSettings {
   defaultAppearance?: "system" | "light" | "dark";
   desktopNodeViewMode?: "large" | "compact" | "mini" | "list";
@@ -519,6 +527,8 @@ export interface ThemeSettings {
   matrixBootAnimation?: boolean;
   /** 自定义方格矩阵开场点阵图案（0~99的像素序号数组），为 null 或空时回退为默认 SAO。 */
   matrixCustomPattern?: number[] | null;
+  /** 云端保存的用户自定义点阵预设列表（跨设备漫游）。 */
+  matrixUserPresets?: UserMatrixPreset[];
   homeGroupOrder?: string[];
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic" | "price";

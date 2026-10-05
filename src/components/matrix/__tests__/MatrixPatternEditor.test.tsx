@@ -66,14 +66,20 @@ describe("MatrixPatternEditor Component & Pattern Utilities", () => {
     expect(emptySet.size).toBe(0);
   });
 
-  it("renders user preset section and action button", () => {
-    const onChange = vi.fn();
+  it("renders user preset section, apply button and handles cloud presets", () => {
+    const onApply = vi.fn();
+    const presets = [
+      { id: "p1", name: "机房A", indices: [0, 1, 2], createdAt: 1000 },
+    ];
     const html = renderToStaticMarkup(
-      <MatrixPatternEditor value={null} onChange={onChange} />,
+      <MatrixPatternEditor value={null} userPresets={presets} onApply={onApply} />,
     );
 
+    expect(html).toContain("应用到首页");
     expect(html).toContain("用户预设:");
     expect(html).toContain("存为预设");
+    expect(html).toContain("机房A");
   });
 });
+
 

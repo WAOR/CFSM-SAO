@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Trash2, Sparkles, Plus, X } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Play, Trash2, Sparkles, Plus, X, Send, Check } from "lucide-react";
 import {
   GRID_COLUMNS,
   TOTAL_PIXELS,
@@ -12,18 +12,29 @@ import {
   MAX_USER_PRESETS,
 } from "@/utils/matrixPatterns";
 
-interface MatrixPatternEditorProps {
+export interface MatrixPatternEditorProps {
+  /** 全站当前生效的点阵图案 */
   value: number[] | null | undefined;
-  onChange: (pattern: number[] | null) => void;
+  /** 云端保存的用户自定义预设列表（跨设备漫游） */
+  userPresets?: UserMatrixPreset[];
+  /** 兼容旧版 onChange（可选） */
+  onChange?: (pattern: number[] | null) => void;
+  /** 点击「应用到首页」时触发（精准 1 次同步到云端 D1） */
+  onApply?: (pattern: number[] | null) => void;
+  /** 保存或删除用户预设时触发（精准 1 次同步到云端 D1） */
+  onSaveUserPresets?: (presets: UserMatrixPreset[]) => void;
   colorTheme?: "default" | "eva";
 }
 
 export function MatrixPatternEditor({
   value,
+  userPresets: externalUserPresets,
   onChange,
+  onApply,
+  onSaveUserPresets,
   colorTheme = "default",
 }: MatrixPatternEditorProps) {
-  // 当前点亮像素的集合
+  // 当前画板像素点亮集合（纯本地草稿状态，绘制过程绝不自动向云端 D1 发请求）
   const [pixels, setPixels] = useState<Set<number>>(() => getPatternPixelSet(value));
 
   // 鼠标拖拽绘制状态
@@ -37,68 +48,44 @@ export function MatrixPatternEditor({
   const [previewPhase, setPreviewPhase] = useState<"idle" | "scan" | "hold">("idle");
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 用户自定义预设列表（保存在浏览器本地 localStorage，0 后端请求）
-  const [userPresets, setUserPresets] = useState<UserMatrixPreset[]>(() =>
+  // 点击「应用到首页」后的即时成功反馈反馈态
+  const [justApplied, setJustApplied] = useState(false);
+  const appliedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 用户自定义预设列表：优先使用外部传入的云端预设，否则回退使用本地 localStorage
+  const [localPresets, setLocalPresets] = useState<UserMatrixPreset[]>(() =>
     loadUserMatrixPresets(),
   );
 
-  // 保存当前画布设计为用户预设
-  const handleSaveUserPreset = () => {
-    if (userPresets.length >= MAX_USER_PRESETS) {
-      window.alert(`最多保存 ${MAX_USER_PRESETS} 个自定义预设，请先删除不需要的预设。`);
-      return;
+  const activePresets = useMemo(() => {
+    if (Array.isArray(externalUserPresets)) {
+      return externalUserPresets;
     }
-    const defaultName = `预设 ${userPresets.length + 1}`;
-    const inputName = window.prompt("请输入用户预设名称：", defaultName);
-    if (inputName === null) return;
-    const finalName = inputName.trim() || defaultName;
+    return localPresets;
+  }, [externalUserPresets, localPresets]);
 
-    const newPreset: UserMatrixPreset = {
-      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      name: finalName,
-      indices: Array.from(pixels).sort((a, b) => a - b),
-      createdAt: Date.now(),
-    };
-
-    const nextPresets = [...userPresets, newPreset];
-    setUserPresets(nextPresets);
-    saveUserMatrixPresets(nextPresets);
-  };
-
-  // 删除指定的自定义预设
-  const handleDeleteUserPreset = (id: string, name: string) => {
-    if (!window.confirm(`确定删除用户预设「${name}」吗？`)) return;
-    const nextPresets = userPresets.filter((p) => p.id !== id);
-    setUserPresets(nextPresets);
-    saveUserMatrixPresets(nextPresets);
-  };
+  // 当外部生效值发生变更时，同步画板初始状态
+  useEffect(() => {
+    setPixels(getPatternPixelSet(value));
+  }, [value]);
 
   // 组件卸载时清理定时器
   useEffect(() => {
     return () => {
-      if (previewTimerRef.current) {
-        clearInterval(previewTimerRef.current);
-      }
+      if (previewTimerRef.current) clearInterval(previewTimerRef.current);
+      if (appliedTimerRef.current) clearTimeout(appliedTimerRef.current);
     };
   }, []);
 
-  // 提交更新到外部
-  const commitChange = useCallback(
-    (newSet: Set<number>) => {
-      // 检查是否与默认 SAO 完全一致，一致则存 null 节省体积
-      const defaultSet = new Set(DEFAULT_PATTERN);
-      const isDefault =
-        newSet.size === defaultSet.size &&
-        Array.from(newSet).every((idx) => defaultSet.has(idx));
-
-      if (isDefault) {
-        onChange(null);
-      } else {
-        onChange(Array.from(newSet).sort((a, b) => a - b));
-      }
-    },
-    [onChange],
-  );
+  // 计算当前画板是否与全站当前生效值存在差异（未应用改动）
+  const externalPatternSet = useMemo(() => getPatternPixelSet(value), [value]);
+  const hasUnappliedChanges = useMemo(() => {
+    if (pixels.size !== externalPatternSet.size) return true;
+    for (const idx of pixels) {
+      if (!externalPatternSet.has(idx)) return true;
+    }
+    return false;
+  }, [pixels, externalPatternSet]);
 
   // 开始绘制（按下）
   const handleCellDown = (index: number) => {
@@ -115,7 +102,6 @@ export function MatrixPatternEditor({
       } else {
         next.delete(index);
       }
-      commitChange(next);
       return next;
     });
   };
@@ -131,52 +117,92 @@ export function MatrixPatternEditor({
       } else {
         next.delete(index);
       }
-      commitChange(next);
       return next;
     });
   };
 
-  // 全局监听鼠标释放
-  useEffect(() => {
-    const handleMouseUp = () => {
-      isMouseDownRef.current = false;
-    };
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => window.removeEventListener("mouseup", handleMouseUp);
-  }, []);
-
-  // 移动端触摸滑动绘制支持
-  const handleTouchMove = (e: React.TouchEvent) => {
+  // 移动端触摸滑动绘制
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isMouseDownRef.current || isPreviewing) return;
     const touch = e.touches[0];
     if (!touch) return;
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!target) return;
-    const cellIdxStr = target.getAttribute("data-pixel-index");
-    if (cellIdxStr !== null) {
-      const idx = parseInt(cellIdxStr, 10);
-      if (!isNaN(idx) && idx >= 0 && idx < TOTAL_PIXELS) {
-        handleCellEnter(idx);
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!element) return;
+    const cell = element.closest("[data-pixel-index]");
+    if (cell && gridContainerRef.current?.contains(cell)) {
+      const index = Number(cell.getAttribute("data-pixel-index"));
+      if (!Number.isNaN(index) && index >= 0 && index < TOTAL_PIXELS) {
+        handleCellEnter(index);
       }
     }
   };
 
-  // 应用预设图案
-  const applyPreset = (presetIndices: number[]) => {
+  // 应用某个预设到画布（纯本地加载到画板，不自动触发 D1 同步）
+  const applyPresetToCanvas = (indices: number[]) => {
     if (isPreviewing) return;
-    const newSet = new Set(presetIndices);
-    setPixels(newSet);
-    commitChange(newSet);
+    setPixels(new Set(indices));
   };
 
-  // 清空画布
+  // 清空画布（纯本地操作，不自动触发 D1 同步）
   const handleClear = () => {
     if (isPreviewing) return;
-    const newSet = new Set<number>();
-    setPixels(newSet);
-    commitChange(newSet);
+    setPixels(new Set<number>());
   };
 
+  // 点击「应用到首页」：明确触发一次提交并同步到云端 D1
+  const handleApplyToSite = () => {
+    if (isPreviewing) return;
+    const defaultSet = new Set(DEFAULT_PATTERN);
+    const isDefault =
+      pixels.size === defaultSet.size &&
+      Array.from(pixels).every((idx) => defaultSet.has(idx));
+
+    const finalPattern = isDefault ? null : Array.from(pixels).sort((a, b) => a - b);
+    if (onApply) {
+      onApply(finalPattern);
+    } else if (onChange) {
+      onChange(finalPattern);
+    }
+
+    setJustApplied(true);
+    if (appliedTimerRef.current) clearTimeout(appliedTimerRef.current);
+    appliedTimerRef.current = setTimeout(() => {
+      setJustApplied(false);
+    }, 2000);
+  };
+
+  // 保存当前画布设计为用户预设（触发 1 次云端同步）
+  const handleSaveUserPreset = () => {
+    if (activePresets.length >= MAX_USER_PRESETS) {
+      window.alert(`最多保存 ${MAX_USER_PRESETS} 个自定义预设，请先删除不需要的预设。`);
+      return;
+    }
+    const defaultName = `预设 ${activePresets.length + 1}`;
+    const inputName = window.prompt("请输入用户预设名称：", defaultName);
+    if (inputName === null) return;
+    const finalName = inputName.trim() || defaultName;
+
+    const newPreset: UserMatrixPreset = {
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: finalName,
+      indices: Array.from(pixels).sort((a, b) => a - b),
+      createdAt: Date.now(),
+    };
+
+    const nextPresets = [...activePresets, newPreset];
+    setLocalPresets(nextPresets);
+    saveUserMatrixPresets(nextPresets);
+    onSaveUserPresets?.(nextPresets);
+  };
+
+  // 删除指定的自定义预设（触发 1 次云端同步）
+  const handleDeleteUserPreset = (id: string, name: string) => {
+    if (!window.confirm(`确定删除用户预设「${name}」吗？`)) return;
+    const nextPresets = activePresets.filter((p) => p.id !== id);
+    setLocalPresets(nextPresets);
+    saveUserMatrixPresets(nextPresets);
+    onSaveUserPresets?.(nextPresets);
+  };
 
   // 播放开屏动画预览
   const startPreview = () => {
@@ -192,7 +218,6 @@ export function MatrixPatternEditor({
       if (current > GRID_COLUMNS) {
         clearInterval(interval);
         setPreviewPhase("hold");
-        // 呼吸 1.5 秒后恢复编辑态
         setTimeout(() => {
           setPreviewPhase("idle");
           setIsPreviewing(false);
@@ -258,6 +283,36 @@ export function MatrixPatternEditor({
             <span>清空</span>
           </button>
 
+          <div className="h-3.5 w-px bg-(--hairline) mx-0.5" />
+
+          {/* 核心意愿触发：点击后精准将画布应用到全站首页并同步 D1 */}
+          <button
+            type="button"
+            onClick={handleApplyToSite}
+            disabled={isPreviewing}
+            className={`mao-pattern-action-btn is-apply ${
+              hasUnappliedChanges ? "has-changes" : ""
+            } ${justApplied ? "is-applied" : ""}`}
+            title="将当前画板设计应用到首页并同步至云端 D1"
+          >
+            {justApplied ? (
+              <>
+                <Check size={12} className="text-emerald-500" />
+                <span className="text-emerald-500 font-semibold">已应用</span>
+              </>
+            ) : (
+              <>
+                <Send size={11} />
+                <span>应用到首页</span>
+                {hasUnappliedChanges && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-white animate-pulse ml-0.5"
+                    title="有未应用的变动"
+                  />
+                )}
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -314,9 +369,10 @@ export function MatrixPatternEditor({
             <button
               key={preset.id}
               type="button"
-              onClick={() => applyPreset(preset.indices)}
+              onClick={() => applyPresetToCanvas(preset.indices)}
               disabled={isPreviewing}
               className={`mao-preset-chip ${isCurrent ? "is-active" : ""}`}
+              title="载入画布预览（不自动提交）"
             >
               {preset.name}
             </button>
@@ -324,7 +380,7 @@ export function MatrixPatternEditor({
         })}
       </div>
 
-      {/* 用户自定义预设快捷选用 */}
+      {/* 用户自定义预设快捷选用（云端 D1 漫游，跨设备不丢） */}
       <div className="mt-2 pt-2 border-t border-(--hairline)/40 flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] text-(--text-muted) mr-0.5">用户预设:</span>
         <button
@@ -332,18 +388,18 @@ export function MatrixPatternEditor({
           onClick={handleSaveUserPreset}
           disabled={isPreviewing}
           className="mao-preset-chip is-add flex items-center gap-0.5"
-          title="将当前画布设计保存为用户预设"
+          title="将当前画布设计保存为用户预设（保存至云端 D1，跨设备不丢）"
         >
           <Plus size={11} />
           <span>存为预设</span>
         </button>
 
-        {userPresets.length === 0 ? (
+        {activePresets.length === 0 ? (
           <span className="text-[10px] text-(--text-muted)/70 italic ml-0.5">
             (暂无保存的预设，绘制后点击「存为预设」)
           </span>
         ) : (
-          userPresets.map((preset) => {
+          activePresets.map((preset) => {
             const isCurrent =
               pixels.size === preset.indices.length &&
               preset.indices.every((idx) => pixels.has(idx));
@@ -352,12 +408,12 @@ export function MatrixPatternEditor({
               <div key={preset.id} className="inline-flex items-center">
                 <button
                   type="button"
-                  onClick={() => applyPreset(preset.indices)}
+                  onClick={() => applyPresetToCanvas(preset.indices)}
                   disabled={isPreviewing}
                   className={`mao-preset-chip flex items-center gap-1.5 ${
                     isCurrent ? "is-active" : ""
                   }`}
-                  title={`点亮 ${preset.indices.length} 格`}
+                  title={`载入此预设到画布（点亮 ${preset.indices.length} 格）`}
                 >
                   <span>{preset.name}</span>
                   <span
@@ -374,7 +430,7 @@ export function MatrixPatternEditor({
                       }
                     }}
                     className="inline-flex items-center justify-center w-3 h-3 rounded-full hover:bg-red-500/20 hover:text-red-500 transition-colors text-[10px] leading-none"
-                    title="删除此预设"
+                    title="从云端删除此预设"
                   >
                     <X size={9} />
                   </span>

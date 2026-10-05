@@ -1,4 +1,4 @@
-import type { ThemeSettings } from "@/types/cfsm";
+import type { ThemeSettings, UserMatrixPreset } from "@/types/cfsm";
 import {
   DEFAULT_COST_RATE_API_URL,
   normalizeCostIgnoredNodes,
@@ -47,6 +47,7 @@ export interface ResolvedThemeSettings {
   matrixMockFill: boolean;
   matrixBootAnimation: boolean;
   matrixCustomPattern: number[] | null;
+  matrixUserPresets: UserMatrixPreset[];
   enableAdminButton: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
@@ -101,6 +102,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   matrixMockFill: false,
   matrixBootAnimation: true,
   matrixCustomPattern: null,
+  matrixUserPresets: [],
   enableAdminButton: true,
   showPingChart: true,
   homepagePingBindings: {},
@@ -246,6 +248,35 @@ export function normalizeMatrixCustomPattern(val: unknown): number[] | null {
   return Array.from(new Set(valid)).sort((a, b) => a - b);
 }
 
+export function normalizeMatrixUserPresets(val: unknown): UserMatrixPreset[] {
+  if (!Array.isArray(val)) return [];
+  return val
+    .filter(
+      (item): item is UserMatrixPreset =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            typeof (item as UserMatrixPreset).id === "string" &&
+            typeof (item as UserMatrixPreset).name === "string" &&
+            Array.isArray((item as UserMatrixPreset).indices),
+        ),
+    )
+    .map((item) => ({
+      id: String(item.id),
+      name: String(item.name).trim().slice(0, 24) || "自定义预设",
+      indices: Array.from(
+        new Set(
+          item.indices.filter(
+            (idx): idx is number =>
+              typeof idx === "number" && Number.isInteger(idx) && idx >= 0 && idx < 100,
+          ),
+        ),
+      ).sort((a, b) => a - b),
+      createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
+    }))
+    .slice(0, 12);
+}
+
 function enabledUnlessFalse(value: unknown) {
   return value !== false;
 }
@@ -289,6 +320,7 @@ export function normalizeThemeSettings(
     matrixMockFill: normalizeMatrixMockFill(settings?.matrixMockFill),
     matrixBootAnimation: normalizeMatrixBootAnimation(settings?.matrixBootAnimation),
     matrixCustomPattern: normalizeMatrixCustomPattern(settings?.matrixCustomPattern),
+    matrixUserPresets: normalizeMatrixUserPresets(settings?.matrixUserPresets),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
