@@ -19,9 +19,9 @@ export interface MatrixPatternEditorProps {
   userPresets?: UserMatrixPreset[];
   /** 兼容旧版 onChange（可选） */
   onChange?: (pattern: number[] | null) => void;
-  /** 点击「应用到首页」时触发（精准 1 次同步到云端 D1） */
+  /** 点击「应用到首页」时触发（精准 1 次同步到云端） */
   onApply?: (pattern: number[] | null) => void;
-  /** 保存或删除用户预设时触发（精准 1 次同步到云端 D1） */
+  /** 保存或删除用户预设时触发（精准 1 次同步到云端） */
   onSaveUserPresets?: (presets: UserMatrixPreset[]) => void;
   colorTheme?: "default" | "eva";
 }
@@ -34,13 +34,8 @@ export function MatrixPatternEditor({
   onSaveUserPresets,
   colorTheme = "default",
 }: MatrixPatternEditorProps) {
-  // 当前画板像素点亮集合（纯本地草稿状态，绘制过程绝不自动向云端 D1 发请求）
+  // 当前画板像素点亮集合（纯本地草稿状态，绘制过程绝不自动向云端发请求）
   const [pixels, setPixels] = useState<Set<number>>(() => getPatternPixelSet(value));
-
-  // 鼠标拖拽绘制状态
-  const isMouseDownRef = useRef(false);
-  const drawModeRef = useRef<"add" | "remove">("add");
-  const gridContainerRef = useRef<HTMLDivElement>(null);
 
   // 动画预览状态
   const [isPreviewing, setIsPreviewing] = useState(false);
@@ -65,25 +60,10 @@ export function MatrixPatternEditor({
     setPixels(getPatternPixelSet(value));
   }, [value]);
 
-  // 组件卸载时清理定时器与释放监听
+  // 组件卸载时清理定时器
   useEffect(() => {
     return () => {
       if (previewTimerRef.current) clearInterval(previewTimerRef.current);
-    };
-  }, []);
-
-  // 鼠标与触摸全局弹起监听：确保松开按键后立即终止绘制状态，绝不随着鼠标滑动连带误触
-  useEffect(() => {
-    const handleRelease = () => {
-      isMouseDownRef.current = false;
-    };
-    window.addEventListener("mouseup", handleRelease);
-    window.addEventListener("touchend", handleRelease);
-    window.addEventListener("touchcancel", handleRelease);
-    return () => {
-      window.removeEventListener("mouseup", handleRelease);
-      window.removeEventListener("touchend", handleRelease);
-      window.removeEventListener("touchcancel", handleRelease);
     };
   }, []);
 
@@ -97,73 +77,33 @@ export function MatrixPatternEditor({
     return false;
   }, [pixels, externalPatternSet]);
 
-  // 开始绘制（按下）
-  const handleCellDown = (index: number) => {
+  // 单击切换单元格点亮状态（标准 onClick，移动端/桌面端统一，零延迟零误触）
+  const toggleCell = (index: number) => {
     if (isPreviewing) return;
-    isMouseDownRef.current = true;
-    const isCurrentlyLit = pixels.has(index);
-    const mode = isCurrentlyLit ? "remove" : "add";
-    drawModeRef.current = mode;
-
     setPixels((prev) => {
       const next = new Set(prev);
-      if (mode === "add") {
-        next.add(index);
-      } else {
+      if (next.has(index)) {
         next.delete(index);
+      } else {
+        next.add(index);
       }
       return next;
     });
   };
 
-  // 拖拽划过其他格子（加入 e.buttons 原生按键防错校验）
-  const handleCellEnter = (index: number, e?: React.MouseEvent) => {
-    if (e && e.buttons !== undefined && e.buttons !== 1) {
-      isMouseDownRef.current = false;
-      return;
-    }
-    if (!isMouseDownRef.current || isPreviewing) return;
-    setPixels((prev) => {
-      const mode = drawModeRef.current;
-      const next = new Set(prev);
-      if (mode === "add") {
-        next.add(index);
-      } else {
-        next.delete(index);
-      }
-      return next;
-    });
-  };
-
-  // 移动端触摸滑动绘制
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!isMouseDownRef.current || isPreviewing) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    if (!element) return;
-    const cell = element.closest("[data-pixel-index]");
-    if (cell && gridContainerRef.current?.contains(cell)) {
-      const index = Number(cell.getAttribute("data-pixel-index"));
-      if (!Number.isNaN(index) && index >= 0 && index < TOTAL_PIXELS) {
-        handleCellEnter(index);
-      }
-    }
-  };
-
-  // 应用某个预设到画布（纯本地加载到画板，不自动触发 D1 同步）
+  // 应用某个预设到画布（纯本地加载到画板，不自动触发同步）
   const applyPresetToCanvas = (indices: number[]) => {
     if (isPreviewing) return;
     setPixels(new Set(indices));
   };
 
-  // 清空画布（纯本地操作，不自动触发 D1 同步）
+  // 清空画布（纯本地操作，不自动触发同步）
   const handleClear = () => {
     if (isPreviewing) return;
     setPixels(new Set<number>());
   };
 
-  // 点击「应用到首页」：明确触发一次提交并同步到云端 D1
+  // 点击「应用到首页」：明确触发一次提交并同步到云端
   const handleApplyToSite = () => {
     if (isPreviewing) return;
     const defaultSet = new Set(DEFAULT_PATTERN);
@@ -178,7 +118,6 @@ export function MatrixPatternEditor({
       onChange(finalPattern);
     }
   };
-
 
   // 保存当前画布设计为用户预设（触发 1 次云端同步）
   const handleSaveUserPreset = () => {
@@ -294,7 +233,7 @@ export function MatrixPatternEditor({
 
           <div className="h-3.5 w-px bg-(--hairline) mx-0.5" />
 
-          {/* 核心意愿触发：点击后精准将画布应用到全站首页并同步 D1 */}
+          {/* 核心意愿触发：点击后精准将画布应用到全站首页并同步 */}
           <button
             type="button"
             onClick={handleApplyToSite}
@@ -316,19 +255,8 @@ export function MatrixPatternEditor({
 
       {/* 20 × 5 微型像素网格画布 */}
       <div
-        ref={gridContainerRef}
         className={`mao-pattern-canvas ${colorTheme === "eva" ? "is-eva" : ""}`}
         data-palette={colorTheme}
-        onMouseUp={() => {
-          isMouseDownRef.current = false;
-        }}
-        onMouseLeave={() => {
-          isMouseDownRef.current = false;
-        }}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={() => {
-          isMouseDownRef.current = false;
-        }}
         role="grid"
         aria-label="点阵开屏图案绘制画布"
       >
@@ -337,25 +265,13 @@ export function MatrixPatternEditor({
           const isLit = pixels.has(idx);
 
           return (
-            <div
+            <button
               key={idx}
+              type="button"
+              disabled={isPreviewing}
               data-pixel-index={idx}
               className={`mao-pattern-cell ${previewClass}`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleCellDown(idx);
-              }}
-              onMouseUp={() => {
-                isMouseDownRef.current = false;
-              }}
-              onMouseEnter={(e) => handleCellEnter(idx, e)}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                handleCellDown(idx);
-              }}
-              onTouchEnd={() => {
-                isMouseDownRef.current = false;
-              }}
+              onClick={() => toggleCell(idx)}
               aria-label={`第 ${Math.floor(idx / GRID_COLUMNS) + 1} 行，第 ${(idx % GRID_COLUMNS) + 1} 列: ${
                 isLit ? "已点亮" : "未点亮"
               }`}
@@ -387,7 +303,7 @@ export function MatrixPatternEditor({
         })}
       </div>
 
-      {/* 用户自定义预设快捷选用（云端 D1 漫游，跨设备不丢） */}
+      {/* 用户自定义预设快捷选用（云端漫游，跨设备不丢） */}
       <div className="mt-2 pt-2 border-t border-(--hairline)/40 flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] text-(--text-muted) mr-0.5">用户预设:</span>
         <button
@@ -395,7 +311,7 @@ export function MatrixPatternEditor({
           onClick={handleSaveUserPreset}
           disabled={isPreviewing}
           className="mao-preset-chip is-add flex items-center gap-0.5"
-          title="将当前画布设计保存为用户预设（保存至云端 D1，跨设备不丢）"
+          title="将当前画布设计保存为用户预设（保存至云端，跨设备不丢）"
         >
           <Plus size={11} />
           <span>存为预设</span>
