@@ -134,24 +134,50 @@ export function ClusterHeatmap({
     }
     // 页面载入时从左向右横扫点亮正体 "SAO" 字符点阵，呼吸三下后平滑过渡至真实节点数据
     setBootPhase("scan");
-    let current = 0;
-    const interval = setInterval(() => {
-      setScanCol(current);
-      current++;
-      if (current > GRID_COLUMNS) {
-        clearInterval(interval);
-        setBootPhase("hold");
-        // 呼吸三下（每次 600ms，共 1800ms）后进入平滑溶解阶段
-        setTimeout(() => {
-          setBootPhase("dissolve");
-          setTimeout(() => {
-            setBootPhase("idle");
-          }, 350);
-        }, 1800);
-      }
-    }, 24);
+    setScanCol(-1);
 
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    let dissolveTimer: ReturnType<typeof setTimeout> | null = null;
+    let startDelayTimer: ReturnType<typeof setTimeout> | null = null;
+    let raf1: number | null = null;
+    let raf2: number | null = null;
+
+    // 先通过双重 requestAnimationFrame 确保浏览器已经完整完成首屏 DOM 布局、样式计算与初次渲染合成（Paint），
+    // 随后再保留 360ms 的静默就绪缓冲，使用户清晰看到 100 槽机架底板已稳固就位，
+    // 彻底杜绝在浅色模式或页面初始加载卡顿阶段扫光提前“偷跑”导致前几列未能被肉眼捕获的问题。
+    // 扫光步进间隔微调至 36ms，呈现从容优雅的雷达激光横扫质感（20 列耗时约 720ms）。
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        startDelayTimer = setTimeout(() => {
+          let current = 0;
+          interval = setInterval(() => {
+            setScanCol(current);
+            current++;
+            if (current > GRID_COLUMNS) {
+              if (interval) clearInterval(interval);
+              setBootPhase("hold");
+              // 呼吸三下（每次 600ms，共 1800ms）后进入平滑溶解阶段
+              holdTimer = setTimeout(() => {
+                setBootPhase("dissolve");
+                dissolveTimer = setTimeout(() => {
+                  setBootPhase("idle");
+                }, 350);
+              }, 1800);
+            }
+          }, 36);
+        }, 360);
+      });
+    });
+
+    return () => {
+      if (raf1 !== null) cancelAnimationFrame(raf1);
+      if (raf2 !== null) cancelAnimationFrame(raf2);
+      if (startDelayTimer) clearTimeout(startDelayTimer);
+      if (interval) clearInterval(interval);
+      if (holdTimer) clearTimeout(holdTimer);
+      if (dissolveTimer) clearTimeout(dissolveTimer);
+    };
   }, [bootAnimation]);
 
   // 统计高吞吐节点数量（速率 >= 5 MB/s）
