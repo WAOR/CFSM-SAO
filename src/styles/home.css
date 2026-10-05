@@ -620,22 +620,25 @@
   line-height: 1.2;
 }
 
-/* 一节一节的离散节点状态格（少于 51 个节点时） */
+/* 一节一节的离散节点状态格（少于 51 个节点时呈现经典胶囊） */
 .mao-node-blocks {
   display: flex;
   align-items: center;
-  gap: 3.5px;
+  gap: clamp(1px, 0.4vw, 3px);
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 3px 0;
   min-height: 10px;
 }
 
 .mao-node-block {
   flex: 1 1 0px;
-  min-width: 4px;
+  min-width: 0;
   height: 8px;
-  border-radius: 3px;
-  transition: transform 140ms ease, opacity 140ms ease;
+  border-radius: 2px;
+  contain: paint layout;
+  transition: transform 140ms ease;
 }
 
 .mao-node-block.is-online {
