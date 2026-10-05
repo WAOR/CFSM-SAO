@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Trash2, Sparkles } from "lucide-react";
+import { Play, Trash2, Sparkles, Plus, X } from "lucide-react";
 import {
   GRID_COLUMNS,
   TOTAL_PIXELS,
   PATTERN_PRESETS,
   DEFAULT_PATTERN,
   getPatternPixelSet,
+  loadUserMatrixPresets,
+  saveUserMatrixPresets,
+  type UserMatrixPreset,
+  MAX_USER_PRESETS,
 } from "@/utils/matrixPatterns";
 
 interface MatrixPatternEditorProps {
@@ -33,10 +37,41 @@ export function MatrixPatternEditor({
   const [previewPhase, setPreviewPhase] = useState<"idle" | "scan" | "hold">("idle");
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 当外部 value 发生实质变化（例如重置或从配置载入）时同步本地集合
-  useEffect(() => {
-    setPixels(getPatternPixelSet(value));
-  }, [value]);
+  // 用户自定义预设列表（保存在浏览器本地 localStorage，0 后端请求）
+  const [userPresets, setUserPresets] = useState<UserMatrixPreset[]>(() =>
+    loadUserMatrixPresets(),
+  );
+
+  // 保存当前画布设计为用户预设
+  const handleSaveUserPreset = () => {
+    if (userPresets.length >= MAX_USER_PRESETS) {
+      window.alert(`最多保存 ${MAX_USER_PRESETS} 个自定义预设，请先删除不需要的预设。`);
+      return;
+    }
+    const defaultName = `预设 ${userPresets.length + 1}`;
+    const inputName = window.prompt("请输入用户预设名称：", defaultName);
+    if (inputName === null) return;
+    const finalName = inputName.trim() || defaultName;
+
+    const newPreset: UserMatrixPreset = {
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: finalName,
+      indices: Array.from(pixels).sort((a, b) => a - b),
+      createdAt: Date.now(),
+    };
+
+    const nextPresets = [...userPresets, newPreset];
+    setUserPresets(nextPresets);
+    saveUserMatrixPresets(nextPresets);
+  };
+
+  // 删除指定的自定义预设
+  const handleDeleteUserPreset = (id: string, name: string) => {
+    if (!window.confirm(`确定删除用户预设「${name}」吗？`)) return;
+    const nextPresets = userPresets.filter((p) => p.id !== id);
+    setUserPresets(nextPresets);
+    saveUserMatrixPresets(nextPresets);
+  };
 
   // 组件卸载时清理定时器
   useEffect(() => {
@@ -230,6 +265,7 @@ export function MatrixPatternEditor({
       <div
         ref={gridContainerRef}
         className={`mao-pattern-canvas ${colorTheme === "eva" ? "is-eva" : ""}`}
+        data-palette={colorTheme}
         onMouseLeave={() => {
           isMouseDownRef.current = false;
         }}
@@ -286,6 +322,67 @@ export function MatrixPatternEditor({
             </button>
           );
         })}
+      </div>
+
+      {/* 用户自定义预设快捷选用 */}
+      <div className="mt-2 pt-2 border-t border-(--hairline)/40 flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] text-(--text-muted) mr-0.5">用户预设:</span>
+        <button
+          type="button"
+          onClick={handleSaveUserPreset}
+          disabled={isPreviewing}
+          className="mao-preset-chip is-add flex items-center gap-0.5"
+          title="将当前画布设计保存为用户预设"
+        >
+          <Plus size={11} />
+          <span>存为预设</span>
+        </button>
+
+        {userPresets.length === 0 ? (
+          <span className="text-[10px] text-(--text-muted)/70 italic ml-0.5">
+            (暂无保存的预设，绘制后点击「存为预设」)
+          </span>
+        ) : (
+          userPresets.map((preset) => {
+            const isCurrent =
+              pixels.size === preset.indices.length &&
+              preset.indices.every((idx) => pixels.has(idx));
+
+            return (
+              <div key={preset.id} className="inline-flex items-center">
+                <button
+                  type="button"
+                  onClick={() => applyPreset(preset.indices)}
+                  disabled={isPreviewing}
+                  className={`mao-preset-chip flex items-center gap-1.5 ${
+                    isCurrent ? "is-active" : ""
+                  }`}
+                  title={`点亮 ${preset.indices.length} 格`}
+                >
+                  <span>{preset.name}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteUserPreset(preset.id, preset.name);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        handleDeleteUserPreset(preset.id, preset.name);
+                      }
+                    }}
+                    className="inline-flex items-center justify-center w-3 h-3 rounded-full hover:bg-red-500/20 hover:text-red-500 transition-colors text-[10px] leading-none"
+                    title="删除此预设"
+                  >
+                    <X size={9} />
+                  </span>
+                </button>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

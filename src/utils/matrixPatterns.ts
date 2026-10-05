@@ -64,6 +64,57 @@ export const DEFAULT_PATTERN = PATTERN_PRESETS.sao.indices;
 export const DEFAULT_PATTERN_SET = new Set<number>(DEFAULT_PATTERN);
 
 /**
+ * 用户自定义点阵预设
+ */
+export interface UserMatrixPreset {
+  id: string;
+  name: string;
+  indices: number[];
+  createdAt: number;
+}
+
+export const USER_PRESETS_STORAGE_KEY = "cfsm-sao:matrix-user-presets";
+export const MAX_USER_PRESETS = 12;
+
+/**
+ * 从浏览器 localStorage 加载用户保存的点阵预设列表
+ */
+export function loadUserMatrixPresets(): UserMatrixPreset[] {
+  if (typeof window === "undefined" || !window.localStorage) return [];
+  try {
+    const raw = localStorage.getItem(USER_PRESETS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item): item is UserMatrixPreset =>
+          typeof item?.id === "string" &&
+          typeof item?.name === "string" &&
+          Array.isArray(item?.indices),
+      );
+    }
+  } catch (err) {
+    console.warn("Failed to load user matrix presets:", err);
+  }
+  return [];
+}
+
+/**
+ * 保存用户点阵预设列表到浏览器 localStorage
+ */
+export function saveUserMatrixPresets(presets: UserMatrixPreset[]): void {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    localStorage.setItem(
+      USER_PRESETS_STORAGE_KEY,
+      JSON.stringify(presets.slice(0, MAX_USER_PRESETS)),
+    );
+  } catch (err) {
+    console.warn("Failed to save user matrix presets:", err);
+  }
+}
+
+/**
  * 根据传入的自定义图案数组解析出最终生效的点阵像素索引 Set
  * - 当传入 null 或 undefined 时，回退到默认 SAO 点阵；
  * - 当传入数组（包括空数组 []，代表清空画布）时，严格尊重用户所选像素集合。
@@ -74,3 +125,4 @@ export function getPatternPixelSet(custom?: number[] | null): Set<number> {
   }
   return DEFAULT_PATTERN_SET;
 }
+

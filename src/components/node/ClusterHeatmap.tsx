@@ -424,6 +424,8 @@ export function ClusterHeatmap({
 
   const isBooting = bootPhase !== "idle" && bootPhase !== "dissolve";
 
+  const isScrollable = totalSlots > 100;
+
   return (
     <div
       className="mao-progress-section mao-matrix-section"
@@ -448,16 +450,16 @@ export function ClusterHeatmap({
         </div>
       </div>
 
-      {/* GitHub 风格的规整机架方块矩阵（横竖间距等宽，定高无痕滚动） */}
+      {/* GitHub 风格的规整机架方块矩阵（<= 100 台固定无滚动，> 100 台平滑无痕滚动） */}
       <div
         ref={wrapRef}
-        className={`mao-heatmap-wrap${bootPhase !== "idle" ? " is-booting" : ""}`}
+        className={`mao-heatmap-wrap${bootPhase !== "idle" ? " is-booting" : ""}${isScrollable ? " is-scrollable" : ""}`}
         onTouchStartCapture={() => {
           lastTouchTimeRef.current = Date.now();
         }}
       >
         <div
-          className={`mao-heatmap-grid${bootPhase !== "idle" ? " is-booting" : ""}`}
+          className={`mao-heatmap-grid${bootPhase !== "idle" ? " is-booting" : ""}${isScrollable ? " is-scrollable" : ""}`}
           role="grid"
           aria-label="服务器集群机架热力矩阵"
         >

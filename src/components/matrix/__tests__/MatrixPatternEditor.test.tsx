@@ -65,4 +65,15 @@ describe("MatrixPatternEditor Component & Pattern Utilities", () => {
     const emptySet = getPatternPixelSet([]);
     expect(emptySet.size).toBe(0);
   });
+
+  it("renders user preset section and action button", () => {
+    const onChange = vi.fn();
+    const html = renderToStaticMarkup(
+      <MatrixPatternEditor value={null} onChange={onChange} />,
+    );
+
+    expect(html).toContain("用户预设:");
+    expect(html).toContain("存为预设");
+  });
 });
+

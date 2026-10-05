@@ -762,26 +762,30 @@
   width: 100%;
   box-sizing: border-box;
   padding: 5px 6px;
-  max-height: 145px;
-  /* 独占版面时容纳 5~6 行饱满 GitHub 大方块（100-120台），高度充裕自由 */
-  overflow-y: auto;
+  /* 默认（<= 100 台标准 5 行矩阵）：自适应舒展，彻底固定，不产生任何滚动或回弹 */
+  overflow: hidden !important;
+}
+
+/* 仅在超出 100 台（出现第 6 行及以上机位）时，才限制高度并开启平滑无痕垂直滚动 */
+.mao-heatmap-grid.is-scrollable {
+  max-height: 155px;
+  overflow-y: auto !important;
   overflow-x: hidden !important;
   scrollbar-width: none !important;
-  /* Firefox 彻底隐藏滚动条 */
   -ms-overflow-style: none !important;
+  overscroll-behavior: contain;
+}
+
+.mao-heatmap-grid.is-scrollable::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* 开屏动效期间取消滚动裁剪容器，确保文字与光束发散光晕完整舒展不被横线或边框截断 */
 .mao-heatmap-grid.is-booting,
 .mao-heatmap-wrap.is-booting .mao-heatmap-grid {
   overflow: visible !important;
-}
-
-.mao-heatmap-grid::-webkit-scrollbar {
-  display: none !important;
-  /* Chrome / Safari 彻底隐藏滚动条 */
-  width: 0 !important;
-  height: 0 !important;
 }
 
 .mao-heatmap-cell {
@@ -871,16 +875,45 @@
   background: color-mix(in srgb, var(--text-tertiary) 20%, transparent);
 }
 
-.mao-heatmap-cell.is-empty-slot {
+.mao-heatmap-cell.is-empty-slot:not(.is-sao-pixel):not(.is-sao-beam):not(.is-sao-bg):not(.is-sao-unlit) {
   background: rgba(0, 0, 0, 0.035);
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: default;
   opacity: 0.65;
 }
 
-:root[data-appearance="dark"] .mao-heatmap-cell.is-empty-slot {
+:root[data-appearance="dark"] .mao-heatmap-cell.is-empty-slot:not(.is-sao-pixel):not(.is-sao-beam):not(.is-sao-bg):not(.is-sao-unlit) {
   background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ==========================================================================
+   开屏点阵动效与方格矩阵配色设计令牌（Palette Design Tokens）
+   面向未来可扩展架构：未来新增任何配色预设，仅需在此处声明一套 CSS 变量，
+   首页机架热力矩阵与设置页绘制画布将自动 100% 完整继承，
+   彻底杜绝散落选择器造成的权重竞争、深浅模式覆盖与空槽串色。
+   ========================================================================== */
+
+/* 1. 默认经典配色（SAO 暖金橙）Tokens */
+:root,
+.mao-matrix-section,
+.mao-pattern-canvas {
+  --matrix-boot-pixel-bg: #ff9600;
+  --matrix-boot-pixel-border: rgba(255, 220, 100, 0.9);
+  --matrix-boot-pixel-shadow: 0 0 9px rgba(255, 150, 0, 0.65), 0 0 2px rgba(255, 220, 100, 0.95);
+  --matrix-boot-beam-glow: #ff9600;
+  --matrix-boot-pulse-anim: sao-boot-pulse;
+}
+
+/* 2. EVA 初号机配色（初号机紫 + 荧光绿）Tokens */
+[data-palette="eva"],
+.mao-pattern-canvas[data-palette="eva"],
+.mao-pattern-canvas.is-eva {
+  --matrix-boot-pixel-bg: #7c3aed;
+  --matrix-boot-pixel-border: #c084fc;
+  --matrix-boot-pixel-shadow: 0 0 12px rgba(124, 58, 237, 0.85), 0 0 3px #00ff66;
+  --matrix-boot-beam-glow: #7c3aed;
+  --matrix-boot-pulse-anim: sao-boot-pulse-eva;
 }
 
 /* SAO 正体开屏点阵动效：统一重置所有槽位与节点的底色、边框、透明度与动画，杜绝深浅不一 */
@@ -901,49 +934,27 @@
   display: none !important;
 }
 
-/* 1. 光束横扫列：纯净高亮激光扫掠，去除几何放大突跳（杜绝第0列缩放抽搐） */
+/* 1. 光束横扫列：纯净高亮激光扫掠，去除几何放大突跳 */
 .mao-heatmap-cell.is-sao-beam {
   background: #ffffff !important;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 5px #ff9600 !important;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 6px var(--matrix-boot-beam-glow) !important;
   border-color: #ffffff !important;
   opacity: 1 !important;
   transform: none !important;
   z-index: 5;
 }
 
-:root[data-palette="eva"] .mao-heatmap-cell.is-sao-beam,
-.mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-beam,
-.mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-beam {
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.95), 0 0 6px #7c3aed !important;
-}
-
-/* 2. 正体 SAO 文字像素：统一纯色、完全不透明（opacity: 1）、无虚线、高亮光晕 */
+/* 2. 开屏文字像素：统一由配色设计令牌（Tokens）驱动，杜绝写死颜色与层叠权重竞争 */
 .mao-heatmap-cell.is-sao-pixel {
-  background: #ff9600 !important;
-  box-shadow: 0 0 9px rgba(255, 150, 0, 0.65), 0 0 2px rgba(255, 220, 100, 0.95) !important;
-  border-color: rgba(255, 220, 100, 0.9) !important;
+  background: var(--matrix-boot-pixel-bg) !important;
+  border: 1px solid var(--matrix-boot-pixel-border) !important;
+  box-shadow: var(--matrix-boot-pixel-shadow) !important;
   opacity: 1 !important;
   z-index: 2;
 }
 
 .mao-heatmap-cell.is-sao-pixel.is-sao-glow {
-  animation: sao-boot-pulse 0.6s ease-in-out infinite !important;
-}
-
-/* 3. EVA 初号机配色：文字采用初号机标志性紫色 (#7c3aed)，配以初号机紫光晕与荧光绿微光边框 */
-:root[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel,
-.mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel,
-.mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel {
-  background: #7c3aed !important;
-  box-shadow: 0 0 12px rgba(124, 58, 237, 0.85), 0 0 3px #00ff66 !important;
-  border-color: #c084fc !important;
-  opacity: 1 !important;
-}
-
-:root[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel.is-sao-glow,
-.mao-progress-container[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel.is-sao-glow,
-.mao-matrix-section[data-palette="eva"] .mao-heatmap-cell.is-sao-pixel.is-sao-glow {
-  animation: sao-boot-pulse-eva 0.6s ease-in-out infinite !important;
+  animation: var(--matrix-boot-pulse-anim) 0.6s ease-in-out infinite !important;
 }
 
 /* 4. 背景已扫过非文字像素：统统清除离线红光/高载黄光/虚线干扰，呈现干净统一的暗调底色，光束离开时有柔和余晖渐隐 */
@@ -3085,31 +3096,20 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* 点亮状态（默认经典配色：与首页 SAO 完全一致的暖金橘黄色 #ff9600） */
+/* 点亮状态：统一由设计令牌驱动，与首页热力矩阵完全一致 */
 .mao-pattern-cell.is-lit {
-  background: #ff9600 !important;
-  border-color: rgba(255, 220, 100, 0.9) !important;
-  box-shadow: 0 0 8px rgba(255, 150, 0, 0.65), 0 0 2px rgba(255, 220, 100, 0.95) !important;
-}
-
-/* 点亮状态（EVA 初号机配色：与首页完全一致的机体紫 #7c3aed） */
-.mao-pattern-canvas.is-eva .mao-pattern-cell.is-lit {
-  background: #7c3aed !important;
-  border-color: #c084fc !important;
-  box-shadow: 0 0 8px rgba(124, 58, 237, 0.75), 0 0 2px #00ff66 !important;
+  background: var(--matrix-boot-pixel-bg) !important;
+  border: 1px solid var(--matrix-boot-pixel-border) !important;
+  box-shadow: var(--matrix-boot-pixel-shadow) !important;
 }
 
 /* 动效预览横扫光束：纯光效平滑扫掠，无尺寸抽搐 */
 .mao-pattern-cell.is-scan-beam {
   background: #ffffff !important;
   border-color: #ffffff !important;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.95), 0 0 4px #ff9600 !important;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.95), 0 0 4px var(--matrix-boot-beam-glow) !important;
   transform: none;
   z-index: 5;
-}
-
-.mao-pattern-canvas.is-eva .mao-pattern-cell.is-scan-beam {
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.95), 0 0 5px #7c3aed !important;
 }
 
 .mao-pattern-cell.is-unlit {
@@ -3118,11 +3118,7 @@
 }
 
 .mao-pattern-cell.is-preview-pulse {
-  animation: sao-boot-pulse 0.6s ease-in-out infinite;
-}
-
-.mao-pattern-canvas.is-eva .mao-pattern-cell.is-preview-pulse {
-  animation: sao-boot-pulse-eva 0.6s ease-in-out infinite;
+  animation: var(--matrix-boot-pulse-anim) 0.6s ease-in-out infinite;
 }
 
 .mao-preset-chip {
@@ -3147,4 +3143,17 @@
   border-color: color-mix(in srgb, var(--theme-accent, #3b82f6) 40%, transparent);
   color: var(--theme-accent, #3b82f6);
   font-weight: 600;
+}
+
+.mao-preset-chip.is-add {
+  border-style: dashed;
+  color: var(--accent-500, #f59e0b);
+  border-color: color-mix(in srgb, var(--accent-500, #f59e0b) 45%, transparent);
+  background: color-mix(in srgb, var(--accent-500, #f59e0b) 6%, transparent);
+}
+
+.mao-preset-chip.is-add:hover {
+  color: var(--accent-500, #f59e0b);
+  border-color: var(--accent-500, #f59e0b);
+  background: color-mix(in srgb, var(--accent-500, #f59e0b) 14%, transparent);
 }
