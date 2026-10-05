@@ -3056,36 +3056,37 @@
   background: color-mix(in srgb, var(--theme-accent, #3b82f6) 20%, transparent);
 }
 
+/* 核心应用到首页操作按钮：严格遵循高对比度与零抖动 */
 .mao-pattern-action-btn.is-apply {
-  color: var(--accent-500, #f59e0b);
-  border-color: color-mix(in srgb, var(--accent-500, #f59e0b) 35%, transparent);
-  background: color-mix(in srgb, var(--accent-500, #f59e0b) 8%, transparent);
+  position: relative;
+  color: var(--text-secondary);
+  border-color: var(--hairline);
+  background: var(--bg-card);
 }
 
 .mao-pattern-action-btn.is-apply:hover:not(:disabled) {
-  border-color: var(--accent-500, #f59e0b);
-  background: color-mix(in srgb, var(--accent-500, #f59e0b) 16%, transparent);
+  color: var(--text-primary);
+  border-color: var(--theme-accent, #3b82f6);
+  background: color-mix(in srgb, var(--theme-accent, #3b82f6) 12%, transparent);
 }
 
+/* 当画布有未应用修改时：突出高亮主色状态，坚决使用深纯色底配合纯白字，防止白底白字 */
 .mao-pattern-action-btn.is-apply.has-changes {
-  color: #ffffff;
-  background: var(--accent-500, #f59e0b);
-  border-color: var(--accent-500, #f59e0b);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-500, #f59e0b) 45%, transparent);
+  color: #ffffff !important;
+  background: var(--theme-accent, #3b82f6) !important;
+  border-color: var(--theme-accent, #3b82f6) !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--theme-accent, #3b82f6) 45%, transparent);
   font-weight: 600;
 }
 
 .mao-pattern-action-btn.is-apply.has-changes:hover:not(:disabled) {
-  filter: brightness(1.08);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-500, #f59e0b) 60%, transparent);
+  color: #ffffff !important;
+  background: color-mix(in srgb, var(--theme-accent, #3b82f6) 82%, #000000) !important;
+  border-color: color-mix(in srgb, var(--theme-accent, #3b82f6) 82%, #000000) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--theme-accent, #3b82f6) 65%, transparent);
+  filter: none !important;
 }
 
-.mao-pattern-action-btn.is-apply.is-applied {
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.1);
-  box-shadow: none;
-}
 
 
 .mao-pattern-canvas {

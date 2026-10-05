@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Play, Trash2, Sparkles, Plus, X, Send, Check } from "lucide-react";
+import { Play, Trash2, Sparkles, Plus, X, Send } from "lucide-react";
 import {
   GRID_COLUMNS,
   TOTAL_PIXELS,
@@ -48,10 +48,6 @@ export function MatrixPatternEditor({
   const [previewPhase, setPreviewPhase] = useState<"idle" | "scan" | "hold">("idle");
   const previewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 点击「应用到首页」后的即时成功反馈反馈态
-  const [justApplied, setJustApplied] = useState(false);
-  const appliedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // 用户自定义预设列表：优先使用外部传入的云端预设，否则回退使用本地 localStorage
   const [localPresets, setLocalPresets] = useState<UserMatrixPreset[]>(() =>
     loadUserMatrixPresets(),
@@ -73,7 +69,6 @@ export function MatrixPatternEditor({
   useEffect(() => {
     return () => {
       if (previewTimerRef.current) clearInterval(previewTimerRef.current);
-      if (appliedTimerRef.current) clearTimeout(appliedTimerRef.current);
     };
   }, []);
 
@@ -182,13 +177,8 @@ export function MatrixPatternEditor({
     } else if (onChange) {
       onChange(finalPattern);
     }
-
-    setJustApplied(true);
-    if (appliedTimerRef.current) clearTimeout(appliedTimerRef.current);
-    appliedTimerRef.current = setTimeout(() => {
-      setJustApplied(false);
-    }, 2000);
   };
+
 
   // 保存当前画布设计为用户预设（触发 1 次云端同步）
   const handleSaveUserPreset = () => {
@@ -309,27 +299,22 @@ export function MatrixPatternEditor({
             type="button"
             onClick={handleApplyToSite}
             disabled={isPreviewing}
-            className={`mao-pattern-action-btn is-apply ${
+            className={`mao-pattern-action-btn is-apply relative ${
               hasUnappliedChanges ? "has-changes" : ""
-            } ${justApplied ? "is-applied" : ""}`}
-            title="将当前画板设计应用到首页并同步至云端 D1"
+            }`}
+            title={
+              hasUnappliedChanges
+                ? "当前画板有未应用的改动，点击应用到首页并同步云端"
+                : "当前画板设计与首页一致"
+            }
           >
-            {justApplied ? (
-              <>
-                <Check size={12} className="text-emerald-500" />
-                <span className="text-emerald-500 font-semibold">已应用</span>
-              </>
-            ) : (
-              <>
-                <Send size={11} />
-                <span>应用到首页</span>
-                {hasUnappliedChanges && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full bg-white animate-pulse ml-0.5"
-                    title="有未应用的变动"
-                  />
-                )}
-              </>
+            <Send size={11} />
+            <span>应用到首页</span>
+            {hasUnappliedChanges && (
+              <span
+                className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-(--bg-card) animate-pulse pointer-events-none"
+                title="有未应用的变动"
+              />
             )}
           </button>
         </div>

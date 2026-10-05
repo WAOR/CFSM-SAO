@@ -808,6 +808,19 @@ export function ThemeManage() {
   const [copied, setCopied] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 右上角悬浮气泡 Toast（fixed 脱离文档流，0 挤动页面布局，3 秒自动淡出）
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 3000);
+  }, []);
+
   const canSaveToSite = useCanSyncSiteTheme();
   const siteSync = useSiteThemeSyncStatus();
   const editVersionRef = useRef(0);
@@ -1293,6 +1306,29 @@ export function ThemeManage() {
 
   return (
     <div className="theme-manage flex flex-col gap-5 py-2">
+      {/* 右上角悬浮气泡 Toast（fixed 绝对定位，绝不挤压页面任何布局，3秒自动淡出） */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed top-5 right-5 z-[9999] flex items-center gap-2.5 px-4 py-2.5 rounded-xl shadow-2xl border border-emerald-500/35 bg-(--bg-card)/95 backdrop-blur-md text-xs font-semibold text-emerald-600 dark:text-emerald-400 pointer-events-auto"
+        >
+          <span className="flex h-2 w-2 relative shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span>{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="ml-1 text-(--text-muted) hover:text-(--text-primary) transition-colors text-xs leading-none"
+            title="关闭通知"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <header className="theme-topbar">
         <Link to="/" className="instance-page-back theme-topbar-back">
           <ArrowLeft size={14} />
@@ -1682,11 +1718,11 @@ export function ThemeManage() {
                         colorTheme={draft.matrixColorTheme ?? "default"}
                         onApply={(pattern) => {
                           patch("matrixCustomPattern", pattern);
-                          setMessage("已将点阵图案应用到首页并同步云端");
+                          showToast("已将点阵图案应用到首页并同步云端");
                         }}
                         onSaveUserPresets={(presets) => {
                           patch("matrixUserPresets", presets);
-                          setMessage("用户预设已更新并同步云端");
+                          showToast("用户预设已更新并同步云端");
                         }}
                       />
                     )}
