@@ -310,12 +310,6 @@ export function MatrixPatternEditor({
           >
             <Send size={11} />
             <span>应用到首页</span>
-            {hasUnappliedChanges && (
-              <span
-                className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-(--bg-card) animate-pulse pointer-events-none"
-                title="有未应用的变动"
-              />
-            )}
           </button>
         </div>
       </div>
