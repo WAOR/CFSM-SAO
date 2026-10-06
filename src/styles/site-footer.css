@@ -1,91 +1,239 @@
-/* 站点底部署名（Powered by / Theme by）。跨全部路由，跟着 AppShell 走。 */
-.site-footer {
+.home-site-footer {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px 12px 20px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.6;
+  align-items: center;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+  position: relative;
+  z-index: 10;
+  user-select: none;
 }
 
-.site-footer-item {
+.home-footer-capsule {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
   white-space: nowrap;
-}
-
-.site-footer-sep {
-  opacity: 0.55;
-}
-
-.site-footer-link {
-  color: var(--text-secondary);
-  font-weight: 600;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background: var(--surface-card, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0.7;
+  overflow: hidden;
   transition:
-    color 140ms ease,
-    border-color 140ms ease;
+    opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.site-footer-link:hover,
-.site-footer-link:focus-visible {
-  color: var(--text-primary);
-  border-bottom-color: currentColor;
+.home-footer-capsule:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  border-color: var(--border-color-hover, rgba(255, 255, 255, 0.18));
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.2);
 }
 
-/* 悬停提示：在名字正上方弹出、只写版本号。不用原生 title —— 它只会弹在光标下方、样式也改不了。 */
-.site-footer-hint {
+/* SAO 全息对角扫光动效 (平滑悠扬，清晰柔和) */
+.home-footer-capsule::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -140%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.26) 50%,
+    rgba(255, 255, 255, 0.04) 80%,
+    transparent 100%
+  );
+  transform: skewX(-26deg);
+  pointer-events: none;
+}
+
+.home-footer-capsule:hover::before {
+  left: 220%;
+  transition: left 1.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 品牌标识与实时呼吸脉冲 */
+.home-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.52rem;
+}
+
+.home-footer-pulse {
   position: relative;
   display: inline-block;
+  margin-left: 0.08rem;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--status-healthy, #10b981);
 }
 
-.site-footer-tooltip {
+.home-footer-pulse::after {
+  content: "";
   position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  z-index: 10;
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  font-weight: 500;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, 3px);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+  inset: -1.5px;
+  border-radius: 50%;
+  background-color: var(--status-healthy, #10b981);
+  opacity: 0.5;
+  animation: sao-pulse-ring 2.4s cubic-bezier(0.24, 0, 0.38, 1) infinite;
 }
 
-.site-footer-hint:hover .site-footer-tooltip,
-.site-footer-hint:focus-within .site-footer-tooltip {
-  opacity: 1;
-  transform: translate(-50%, 0);
+@keyframes sao-pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  60% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
 }
 
-.site-footer-update-hint {
-  margin-left: 6px;
-}
-
-/* 「新版 vX」：只给登录站长（见 SiteFooter）。强调色描边 + 淡染，与设置页选中态同一语言。 */
-.site-footer-update {
-  padding: 0 7px;
-  border: 1px solid color-mix(in srgb, var(--accent-500) 45%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent-500) 12%, transparent);
+.home-footer-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: border-color 140ms ease;
 }
 
-.site-footer-update:hover,
-.site-footer-update:focus-visible {
-  border-color: var(--accent-500);
+.home-footer-title-link {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: opacity 0.16s ease;
+}
+
+.home-footer-title-link:hover {
+  opacity: 0.8;
+}
+
+/* 微型点状分隔符 */
+.home-footer-divider {
+  display: inline-block;
+  width: 2.5px;
+  height: 2.5px;
+  border-radius: 50%;
+  background-color: var(--text-tertiary, rgba(255, 255, 255, 0.3));
+  opacity: 0.4;
+}
+
+/* 探针版本基础微芯片 */
+.home-footer-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.04rem 0.28rem;
+  border-radius: 3px;
+  background: var(--surface-elev, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: -0.01em;
+}
+
+/* 版本高光微芯片 */
+.home-footer-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  background: var(--surface-elev, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  font-family: var(--font-mono, monospace);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--accent, #6366f1);
+  letter-spacing: -0.01em;
+}
+
+.home-footer-branch-icon {
+  opacity: 0.75;
+}
+
+/* GitHub 跃迁外链按钮 */
+.home-footer-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.06rem 0.28rem;
+  border-radius: 3px;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.home-footer-github:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg, rgba(255, 255, 255, 0.06));
+}
+
+.home-footer-github-icon {
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.home-footer-github:hover .home-footer-github-icon {
+  transform: translateY(-0.5px) rotate(-6deg);
+}
+
+.home-footer-external-icon {
+  opacity: 0.5;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.home-footer-github:hover .home-footer-external-icon {
+  opacity: 0.95;
+  transform: translate(0.5px, -0.5px);
+}
+
+/* 移动端紧凑自适应微调 (即便带有双版本号也坚决保持单行不换行) */
+@media (max-width: 480px) {
+  .home-footer-capsule {
+    padding: 0.18rem 0.45rem;
+    gap: 0.35rem;
+    font-size: 0.6rem;
+  }
+  .home-footer-title,
+  .home-footer-title-link,
+  .home-footer-github {
+    font-size: 0.6rem;
+  }
+  .home-footer-version,
+  .home-footer-pill {
+    font-size: 0.58rem;
+    padding: 0.02rem 0.22rem;
+  }
+  .home-footer-brand {
+    gap: 0.38rem;
+  }
 }
