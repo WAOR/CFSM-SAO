@@ -343,10 +343,8 @@ export function normalizeThemeSettings(
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),
     offlineNodesFirst: settings?.offlineNodesFirst === true,
     adminNickname: normalizePlainText(settings?.adminNickname).trim().slice(0, 40),
-    showCostSummary:
-      enabledUnlessFalse(settings?.showCostSummary) ||
-      settings?.showCostSummaryFloatingButton === true,
-    showCostSummaryFloatingButton: settings?.showCostSummaryFloatingButton !== false,
+    showCostSummary: enabledUnlessFalse(settings?.showCostSummary),
+    showCostSummaryFloatingButton: enabledUnlessFalse(settings?.showCostSummaryFloatingButton),
     showPriceForGuests: settings?.showPriceForGuests === true,
     renewalReminderDays: normalizeRenewalReminderDays(settings?.renewalReminderDays),
     showOverviewRatings: enabledUnlessFalse(settings?.showOverviewRatings),
