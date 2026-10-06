@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
+import { StatMetricIcon } from "../ui/StatMetricIcon";
 import { DraggableCostBall } from "@/components/node/DraggableCostBall";
 import { ClusterHeatmap } from "./ClusterHeatmap";
 import { useAuth } from "@/hooks/useAuth";
@@ -341,7 +342,11 @@ function HomeOverviewCards({
   );
 
   return (
-    <section className={`mao-dashboard-hero home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
+    <section
+      className={`mao-dashboard-hero home-overview${dense ? " is-dense" : ""}`}
+      aria-label="首页总览"
+      data-palette={matrixColorTheme === "eva" ? "eva" : "default"}
+    >
       {/* 左侧主要区域：问候语 + 6 宫格指标小卡片 */}
       <div className="mao-hero-main">
         <div className="mao-hero-header">
@@ -410,7 +415,7 @@ function HomeOverviewCards({
           <div className="mao-stat-card" data-metric="connections">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Network size={15} className="mao-stat-icon text-(--progress-network,var(--accent-500))" />
+                <StatMetricIcon metric="connections" icon={Network} />
                 <span className="mao-stat-label">活跃连接</span>
               </div>
             </div>
@@ -428,7 +433,7 @@ function HomeOverviewCards({
           <div className="mao-stat-card" data-metric="cpu">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Cpu size={15} className="mao-stat-icon text-(--status-warning)" />
+                <StatMetricIcon metric="cpu" icon={Cpu} />
                 <span className="mao-stat-label">平均 CPU</span>
               </div>
             </div>
@@ -446,7 +451,7 @@ function HomeOverviewCards({
           <div className="mao-stat-card" data-metric="ram">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Layers size={15} className="mao-stat-icon text-(--traffic-up,var(--status-info))" />
+                <StatMetricIcon metric="ram" icon={Layers} />
                 <span className="mao-stat-label">内存用量</span>
               </div>
             </div>
@@ -464,7 +469,7 @@ function HomeOverviewCards({
           <div className="mao-stat-card" data-metric="disk">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <HardDrive size={15} className="mao-stat-icon text-(--progress-disk,var(--accent-500))" />
+                <StatMetricIcon metric="disk" icon={HardDrive} />
                 <span className="mao-stat-label">硬盘用量</span>
               </div>
             </div>
@@ -482,7 +487,7 @@ function HomeOverviewCards({
           <div className="mao-stat-card" data-metric="uptime">
             <div className="mao-stat-head">
               <div className="mao-stat-title-wrap">
-                <Timer size={15} className="mao-stat-icon text-(--status-success,var(--accent-500))" />
+                <StatMetricIcon metric="uptime" icon={Timer} />
                 <span className="mao-stat-label">最近重启</span>
               </div>
             </div>
@@ -517,7 +522,7 @@ function HomeOverviewCards({
             <div className={`mao-stat-card${renewalPopoverOpen ? " is-popover-open" : ""}`} data-metric="asset">
               <div className="mao-stat-head">
                 <div className="mao-stat-title-wrap">
-                  <CircleDollarSign size={15} className="mao-stat-icon text-(--accent-500)" />
+                  <StatMetricIcon metric="asset" icon={CircleDollarSign} />
                   <span className="mao-stat-label">资产总值</span>
                 </div>
                 {showDetailButton && (
