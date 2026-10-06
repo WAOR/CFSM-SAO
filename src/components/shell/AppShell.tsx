@@ -1,7 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { TurnstileGate } from "./TurnstileGate";
-import { SiteFooter } from "./SiteFooter";
 import { RealtimeSessionPrompt } from "./RealtimeSessionPrompt";
 import { SiteThemeSyncNotice } from "./SiteThemeSyncNotice";
 import { Spinner } from "@/components/ui/Spinner";
@@ -90,7 +89,7 @@ export function AppShell() {
           <div className="flex items-center gap-2 min-w-9" />
         </div>
       </header>
-      <main className="app-main flex-1 px-3 pb-2 pt-6 sm:px-5 md:px-6 lg:px-8">
+      <main className="app-main flex-1 px-3 pb-8 pt-6 sm:px-5 md:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-430">
           {isCheckingShell ? (
             isHomeDashboard && !isPrivateVisitor ? (
@@ -111,7 +110,6 @@ export function AppShell() {
           )}
         </div>
       </main>
-      <SiteFooter />
       <RealtimeSessionPrompt />
       <SiteThemeSyncNotice />
     </div>

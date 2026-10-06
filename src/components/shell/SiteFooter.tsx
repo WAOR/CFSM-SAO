@@ -1,10 +1,35 @@
+import { useEffect, useState } from "react";
 import { GitBranch, ExternalLink } from "lucide-react";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import pkg from "../../../package.json" with { type: "json" };
 
+const CFSM_VERSION_STORAGE_KEY = "cfsmtheme:version";
+
 export function SiteFooter() {
   const { data: publicConfig } = usePublicConfig();
-  const cfsmVersion = publicConfig?.version ? `v${publicConfig.version}` : "";
+  const rawVersion = publicConfig?.version?.trim();
+
+  // 缓存与持久化 CFSM 版本号，避免刷新时因网络异步返回导致胶囊宽度从短变长闪烁
+  const [cachedVersion, setCachedVersion] = useState<string>(() => {
+    if (typeof localStorage === "undefined") return "";
+    try {
+      return localStorage.getItem(CFSM_VERSION_STORAGE_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+
+  useEffect(() => {
+    if (rawVersion) {
+      setCachedVersion(rawVersion);
+      try {
+        localStorage.setItem(CFSM_VERSION_STORAGE_KEY, rawVersion);
+      } catch {}
+    }
+  }, [rawVersion]);
+
+  const activeVersion = rawVersion || cachedVersion;
+  const cfsmVersion = activeVersion ? `v${activeVersion}` : "";
   const themeVersion = pkg.version ? `v${pkg.version}` : "v1.1.2";
 
   return (
