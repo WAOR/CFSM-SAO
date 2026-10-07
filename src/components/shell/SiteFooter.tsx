@@ -30,7 +30,7 @@ export function SiteFooter() {
 
   const activeVersion = rawVersion || cachedVersion;
   const cfsmVersion = activeVersion ? `v${activeVersion}` : "";
-  const themeVersion = pkg.version ? `v${pkg.version}` : "v1.1.3";
+  const themeVersion = pkg.version ? `v${pkg.version}` : "v1.1.4";
 
   return (
     <footer className="home-site-footer site-footer" aria-label="站点与主题版本信息">
