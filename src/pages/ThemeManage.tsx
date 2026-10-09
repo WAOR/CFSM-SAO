@@ -11,6 +11,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  Server,
+  Sliders,
+  RotateCcw,
   ArrowLeft,
   CircleDollarSign,
   Compass,
@@ -41,6 +44,8 @@ import { InstancePanel } from "@/components/instance/InstancePanel";
 import { Spinner } from "@/components/ui/Spinner";
 import { Flag } from "@/components/ui/Flag";
 import { MatrixPatternEditor } from "@/components/matrix/MatrixPatternEditor";
+import { LatencyBars } from "@/components/node/LatencyBars";
+import { QualityBars } from "@/components/node/QualityBars";
 import { useCarrierNames, usePublicConfig } from "@/hooks/usePublicConfig";
 import { useHourlyClock } from "@/hooks/useClock";
 import { useAllPingLineOverrides } from "@/hooks/usePingOverview";
@@ -62,7 +67,19 @@ import {
   saveLocalThemeSettings,
 } from "@/services/themeSettingsStore";
 import { copyText } from "@/utils/clipboard";
-import type { MatrixColorTheme, MatrixBootEffect, NodeInfo, PingTask, ThemeSettings } from "@/types/cfsm";
+import type {
+  MatrixColorTheme,
+  MatrixBootEffect,
+  NodeInfo,
+  PingTask,
+  ThemeSettings,
+  PingLatencyColors,
+  PingLatencyThresholds,
+  PingLossColors,
+  PingLossThresholds,
+  PingOverviewBucket,
+  TrafficSpectrumColors,
+} from "@/types/cfsm";
 import {
   calculateCostSummary,
   calculateCostPremiumAmount,
@@ -77,6 +94,21 @@ import {
   type CostPremiumEntry,
 } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
+import {
+  DEFAULT_PING_LATENCY_COLORS,
+  DEFAULT_PING_LATENCY_THRESHOLDS,
+  DEFAULT_PING_LOSS_COLORS,
+  DEFAULT_PING_LOSS_THRESHOLDS,
+  DEFAULT_TRAFFIC_SPECTRUM_COLORS,
+  TRAFFIC_SPECTRUM_PRESETS,
+  normalizePingLatencyColors,
+  normalizePingLatencyThresholds,
+  normalizePingLossColors,
+  normalizePingLossThresholds,
+  normalizeTrafficSpectrumColors,
+  type TrafficSpectrumPreset,
+} from "@/utils/themeSettings";
+import { buildTrafficQuotaSegmentColors } from "@/utils/metricTone";
 import { MAX_RENEWAL_REMINDER_DAYS } from "@/utils/renewalReminder";
 import {
   dedupeGroupLabels,
@@ -386,6 +418,11 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     enableHomepageMultiPing: settings.enableHomepageMultiPing,
     homepageMultiPingTaskIds: settings.homepageMultiPingTaskIds,
     fakePingForUnbound: settings.fakePingForUnbound,
+    pingLatencyThresholds: normalizePingLatencyThresholds(settings.pingLatencyThresholds),
+    pingLatencyColors: normalizePingLatencyColors(settings.pingLatencyColors),
+    pingLossThresholds: normalizePingLossThresholds(settings.pingLossThresholds),
+    pingLossColors: normalizePingLossColors(settings.pingLossColors),
+    trafficSpectrumColors: normalizeTrafficSpectrumColors(settings.trafficSpectrumColors),
     showHomeOverview: settings.showHomeOverview,
     showAssetOverview: settings.showAssetOverview,
     showGroupTabs: settings.showGroupTabs,
@@ -812,6 +849,86 @@ const PremiumList = memo(function PremiumList({
 
 type ThemeTabId = "home" | "card" | "cost" | "ping";
 
+
+interface LatencyTierConfig {
+  key: keyof PingLatencyColors;
+  label: string;
+  hint: string;
+  defaultColor: string;
+}
+
+const LATENCY_TIER_CONFIG: readonly LatencyTierConfig[] = [
+  { key: "excellent" as const, label: "极佳 (<=)", hint: "最优网络，极低延迟", defaultColor: DEFAULT_PING_LATENCY_COLORS.excellent },
+  { key: "good" as const, label: "良好 (<=)", hint: "畅快体验，稳定流畅", defaultColor: DEFAULT_PING_LATENCY_COLORS.good },
+  { key: "moderate" as const, label: "轻度 (<=)", hint: "轻度感知，正常可接受", defaultColor: DEFAULT_PING_LATENCY_COLORS.moderate },
+  { key: "elevated" as const, label: "偏高 (<=)", hint: "较高延迟，可明显感知", defaultColor: DEFAULT_PING_LATENCY_COLORS.elevated },
+  { key: "critical" as const, label: "极高", hint: "严重延迟，极度拥堵或告警", defaultColor: DEFAULT_PING_LATENCY_COLORS.critical },
+] as const;
+
+const LOSS_TIER_CONFIG = [
+  { key: "zero" as const, label: "无丢包 (0%)", hint: "网络通畅，零样本丢失", defaultColor: DEFAULT_PING_LOSS_COLORS.zero },
+  { key: "low" as const, label: "轻微丢包", hint: "偶发微量丢包，基本可用", defaultColor: DEFAULT_PING_LOSS_COLORS.low },
+  { key: "medium" as const, label: "中度丢包", hint: "较明显持续丢包，需注意", defaultColor: DEFAULT_PING_LOSS_COLORS.medium },
+  { key: "high" as const, label: "严重丢包", hint: "严重丢包甚至失联脱网", defaultColor: DEFAULT_PING_LOSS_COLORS.high },
+] as const;
+
+const TRAFFIC_SPECTRUM_ANCHOR_CONFIG = [
+  {
+    key: "start" as const,
+    label: "充裕健康色 (0% ~ 15%)",
+    stage: "充裕健康期",
+    hint: "初始充裕配额，健康充足状态",
+    defaultColor: DEFAULT_TRAFFIC_SPECTRUM_COLORS.start,
+  },
+  {
+    key: "mid" as const,
+    label: "半程消耗色 (~50%)",
+    stage: "半程稳定期",
+    hint: "中期消耗过半，进入稳定过渡期",
+    defaultColor: DEFAULT_TRAFFIC_SPECTRUM_COLORS.mid,
+  },
+  {
+    key: "high" as const,
+    label: "警戒消耗色 (~80%)",
+    stage: "警戒告警期",
+    hint: "额度告急进入警戒红热期",
+    defaultColor: DEFAULT_TRAFFIC_SPECTRUM_COLORS.high,
+  },
+  {
+    key: "end" as const,
+    label: "耗尽告警色 (100%)",
+    stage: "耗尽守护",
+    hint: "严格锁止最终暴走赤红守护",
+    defaultColor: DEFAULT_TRAFFIC_SPECTRUM_COLORS.end,
+  },
+] as const;
+
+const PREVIEW_LATENCY_BUCKETS: PingOverviewBucket[] = [
+  18, 36, 55, 72, 88, 105, 120, 138, 155, 168, 185, 198, 215, 245, 280, 320,
+].map((v, i) => ({
+  index: i,
+  value: v,
+  loss: 0,
+  total: 60,
+  lost: 0,
+  startAt: null,
+  endAt: null,
+  offline: false,
+}));
+
+const PREVIEW_LOSS_BUCKETS: PingOverviewBucket[] = [
+  0, 0, 0, 0, 1.5, 2.8, 4.5, 6.2, 8.5, 12.0, 16.5, 22.0, 35.0, 55.0, 78.0, 100.0,
+].map((loss, i) => ({
+  index: i,
+  value: 30,
+  loss,
+  total: 60,
+  lost: Math.round((loss / 100) * 60),
+  startAt: null,
+  endAt: null,
+  offline: false,
+}));
+
 const THEME_TABS: ReadonlyArray<{
   id: ThemeTabId;
   label: string;
@@ -821,7 +938,7 @@ const THEME_TABS: ReadonlyArray<{
   { id: "home", label: "首页", hint: "外观、视图、总览与排序", icon: ListFilter },
   { id: "card", label: "卡片", hint: "卡片上显示哪些信息与悬浮窗", icon: Rows3 },
   { id: "cost", label: "花费", hint: "资产统计与收购溢价", icon: CircleDollarSign },
-  { id: "ping", label: "延迟", hint: "多线路与逐节点指定", icon: Activity },
+  { id: "ping", label: "服务器卡片", hint: "延迟、丢包监控与流量进度光柱自定义", icon: Server },
 ];
 
 const DEFAULT_THEME_TAB: ThemeTabId = "home";
@@ -1001,6 +1118,107 @@ export function ThemeManage() {
     setExpandedTaskId((current) => (current === taskId ? null : taskId));
     setNodeSearch("");
   }, []);
+
+
+  const patchPingLatencyThreshold = useCallback(
+    (key: keyof PingLatencyThresholds, val: number) => {
+      setDraft((prev) => ({
+        ...prev,
+        pingLatencyThresholds: {
+          ...prev.pingLatencyThresholds,
+          [key]: val,
+        },
+      }));
+    },
+    [],
+  );
+
+  const patchPingLatencyColor = useCallback(
+    (key: keyof PingLatencyColors, val: string) => {
+      setDraft((prev) => ({
+        ...prev,
+        pingLatencyColors: {
+          ...prev.pingLatencyColors,
+          [key]: val,
+        },
+      }));
+    },
+    [],
+  );
+
+  const resetPingLatency = useCallback(() => {
+    setDraft((prev) => ({
+      ...prev,
+      pingLatencyThresholds: { ...DEFAULT_PING_LATENCY_THRESHOLDS },
+      pingLatencyColors: { ...DEFAULT_PING_LATENCY_COLORS },
+    }));
+  }, []);
+
+  const patchPingLossThreshold = useCallback(
+    (key: keyof PingLossThresholds, val: number) => {
+      setDraft((prev) => ({
+        ...prev,
+        pingLossThresholds: {
+          ...prev.pingLossThresholds,
+          [key]: val,
+        },
+      }));
+    },
+    [],
+  );
+
+  const patchPingLossColor = useCallback(
+    (key: keyof PingLossColors, val: string) => {
+      setDraft((prev) => ({
+        ...prev,
+        pingLossColors: {
+          ...prev.pingLossColors,
+          [key]: val,
+        },
+      }));
+    },
+    [],
+  );
+
+  const resetPingLoss = useCallback(() => {
+    setDraft((prev) => ({
+      ...prev,
+      pingLossThresholds: { ...DEFAULT_PING_LOSS_THRESHOLDS },
+      pingLossColors: { ...DEFAULT_PING_LOSS_COLORS },
+    }));
+  }, []);
+
+  const patchTrafficSpectrumColor = useCallback(
+    (key: keyof TrafficSpectrumColors, val: string) => {
+      setDraft((prev) => ({
+        ...prev,
+        trafficSpectrumColors: {
+          ...prev.trafficSpectrumColors,
+          [key]: val,
+        },
+      }));
+    },
+    [],
+  );
+
+  const applyTrafficSpectrumPreset = useCallback((preset: TrafficSpectrumPreset) => {
+    setDraft((prev) => ({
+      ...prev,
+      trafficSpectrumColors: { ...preset.colors },
+    }));
+  }, []);
+
+  const resetTrafficSpectrum = useCallback(() => {
+    setDraft((prev) => ({
+      ...prev,
+      trafficSpectrumColors: { ...DEFAULT_TRAFFIC_SPECTRUM_COLORS },
+    }));
+  }, []);
+
+  const previewTrafficSegmentColors = useMemo(
+    () => buildTrafficQuotaSegmentColors(draft.trafficSpectrumColors),
+    [draft.trafficSpectrumColors],
+  );
 
   const commitMultiPingTaskIds = useCallback(
     (mutate: (prev: number[]) => number[]) => {
@@ -2126,6 +2344,417 @@ export function ThemeManage() {
                   <span className="setting-hint">
                     列在此处的节点将不会在首页及总览中展示。当前已生效 {draftHiddenNodes.length} 台。
                   </span>
+                </div>
+              </InstancePanel>
+
+              <InstancePanel
+                kicker="光柱"
+                title="卡片光柱视觉与色彩自定义"
+                description="定制服务器卡片的流量使用率光柱、延迟状态光柱与丢包状态光柱的连续色谱、门槛及色彩阶梯。"
+                aside={<Sliders size={16} />}
+              >
+                <div className="flex flex-col gap-5">
+                  {/* 1. 流量进度光柱色谱自定义 */}
+                  <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="setting-subhead-title">流量进度光柱色谱自定义</span>
+                        <p className="setting-hint mt-1">
+                          流量使用率采用 4 锚点平滑连续光谱（Anchor Spectrum）插值算法，保证色相过渡平滑无阶跃断层，且末端 100% 严格呈现警报红守护。
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={resetTrafficSpectrum}
+                        className="theme-manage-button is-compact shrink-0 flex items-center gap-1.5"
+                        title="恢复为默认的监控绿色谱"
+                      >
+                        <RotateCcw size={13} />
+                        恢复色谱默认
+                      </button>
+                    </div>
+
+                    {/* 就近实时预览：18 段发光光柱色谱全貌（置顶呈现） */}
+                    <div className="flex flex-col gap-2.5 rounded-[10px] border border-(--hairline) bg-(--bg-card) p-3.5">
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="font-medium text-(--text-secondary) flex items-center gap-1.5">
+                          <Sparkles size={13} className="text-(--accent-500)" />
+                          流量进度光柱实时效果 (18 段发光光柱)
+                        </span>
+                        <span className="text-[11px] text-(--text-tertiary)">
+                          所见即所得 · 0% 充裕至 100% 耗尽连续色谱
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-1 rounded-md bg-(--bg-primary) p-2.5 shadow-inner">
+                        <div className="flex items-center justify-between text-[11px] text-(--text-tertiary) mb-1">
+                          <span>18 段发光光柱色谱全貌：</span>
+                          <span className="font-mono">从轻载平滑过渡至警戒红</span>
+                        </div>
+                        <div className="traffic-quota-track" aria-hidden>
+                          {previewTrafficSegmentColors.map((color, i) => (
+                            <span key={i} className="traffic-quota-segment" style={{ background: color }} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 快捷预设按钮组 */}
+                    <div className="flex flex-col gap-2 pt-0.5">
+                      <span className="text-[12px] font-medium text-(--text-secondary)">色谱预设方案：</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {TRAFFIC_SPECTRUM_PRESETS.map((preset) => {
+                          const isSelected =
+                            draft.trafficSpectrumColors.start === preset.colors.start &&
+                            draft.trafficSpectrumColors.mid === preset.colors.mid &&
+                            draft.trafficSpectrumColors.high === preset.colors.high &&
+                            draft.trafficSpectrumColors.end === preset.colors.end;
+                          const gradient = `linear-gradient(to right, ${preset.colors.start}, ${preset.colors.mid}, ${preset.colors.high}, ${preset.colors.end})`;
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => applyTrafficSpectrumPreset(preset)}
+                              data-active={isSelected ? "true" : "false"}
+                              aria-pressed={isSelected}
+                              className="setting-spectrum-preset-card"
+                            >
+                              <div className="flex items-center justify-between gap-1.5 w-full">
+                                <span
+                                  className={clsx(
+                                    "text-xs font-semibold truncate",
+                                    isSelected
+                                      ? "text-(--accent-500)"
+                                      : "text-(--text-primary)",
+                                  )}
+                                >
+                                  {preset.name}
+                                </span>
+                                <div className="setting-color-theme-radio" aria-hidden="true">
+                                  {isSelected && <div className="setting-color-theme-radio-dot" />}
+                                </div>
+                              </div>
+                              <div
+                                className="h-2 w-full rounded-full shadow-inner ring-1 ring-black/10 dark:ring-white/10"
+                                style={{ background: gradient }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 4 锚点 HEX 输入网格 */}
+                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                      {TRAFFIC_SPECTRUM_ANCHOR_CONFIG.map(({ key, label, stage, hint, defaultColor }) => {
+                        const currentColor = draft.trafficSpectrumColors[key];
+                        const isEnd = key === "end";
+                        return (
+                          <div
+                            key={key}
+                            className="flex flex-col justify-between gap-2.5 rounded-[10px] border border-(--hairline) bg-(--bg-card) p-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] font-semibold text-(--text-primary)">
+                                {label}
+                              </span>
+                              <span
+                                className={clsx(
+                                  "text-[10px] px-1.5 py-0.5 rounded border font-mono font-medium",
+                                  isEnd
+                                    ? "bg-rose-500/10 text-rose-500 border-rose-500/20"
+                                    : "bg-(--bg-primary) text-(--text-tertiary) border-(--hairline)",
+                                )}
+                              >
+                                {stage}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <label className="relative flex items-center justify-center shrink-0 cursor-pointer">
+                                <span
+                                  className="inline-block h-7 w-7 rounded-full border-2 border-white/40 shadow-sm"
+                                  style={{ backgroundColor: currentColor }}
+                                />
+                                <input
+                                  type="color"
+                                  value={currentColor}
+                                  onChange={(e) => patchTrafficSpectrumColor(key, e.target.value)}
+                                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                  title={`选取${label}`}
+                                />
+                              </label>
+                              <input
+                                type="text"
+                                maxLength={7}
+                                value={currentColor}
+                                onChange={(e) => patchTrafficSpectrumColor(key, e.target.value)}
+                                className="surface-inset px-2.5 py-1 text-[12px] font-mono uppercase text-(--text-primary) w-full outline-none"
+                                placeholder={defaultColor}
+                              />
+                            </div>
+
+                            <p className="text-[11px] text-(--text-tertiary) leading-tight">
+                              {hint}
+                            </p>
+
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-(--hairline)">
+                              <span className="text-[11px] text-(--text-secondary) shrink-0">
+                                {isEnd ? "末端特性" : "阶段定位"}
+                              </span>
+                              <span className="text-[11px] font-mono text-(--text-tertiary)">
+                                {isEnd ? "严格警报红守护" : "平滑色谱锚点"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2. 延迟评级标准与色彩设置 */}
+                  <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="setting-subhead-title">延迟评级标准与色彩自定义</span>
+                        <p className="setting-hint mt-1">
+                          设定服务器卡片延迟光柱在不同毫秒区间的阶梯门槛与对应光柱色彩。
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={resetPingLatency}
+                        className="theme-manage-button is-compact shrink-0 flex items-center gap-1.5"
+                        title="恢复为默认的 60/100/160/200ms 及预设色"
+                      >
+                        <RotateCcw size={13} />
+                        恢复延迟默认
+                      </button>
+                    </div>
+
+                    {/* 就近实时预览：延迟光柱 */}
+                    <div className="flex flex-col gap-2 rounded-[10px] border border-(--hairline) bg-(--bg-card) p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-1 text-[12px]">
+                        <span className="font-medium text-(--text-secondary) flex items-center gap-1.5">
+                          <Activity size={13} className="text-(--status-success)" />
+                          延迟光柱实时效果 (示例梯度 15ms ~ 320ms)
+                        </span>
+                        <span className="tabular font-medium text-(--text-tertiary) text-[11px]">
+                          门槛：{draft.pingLatencyThresholds.excellent}ms / {draft.pingLatencyThresholds.good}ms / {draft.pingLatencyThresholds.moderate}ms / {draft.pingLatencyThresholds.elevated}ms
+                        </span>
+                      </div>
+                      <div className="rounded-md bg-(--bg-primary) p-2 shadow-inner">
+                        <LatencyBars
+                          buckets={PREVIEW_LATENCY_BUCKETS}
+                          latencyThresholds={draft.pingLatencyThresholds}
+                          latencyColors={draft.pingLatencyColors}
+                          height={18}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                      {LATENCY_TIER_CONFIG.map(({ key, label, hint, defaultColor }) => {
+                        const currentColor = draft.pingLatencyColors[key];
+                        const isThresholdEditable = key !== "critical";
+                        const thresholdVal = isThresholdEditable
+                          ? draft.pingLatencyThresholds[key]
+                          : null;
+
+                        return (
+                          <div
+                            key={key}
+                            className="flex flex-col justify-between gap-2.5 rounded-[10px] border border-(--hairline) bg-(--bg-card) p-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] font-semibold text-(--text-primary)">
+                                {label}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <label
+                                  className="metric-color-swatch"
+                                  style={{ background: currentColor }}
+                                  title="点击调整颜色"
+                                >
+                                  <input
+                                    type="color"
+                                    value={currentColor}
+                                    onChange={(e) => patchPingLatencyColor(key, e.target.value)}
+                                  />
+                                </label>
+                                {currentColor.toLowerCase() !== defaultColor.toLowerCase() && (
+                                  <button
+                                    type="button"
+                                    onClick={() => patchPingLatencyColor(key, defaultColor)}
+                                    className="text-(--text-tertiary) hover:text-(--text-primary) transition-colors p-1"
+                                    title="恢复该项默认色"
+                                  >
+                                    <RotateCcw size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-(--text-tertiary) leading-tight">
+                              {hint}
+                            </p>
+
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-(--hairline)">
+                              <span className="text-[11px] text-(--text-secondary) shrink-0">
+                                {isThresholdEditable ? "门槛上限" : "高延迟区间"}
+                              </span>
+                              {isThresholdEditable ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={9999}
+                                    value={thresholdVal ?? 0}
+                                    onChange={(e) => {
+                                      const num = parseInt(e.target.value, 10);
+                                      if (!Number.isNaN(num) && num > 0) {
+                                        patchPingLatencyThreshold(key, num);
+                                      }
+                                    }}
+                                    className="w-16 rounded-[5px] border border-(--hairline) bg-(--bg-primary) px-2 py-0.5 text-right font-mono text-[12px] font-medium outline-none focus:border-(--status-success)"
+                                  />
+                                  <span className="text-[11px] text-(--text-tertiary)">ms</span>
+                                </div>
+                              ) : (
+                                <span className="font-mono text-[11px] text-(--text-tertiary)">
+                                  &gt; {draft.pingLatencyThresholds.elevated}ms
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 3. 丢包评级标准与色彩设置 */}
+                  <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <span className="setting-subhead-title">丢包色彩与分档自定义</span>
+                        <p className="setting-hint mt-1">
+                          设定服务器卡片丢包光柱在无丢包 (0%) 及不同丢包率时的色彩与分界点。
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={resetPingLoss}
+                        className="theme-manage-button is-compact shrink-0 flex items-center gap-1.5"
+                        title="恢复为默认的 3%/10% 门槛及预设色"
+                      >
+                        <RotateCcw size={13} />
+                        恢复丢包默认
+                      </button>
+                    </div>
+
+                    {/* 就近实时预览：丢包光柱 */}
+                    <div className="flex flex-col gap-2 rounded-[10px] border border-(--hairline) bg-(--bg-card) p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-1 text-[12px]">
+                        <span className="font-medium text-(--text-secondary) flex items-center gap-1.5">
+                          <Activity size={13} className="text-(--status-warning)" />
+                          丢包光柱实时效果 (示例梯度 0% ~ 25%)
+                        </span>
+                        <span className="tabular font-medium text-(--text-tertiary) text-[11px]">
+                          门槛：0% / {draft.pingLossThresholds.low}% / {draft.pingLossThresholds.medium}%
+                        </span>
+                      </div>
+                      <div className="rounded-md bg-(--bg-primary) p-2 shadow-inner">
+                        <QualityBars
+                          buckets={PREVIEW_LOSS_BUCKETS}
+                          lossThresholds={draft.pingLossThresholds}
+                          lossColors={draft.pingLossColors}
+                          height={18}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                      {LOSS_TIER_CONFIG.map(({ key, label, hint, defaultColor }) => {
+                        const currentColor = draft.pingLossColors[key];
+                        const isEditable = key === "low" || key === "medium";
+                        const thresholdVal =
+                          key === "low"
+                            ? draft.pingLossThresholds.low
+                            : key === "medium"
+                              ? draft.pingLossThresholds.medium
+                              : null;
+
+                        return (
+                          <div
+                            key={key}
+                            className="flex flex-col justify-between gap-2.5 rounded-[10px] border border-(--hairline) bg-(--bg-card) p-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] font-semibold text-(--text-primary)">
+                                {label}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <label
+                                  className="metric-color-swatch"
+                                  style={{ background: currentColor }}
+                                  title="点击调整颜色"
+                                >
+                                  <input
+                                    type="color"
+                                    value={currentColor}
+                                    onChange={(e) => patchPingLossColor(key, e.target.value)}
+                                  />
+                                </label>
+                                {currentColor.toLowerCase() !== defaultColor.toLowerCase() && (
+                                  <button
+                                    type="button"
+                                    onClick={() => patchPingLossColor(key, defaultColor)}
+                                    className="text-(--text-tertiary) hover:text-(--text-primary) transition-colors p-1"
+                                    title="恢复该项默认色"
+                                  >
+                                    <RotateCcw size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <p className="text-[11px] text-(--text-tertiary) leading-tight">
+                              {hint}
+                            </p>
+
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-(--hairline)">
+                              <span className="text-[11px] text-(--text-secondary) shrink-0">
+                                {isEditable ? "丢包上限" : "生效条件"}
+                              </span>
+                              {isEditable ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min={0.1}
+                                    max={100}
+                                    value={thresholdVal ?? 0}
+                                    onChange={(e) => {
+                                      const num = parseFloat(e.target.value);
+                                      if (!Number.isNaN(num) && num > 0) {
+                                        patchPingLossThreshold(key, num);
+                                      }
+                                    }}
+                                    className="w-16 rounded-[5px] border border-(--hairline) bg-(--bg-primary) px-2 py-0.5 text-right font-mono text-[12px] font-medium outline-none focus:border-(--status-success)"
+                                  />
+                                  <span className="text-[11px] text-(--text-tertiary)">%</span>
+                                </div>
+                              ) : (
+                                <span className="font-mono text-[11px] text-(--text-tertiary)">
+                                  {key === "zero" ? "= 0% (完全健康)" : `> ${draft.pingLossThresholds.medium}%`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </InstancePanel>
             </>

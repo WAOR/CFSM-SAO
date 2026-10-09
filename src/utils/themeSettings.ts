@@ -1,4 +1,12 @@
-import type { ThemeSettings, UserMatrixPreset } from "@/types/cfsm";
+import type {
+  PingLatencyColors,
+  PingLatencyThresholds,
+  PingLossColors,
+  PingLossThresholds,
+  ThemeSettings,
+  TrafficSpectrumColors,
+  UserMatrixPreset,
+} from "@/types/cfsm";
 import {
   DEFAULT_COST_RATE_API_URL,
   normalizeCostIgnoredNodes,
@@ -62,6 +70,90 @@ export const MATRIX_BOOT_EFFECTS: readonly MatrixBootEffect[] = [
   "divergence-flux",
 ] as const;
 
+
+export const DEFAULT_PING_LATENCY_THRESHOLDS: PingLatencyThresholds = {
+  excellent: 60,
+  good: 100,
+  moderate: 160,
+  elevated: 200,
+};
+
+export const DEFAULT_PING_LATENCY_COLORS: PingLatencyColors = {
+  excellent: "#10b981",
+  good: "#84cc16",
+  moderate: "#eab308",
+  elevated: "#f59e0b",
+  critical: "#ef4444",
+};
+
+export const DEFAULT_PING_LOSS_THRESHOLDS: PingLossThresholds = {
+  low: 3,
+  medium: 10,
+};
+
+export const DEFAULT_PING_LOSS_COLORS: PingLossColors = {
+  zero: "#10b981",
+  low: "#eab308",
+  medium: "#f97316",
+  high: "#ef4444",
+};
+
+export interface TrafficSpectrumPreset {
+  id: string;
+  name: string;
+  colors: TrafficSpectrumColors;
+}
+
+export const DEFAULT_TRAFFIC_SPECTRUM_COLORS: TrafficSpectrumColors = {
+  start: "#10b981",
+  mid: "#eab308",
+  high: "#f97316",
+  end: "#ef4444",
+};
+
+export const TRAFFIC_SPECTRUM_PRESETS: readonly TrafficSpectrumPreset[] = [
+  {
+    id: "classic",
+    name: "经典监控 (绿 · 黄 · 橙 · 红)",
+    colors: {
+      start: "#10b981",
+      mid: "#eab308",
+      high: "#f97316",
+      end: "#ef4444",
+    },
+  },
+  {
+    id: "eva",
+    name: "EVA 初号机 (清透绿 · 机体深紫 · 装甲橙 · 暴走赤红)",
+    colors: {
+      start: "#22c55e",
+      mid: "#7c3aed",
+      high: "#f97316",
+      end: "#ef4444",
+    },
+  },
+  {
+    id: "cyberpunk",
+    name: "夜之城 2077 (霓虹青 · 警戒黄 · 义体粉 · 绝境红)",
+    colors: {
+      start: "#00f0ff",
+      mid: "#fcee0a",
+      high: "#ff007f",
+      end: "#ef4444",
+    },
+  },
+  {
+    id: "divergence",
+    name: "命运石之门 (暖杏橙 · 电离金 · 氖气红橙 · 收敛赤红)",
+    colors: {
+      start: "#ea580c",
+      mid: "#facc15",
+      high: "#ff7700",
+      end: "#ef4444",
+    },
+  },
+] as const;
+
 export interface ResolvedThemeSettings {
   defaultAppearance: Appearance;
   desktopNodeViewMode: NodeViewMode;
@@ -81,6 +173,11 @@ export interface ResolvedThemeSettings {
   homepageMultiPingTaskIds: number[];
   homepagePingLineOverrides: PingLineOverridesByNode;
   fakePingForUnbound: boolean;
+  pingLatencyThresholds: PingLatencyThresholds;
+  pingLatencyColors: PingLatencyColors;
+  pingLossThresholds: PingLossThresholds;
+  pingLossColors: PingLossColors;
+  trafficSpectrumColors: TrafficSpectrumColors;
   showHomeOverview: boolean;
   /** 顶部总览里的「资产概览」卡（把每月花多少钱亮给所有访客，单独给个开关）。 */
   showAssetOverview: boolean;
@@ -137,6 +234,11 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   homepageMultiPingTaskIds: [...DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS],
   homepagePingLineOverrides: EMPTY_PING_LINE_OVERRIDES_BY_NODE,
   fakePingForUnbound: false,
+  pingLatencyThresholds: DEFAULT_PING_LATENCY_THRESHOLDS,
+  pingLatencyColors: DEFAULT_PING_LATENCY_COLORS,
+  pingLossThresholds: DEFAULT_PING_LOSS_THRESHOLDS,
+  pingLossColors: DEFAULT_PING_LOSS_COLORS,
+  trafficSpectrumColors: DEFAULT_TRAFFIC_SPECTRUM_COLORS,
   showHomeOverview: true,
   showAssetOverview: true,
   showGroupTabs: true,
@@ -335,6 +437,80 @@ function normalizeHomeSortDefault(
   };
 }
 
+
+function isValidHexColor(val: unknown): val is string {
+  return typeof val === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val.trim());
+}
+
+export function normalizePingLatencyThresholds(val: unknown): PingLatencyThresholds {
+  const defaults = DEFAULT_PING_LATENCY_THRESHOLDS;
+  if (!val || typeof val !== "object") return defaults;
+  const raw = val as Record<string, unknown>;
+  const e = typeof raw.excellent === "number" && Number.isFinite(raw.excellent) && raw.excellent > 0
+    ? Math.round(raw.excellent)
+    : defaults.excellent;
+  const g = typeof raw.good === "number" && Number.isFinite(raw.good) && raw.good > e
+    ? Math.round(raw.good)
+    : Math.max(e + 10, defaults.good);
+  const m = typeof raw.moderate === "number" && Number.isFinite(raw.moderate) && raw.moderate > g
+    ? Math.round(raw.moderate)
+    : Math.max(g + 10, defaults.moderate);
+  const el = typeof raw.elevated === "number" && Number.isFinite(raw.elevated) && raw.elevated > m
+    ? Math.round(raw.elevated)
+    : Math.max(m + 10, defaults.elevated);
+  return { excellent: e, good: g, moderate: m, elevated: el };
+}
+
+export function normalizePingLatencyColors(val: unknown): PingLatencyColors {
+  const defaults = DEFAULT_PING_LATENCY_COLORS;
+  if (!val || typeof val !== "object") return defaults;
+  const raw = val as Record<string, unknown>;
+  return {
+    excellent: isValidHexColor(raw.excellent) ? raw.excellent.toLowerCase() : defaults.excellent,
+    good: isValidHexColor(raw.good) ? raw.good.toLowerCase() : defaults.good,
+    moderate: isValidHexColor(raw.moderate) ? raw.moderate.toLowerCase() : defaults.moderate,
+    elevated: isValidHexColor(raw.elevated) ? raw.elevated.toLowerCase() : defaults.elevated,
+    critical: isValidHexColor(raw.critical) ? raw.critical.toLowerCase() : defaults.critical,
+  };
+}
+
+export function normalizePingLossThresholds(val: unknown): PingLossThresholds {
+  const defaults = DEFAULT_PING_LOSS_THRESHOLDS;
+  if (!val || typeof val !== "object") return defaults;
+  const raw = val as Record<string, unknown>;
+  const low = typeof raw.low === "number" && Number.isFinite(raw.low) && raw.low > 0 && raw.low <= 100
+    ? Number(raw.low.toFixed(1))
+    : defaults.low;
+  const medium = typeof raw.medium === "number" && Number.isFinite(raw.medium) && raw.medium > low && raw.medium <= 100
+    ? Number(raw.medium.toFixed(1))
+    : Math.max(low + 1, defaults.medium);
+  return { low, medium };
+}
+
+export function normalizePingLossColors(val: unknown): PingLossColors {
+  const defaults = DEFAULT_PING_LOSS_COLORS;
+  if (!val || typeof val !== "object") return defaults;
+  const raw = val as Record<string, unknown>;
+  return {
+    zero: isValidHexColor(raw.zero) ? raw.zero.toLowerCase() : defaults.zero,
+    low: isValidHexColor(raw.low) ? raw.low.toLowerCase() : defaults.low,
+    medium: isValidHexColor(raw.medium) ? raw.medium.toLowerCase() : defaults.medium,
+    high: isValidHexColor(raw.high) ? raw.high.toLowerCase() : defaults.high,
+  };
+}
+
+export function normalizeTrafficSpectrumColors(val: unknown): TrafficSpectrumColors {
+  const defaults = DEFAULT_TRAFFIC_SPECTRUM_COLORS;
+  if (!val || typeof val !== "object") return defaults;
+  const raw = val as Record<string, unknown>;
+  return {
+    start: isValidHexColor(raw.start) ? raw.start.toLowerCase() : defaults.start,
+    mid: isValidHexColor(raw.mid) ? raw.mid.toLowerCase() : defaults.mid,
+    high: isValidHexColor(raw.high) ? raw.high.toLowerCase() : defaults.high,
+    end: isValidHexColor(raw.end) ? raw.end.toLowerCase() : defaults.end,
+  };
+}
+
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
@@ -369,6 +545,11 @@ export function normalizeThemeSettings(
     homepageMultiPingTaskIds,
     homepagePingLineOverrides: normalizePingLineOverridesByNode(settings?.homepagePingLineOverrides),
     fakePingForUnbound: settings?.fakePingForUnbound === true,
+    pingLatencyThresholds: normalizePingLatencyThresholds(settings?.pingLatencyThresholds),
+    pingLatencyColors: normalizePingLatencyColors(settings?.pingLatencyColors),
+    pingLossThresholds: normalizePingLossThresholds(settings?.pingLossThresholds),
+    pingLossColors: normalizePingLossColors(settings?.pingLossColors),
+    trafficSpectrumColors: normalizeTrafficSpectrumColors(settings?.trafficSpectrumColors),
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
     showAssetOverview: true,
     showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),

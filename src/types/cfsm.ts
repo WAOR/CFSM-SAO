@@ -504,6 +504,41 @@ export type MatrixBootEffect =
   | "divergence-flux";
 
 /** 用户自定义点阵预设（云端存储） */
+
+export interface PingLatencyThresholds {
+  excellent: number;
+  good: number;
+  moderate: number;
+  elevated: number;
+}
+
+export interface PingLatencyColors {
+  excellent: string;
+  good: string;
+  moderate: string;
+  elevated: string;
+  critical: string;
+}
+
+export interface PingLossThresholds {
+  low: number;
+  medium: number;
+}
+
+export interface PingLossColors {
+  zero: string;
+  low: string;
+  medium: string;
+  high: string;
+}
+
+export interface TrafficSpectrumColors {
+  start: string;
+  mid: string;
+  high: string;
+  end: string;
+}
+
 export interface UserMatrixPreset {
   id: string;
   name: string;
@@ -523,7 +558,12 @@ export interface ThemeSettings {
   homepageMultiPingTaskIds?: number[];
   /** 站长在卡片上换好、「保存到后端」写上来的逐节点换线：`{ uuid: { 行号: 线路 id } }`。 */
   homepagePingLineOverrides?: Record<string, Record<string, number>>;
-  fakePingForUnbound?: boolean;
+    fakePingForUnbound?: boolean;
+  pingLatencyThresholds?: Partial<PingLatencyThresholds>;
+  pingLatencyColors?: Partial<PingLatencyColors>;
+  pingLossThresholds?: Partial<PingLossThresholds>;
+  pingLossColors?: Partial<PingLossColors>;
+  trafficSpectrumColors?: Partial<TrafficSpectrumColors>;
   showHomeOverview?: boolean;
   showGroupTabs?: boolean;
   showRegionBar?: boolean;
