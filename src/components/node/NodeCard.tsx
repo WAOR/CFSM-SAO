@@ -60,6 +60,10 @@ export const NodeCard = memo(function NodeCard({
   const colorsVersion = useMetricColorsVersion();
   const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
   const themeSettings = useThemeSettings();
+  const trafficSegmentColors = useMemo(
+    () => buildTrafficQuotaSegmentColors(themeSettings.trafficSpectrumColors),
+    [themeSettings.trafficSpectrumColors],
+  );
   const model = useNodeCardModel(uuid, { includeMultiPing: true });
 
   if (!model.node) {
@@ -102,10 +106,7 @@ export const NodeCard = memo(function NodeCard({
   } = model;
   const renewalPrice = showCardPrice && Boolean(isPriceVisible) ? metaRenewalPrice : null;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
-  const trafficSegmentColors = useMemo(
-    () => buildTrafficQuotaSegmentColors(themeSettings.trafficSpectrumColors),
-    [themeSettings.trafficSpectrumColors],
-  );
+
 
   return (
     <article

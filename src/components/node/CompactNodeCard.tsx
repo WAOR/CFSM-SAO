@@ -717,6 +717,10 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     includeMultiPing: true,
   });
   const themeSettings = useThemeSettings();
+  const trafficHeatSpectrum = useMemo(
+    () => buildTrafficHeatSpectrum(themeSettings.trafficSpectrumColors),
+    [themeSettings.trafficSpectrumColors],
+  );
 
   if (!model.node) {
     return <div className="compact-node-card animate-pulse" aria-busy />;
@@ -752,10 +756,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
   // 开关关闭或节点离线时,完全跳过格式化工作。
   const uptimeLabel = showUptime && !isOffline ? formatCompactUptime(node.uptime) : "";
-  const trafficHeatSpectrum = useMemo(
-    () => buildTrafficHeatSpectrum(themeSettings.trafficSpectrumColors),
-    [themeSettings.trafficSpectrumColors],
-  );
+
 
   return (
     <article
