@@ -1122,6 +1122,7 @@ export function ThemeManage() {
 
   const patchPingLatencyThreshold = useCallback(
     (key: keyof PingLatencyThresholds, val: number) => {
+      editVersionRef.current += 1;
       setDraft((prev) => ({
         ...prev,
         pingLatencyThresholds: {
@@ -1135,6 +1136,7 @@ export function ThemeManage() {
 
   const patchPingLatencyColor = useCallback(
     (key: keyof PingLatencyColors, val: string) => {
+      editVersionRef.current += 1;
       setDraft((prev) => ({
         ...prev,
         pingLatencyColors: {
@@ -1147,6 +1149,7 @@ export function ThemeManage() {
   );
 
   const resetPingLatency = useCallback(() => {
+      editVersionRef.current += 1;
     setDraft((prev) => ({
       ...prev,
       pingLatencyThresholds: { ...DEFAULT_PING_LATENCY_THRESHOLDS },
@@ -1156,6 +1159,7 @@ export function ThemeManage() {
 
   const patchPingLossThreshold = useCallback(
     (key: keyof PingLossThresholds, val: number) => {
+      editVersionRef.current += 1;
       setDraft((prev) => ({
         ...prev,
         pingLossThresholds: {
@@ -1169,6 +1173,7 @@ export function ThemeManage() {
 
   const patchPingLossColor = useCallback(
     (key: keyof PingLossColors, val: string) => {
+      editVersionRef.current += 1;
       setDraft((prev) => ({
         ...prev,
         pingLossColors: {
@@ -1181,6 +1186,7 @@ export function ThemeManage() {
   );
 
   const resetPingLoss = useCallback(() => {
+      editVersionRef.current += 1;
     setDraft((prev) => ({
       ...prev,
       pingLossThresholds: { ...DEFAULT_PING_LOSS_THRESHOLDS },
@@ -1190,6 +1196,7 @@ export function ThemeManage() {
 
   const patchTrafficSpectrumColor = useCallback(
     (key: keyof TrafficSpectrumColors, val: string) => {
+      editVersionRef.current += 1;
       setDraft((prev) => ({
         ...prev,
         trafficSpectrumColors: {
@@ -1202,6 +1209,7 @@ export function ThemeManage() {
   );
 
   const applyTrafficSpectrumPreset = useCallback((preset: TrafficSpectrumPreset) => {
+      editVersionRef.current += 1;
     setDraft((prev) => ({
       ...prev,
       trafficSpectrumColors: { ...preset.colors },
@@ -1209,6 +1217,7 @@ export function ThemeManage() {
   }, []);
 
   const resetTrafficSpectrum = useCallback(() => {
+      editVersionRef.current += 1;
     setDraft((prev) => ({
       ...prev,
       trafficSpectrumColors: { ...DEFAULT_TRAFFIC_SPECTRUM_COLORS },
