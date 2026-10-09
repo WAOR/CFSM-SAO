@@ -558,7 +558,7 @@ function HomeOverviewCards({
       <div className="mao-hero-side">
         <div
           className="mao-progress-container"
-          data-palette={clusterOverviewMode === "nodes" && matrixColorTheme ? matrixColorTheme : "default"}
+          data-palette={matrixColorTheme || "default"}
         >
           <div className="mao-progress-head">
             <div className="mao-progress-title-wrap">

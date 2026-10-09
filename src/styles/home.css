@@ -683,15 +683,15 @@
 }
 
 .mao-progress-container[data-palette="divergence"] .mao-status-pill.is-warning {
-  background: color-mix(in srgb, #ca8a04 10%, transparent);
-  color: #ca8a04;
-  border-color: color-mix(in srgb, #ca8a04 35%, transparent);
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #dc2626;
+  border-color: color-mix(in srgb, #dc2626 35%, transparent);
 }
 
 :root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .mao-status-pill.is-warning {
-  color: #facc15;
-  background: color-mix(in srgb, #facc15 15%, transparent);
-  border-color: color-mix(in srgb, #facc15 38%, transparent);
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 15%, transparent);
+  border-color: color-mix(in srgb, #ef4444 38%, transparent);
 }
 
 .mao-status-dot {
@@ -2871,6 +2871,168 @@
   animation-name: bandwidth-pulse-eva-3;
 }
 
+/* 赛博朋克 2077：带宽评级徽章专属配色（斯安威斯坦冷青 -> 霓虹亮黄 -> 义眼超频品红 -> 义体过载绯红） */
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="0"] {
+  --badge-color: #0891b2;
+  --badge-glow: rgba(8, 145, 178, 0.45);
+  color: #0891b2;
+  border-color: color-mix(in srgb, #0891b2 35%, transparent);
+  background: color-mix(in srgb, #0891b2 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="0"] {
+  --badge-color: #00f0ff;
+  --badge-glow: rgba(0, 240, 255, 0.7);
+  color: #67e8f9;
+  border-color: color-mix(in srgb, #00f0ff 40%, transparent);
+  background: color-mix(in srgb, #00f0ff 16%, transparent);
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="1"] {
+  --badge-color: #ca8a04;
+  --badge-glow: rgba(202, 138, 4, 0.45);
+  color: #ca8a04;
+  border-color: color-mix(in srgb, #ca8a04 35%, transparent);
+  background: color-mix(in srgb, #ca8a04 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="1"] {
+  --badge-color: #fcee0a;
+  --badge-glow: rgba(252, 238, 10, 0.7);
+  color: #fcee0a;
+  border-color: color-mix(in srgb, #fcee0a 40%, transparent);
+  background: color-mix(in srgb, #fcee0a 16%, transparent);
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="2"] {
+  --badge-color: #e11d48;
+  --badge-glow: rgba(225, 29, 72, 0.45);
+  color: #e11d48;
+  border-color: color-mix(in srgb, #e11d48 35%, transparent);
+  background: color-mix(in srgb, #e11d48 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="2"] {
+  --badge-color: #ff007f;
+  --badge-glow: rgba(255, 0, 127, 0.75);
+  color: #ff007f;
+  border-color: color-mix(in srgb, #ff007f 40%, transparent);
+  background: color-mix(in srgb, #ff007f 16%, transparent);
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="3"] {
+  --badge-color: #be123c;
+  --badge-glow: rgba(190, 18, 60, 0.45);
+  color: #be123c;
+  border-color: color-mix(in srgb, #be123c 35%, transparent);
+  background: color-mix(in srgb, #be123c 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="3"] {
+  --badge-color: #ff0055;
+  --badge-glow: rgba(255, 0, 85, 0.8);
+  color: #ff0055;
+  border-color: color-mix(in srgb, #ff0055 42%, transparent);
+  background: color-mix(in srgb, #ff0055 18%, transparent);
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="0"] .mao-status-dot {
+  animation-name: bandwidth-pulse-cp-0;
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="1"] .mao-status-dot {
+  animation-name: bandwidth-pulse-cp-1;
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="2"] .mao-status-dot {
+  animation-name: bandwidth-pulse-cp-2;
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .overview-card-rating.is-bandwidth-badge[data-rating-level="3"] .mao-status-dot {
+  animation-name: bandwidth-pulse-cp-3;
+}
+
+/* 命运石之门：带宽评级徽章专属配色（冷阴极休眠灰 -> 初级辉光琥珀 -> 高能炽热电离金 -> 超频赤红） */
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="0"] {
+  --badge-color: #78716c;
+  --badge-glow: rgba(120, 113, 108, 0.35);
+  color: #78716c;
+  border-color: color-mix(in srgb, #78716c 30%, transparent);
+  background: color-mix(in srgb, #78716c 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="0"] {
+  --badge-color: #a8a29e;
+  --badge-glow: rgba(168, 162, 158, 0.45);
+  color: #d6d3d1;
+  border-color: color-mix(in srgb, #a8a29e 35%, transparent);
+  background: color-mix(in srgb, #a8a29e 14%, transparent);
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="1"] {
+  --badge-color: #c2410c;
+  --badge-glow: rgba(194, 65, 12, 0.45);
+  color: #c2410c;
+  border-color: color-mix(in srgb, #c2410c 35%, transparent);
+  background: color-mix(in srgb, #c2410c 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="1"] {
+  --badge-color: #f97316;
+  --badge-glow: rgba(249, 115, 22, 0.65);
+  color: #fb923c;
+  border-color: color-mix(in srgb, #f97316 40%, transparent);
+  background: color-mix(in srgb, #f97316 16%, transparent);
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="2"] {
+  --badge-color: #ca8a04;
+  --badge-glow: rgba(202, 138, 4, 0.45);
+  color: #ca8a04;
+  border-color: color-mix(in srgb, #ca8a04 35%, transparent);
+  background: color-mix(in srgb, #ca8a04 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="2"] {
+  --badge-color: #facc15;
+  --badge-glow: rgba(250, 204, 21, 0.7);
+  color: #facc15;
+  border-color: color-mix(in srgb, #facc15 40%, transparent);
+  background: color-mix(in srgb, #facc15 16%, transparent);
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="3"] {
+  --badge-color: #be123c;
+  --badge-glow: rgba(190, 18, 60, 0.45);
+  color: #be123c;
+  border-color: color-mix(in srgb, #be123c 35%, transparent);
+  background: color-mix(in srgb, #be123c 10%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="3"] {
+  --badge-color: #f43f5e;
+  --badge-glow: rgba(244, 63, 94, 0.75);
+  color: #f43f5e;
+  border-color: color-mix(in srgb, #f43f5e 42%, transparent);
+  background: color-mix(in srgb, #f43f5e 18%, transparent);
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="0"] .mao-status-dot {
+  animation-name: bandwidth-pulse-div-0;
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="1"] .mao-status-dot {
+  animation-name: bandwidth-pulse-div-1;
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="2"] .mao-status-dot {
+  animation-name: bandwidth-pulse-div-2;
+}
+
+.mao-progress-container[data-palette="divergence"] .overview-card-rating.is-bandwidth-badge[data-rating-level="3"] .mao-status-dot {
+  animation-name: bandwidth-pulse-div-3;
+}
+
 /* 指示圆点呼吸闪烁效果：位置绝对钉死在左侧 9px 槽位，杜绝跟随评级文字长短发生水平位移与缩进抖动 */
 .overview-card-rating.is-bandwidth-badge .mao-status-dot {
   position: absolute;
@@ -2990,6 +3152,42 @@
 @keyframes bandwidth-pulse-eva-3 {
   0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(220, 38, 38, 0.45)); }
   50% { opacity: 0.35; box-shadow: 0 0 6px 2px var(--badge-glow, rgba(220, 38, 38, 0.45)); }
+}
+
+/* 赛博朋克 2077：带宽指示灯专属同步脉冲 */
+@keyframes bandwidth-pulse-cp-0 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(0, 240, 255, 0.5)); }
+  50% { opacity: 0.35; box-shadow: 0 0 5px 1.5px var(--badge-glow, rgba(0, 240, 255, 0.5)); }
+}
+@keyframes bandwidth-pulse-cp-1 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(252, 238, 10, 0.5)); }
+  50% { opacity: 0.35; box-shadow: 0 0 5px 1.5px var(--badge-glow, rgba(252, 238, 10, 0.5)); }
+}
+@keyframes bandwidth-pulse-cp-2 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(255, 0, 127, 0.55)); }
+  50% { opacity: 0.35; box-shadow: 0 0 5px 1.5px var(--badge-glow, rgba(255, 0, 127, 0.55)); }
+}
+@keyframes bandwidth-pulse-cp-3 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(255, 0, 85, 0.6)); }
+  50% { opacity: 0.35; box-shadow: 0 0 6px 2px var(--badge-glow, rgba(255, 0, 85, 0.6)); }
+}
+
+/* 命运石之门：带宽指示灯专属同步脉冲 */
+@keyframes bandwidth-pulse-div-0 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(168, 162, 158, 0.45)); }
+  50% { opacity: 0.35; box-shadow: 0 0 5px 1.5px var(--badge-glow, rgba(168, 162, 158, 0.45)); }
+}
+@keyframes bandwidth-pulse-div-1 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(255, 119, 0, 0.5)); }
+  50% { opacity: 0.35; box-shadow: 0 0 5px 1.5px var(--badge-glow, rgba(255, 119, 0, 0.5)); }
+}
+@keyframes bandwidth-pulse-div-2 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(250, 204, 21, 0.5)); }
+  50% { opacity: 0.35; box-shadow: 0 0 5px 1.5px var(--badge-glow, rgba(250, 204, 21, 0.5)); }
+}
+@keyframes bandwidth-pulse-div-3 {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--badge-glow, rgba(244, 63, 94, 0.6)); }
+  50% { opacity: 0.35; box-shadow: 0 0 6px 2px var(--badge-glow, rgba(244, 63, 94, 0.6)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
