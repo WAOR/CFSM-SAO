@@ -847,7 +847,7 @@ const PremiumList = memo(function PremiumList({
   );
 });
 
-type ThemeTabId = "home" | "card" | "cost" | "ping";
+type ThemeTabId = "home" | "card" | "cost";
 
 
 interface LatencyTierConfig {
@@ -936,9 +936,8 @@ const THEME_TABS: ReadonlyArray<{
   icon: typeof ListFilter;
 }> = [
   { id: "home", label: "首页", hint: "外观、视图、总览与排序", icon: ListFilter },
-  { id: "card", label: "卡片", hint: "卡片上显示哪些信息与悬浮窗", icon: Rows3 },
+  { id: "card", label: "服务器卡片", hint: "光柱色谱、指标展示与探测线路", icon: Server },
   { id: "cost", label: "花费", hint: "资产统计与收购溢价", icon: CircleDollarSign },
-  { id: "ping", label: "服务器卡片", hint: "延迟、丢包监控与流量进度光柱自定义", icon: Server },
 ];
 
 const DEFAULT_THEME_TAB: ThemeTabId = "home";
@@ -1010,7 +1009,8 @@ export function ThemeManage() {
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const activeTab: ThemeTabId = isThemeTabId(tabParam) ? tabParam : DEFAULT_THEME_TAB;
+  const normalizedTab = tabParam === "ping" ? "card" : tabParam;
+  const activeTab: ThemeTabId = isThemeTabId(normalizedTab) ? normalizedTab : DEFAULT_THEME_TAB;
   const [nodeSearch, setNodeSearch] = useState("");
   const [premiumSearch, setPremiumSearch] = useState("");
   const [savedLocally, setSavedLocally] = useState(false);
@@ -2346,7 +2346,12 @@ export function ThemeManage() {
                   </span>
                 </div>
               </InstancePanel>
+            </>
+          )}
 
+          {activeTab === "card" && (
+            <>
+              {/* 面板 1: 光柱视觉与色彩自定义 */}
               <InstancePanel
                 kicker="光柱"
                 title="卡片光柱视觉与色彩自定义"
@@ -2757,14 +2762,12 @@ export function ThemeManage() {
                   </div>
                 </div>
               </InstancePanel>
-            </>
-          )}
 
-          {activeTab === "card" && (
-            <InstancePanel
+              {/* 面板 2: 卡片展示内容与指标开关 */}
+              <InstancePanel
               id="set-card-content"
-              kicker="卡片"
-              title="卡片展示内容"
+              kicker="指标"
+              title="卡片展示内容与指标开关"
               description="定制大卡片、小卡片和列表模式下呈现的具体指标。"
               aside={<Rows3 size={16} />}
             >
@@ -2813,98 +2816,12 @@ export function ThemeManage() {
                 />
               </div>
             </InstancePanel>
-          )}
 
-          {activeTab === "cost" && (
-            <>
-              <InstancePanel
-                id="set-cost"
-                kicker="资产"
-                title="资产与财务设置"
-                aside={<CircleDollarSign size={16} />}
-              >
-                <div className="flex flex-col gap-4">
-
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="surface-inset flex flex-col gap-2 px-4 py-3">
-                      <span className="setting-subhead-title">临期续费提醒天数</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={MAX_RENEWAL_REMINDER_DAYS}
-                        value={draft.renewalReminderDays}
-                        onChange={(event) => patch("renewalReminderDays", Number(event.target.value) || 0)}
-                        className="surface-inset px-3 py-2 text-[13px] outline-none"
-                      />
-                      <span className="setting-hint">到期前多少天标黄预警，0 表示不提醒。</span>
-                    </label>
-
-                    <label className="surface-inset flex flex-col gap-2 px-4 py-3">
-                      <span className="setting-subhead-title">实时汇率接口 API URL</span>
-                      <input
-                        type="url"
-                        value={draft.costRateApiUrl}
-                        onChange={(event) => patch("costRateApiUrl", event.target.value)}
-                        placeholder="https://open.er-api.com/v6/latest/CNY"
-                        className="surface-inset px-3 py-2 text-[13px] outline-none"
-                      />
-                      <span className="setting-hint">留空使用官方默认免费公共汇率接口。</span>
-                    </label>
-                  </div>
-
-                  <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                    <span className="setting-subhead-title">忽略计算费用的节点</span>
-                    <textarea
-                      rows={3}
-                      value={draft.costIgnoredText}
-                      onChange={(event) => patch("costIgnoredText", event.target.value)}
-                      placeholder="测试机&#10;node-uuid"
-                      className="surface-inset p-3 text-[13px] font-mono outline-none"
-                    />
-                    <span className="setting-hint">每行一个节点 UUID 或名称，计入资产时不摊销其成本。</span>
-                  </div>
-                </div>
-              </InstancePanel>
-
-              <InstancePanel
-                id="set-premiums"
-                kicker="溢价"
-                title="二手买入溢价/折价固化"
-                description="记录收购时的实际支出，系统自动算出折价盈亏并在到期日前线性摊销。"
-                aside={<CircleDollarSign size={16} />}
-              >
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <input
-                      value={premiumSearch}
-                      onChange={(event) => setPremiumSearch(event.target.value)}
-                      placeholder="搜索节点录入收购价…"
-                      className="surface-inset px-3 py-1.5 text-[13px] outline-none max-w-xs"
-                    />
-                    <span className="setting-hint">已记录 {premiumConfiguredCount} 台溢价</span>
-                  </div>
-
-                  <PremiumList
-                    clients={filteredPremiumClients}
-                    costPremiums={draft.costPremiums}
-                    detailByUuid={premiumDetailByUuid}
-                    rateLoading={premiumRateQuery.isLoading}
-                    acquiredAtMax={acquiredAtMax}
-                    onPatchPaid={patchPremiumPaid}
-                    onPatchAcquiredAt={patchPremiumAcquiredAt}
-                  />
-                </div>
-              </InstancePanel>
-            </>
-          )}
-
-          {activeTab === "ping" && (
-            <>
+              {/* 面板 3: 延迟探测模式与线路绑定 */}
               <InstancePanel
                 id="set-ping-mode"
-                kicker="线路"
-                title="延迟探测模式"
+                kicker="探测"
+                title="延迟探测模式与线路绑定"
                 aside={<Activity size={16} />}
               >
                 <div className="flex flex-col gap-4">
@@ -3035,6 +2952,91 @@ export function ThemeManage() {
               </InstancePanel>
             </>
           )}
+
+          {activeTab === "cost" && (
+            <>
+              <InstancePanel
+                id="set-cost"
+                kicker="资产"
+                title="资产与财务设置"
+                aside={<CircleDollarSign size={16} />}
+              >
+                <div className="flex flex-col gap-4">
+
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="surface-inset flex flex-col gap-2 px-4 py-3">
+                      <span className="setting-subhead-title">临期续费提醒天数</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={MAX_RENEWAL_REMINDER_DAYS}
+                        value={draft.renewalReminderDays}
+                        onChange={(event) => patch("renewalReminderDays", Number(event.target.value) || 0)}
+                        className="surface-inset px-3 py-2 text-[13px] outline-none"
+                      />
+                      <span className="setting-hint">到期前多少天标黄预警，0 表示不提醒。</span>
+                    </label>
+
+                    <label className="surface-inset flex flex-col gap-2 px-4 py-3">
+                      <span className="setting-subhead-title">实时汇率接口 API URL</span>
+                      <input
+                        type="url"
+                        value={draft.costRateApiUrl}
+                        onChange={(event) => patch("costRateApiUrl", event.target.value)}
+                        placeholder="https://open.er-api.com/v6/latest/CNY"
+                        className="surface-inset px-3 py-2 text-[13px] outline-none"
+                      />
+                      <span className="setting-hint">留空使用官方默认免费公共汇率接口。</span>
+                    </label>
+                  </div>
+
+                  <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                    <span className="setting-subhead-title">忽略计算费用的节点</span>
+                    <textarea
+                      rows={3}
+                      value={draft.costIgnoredText}
+                      onChange={(event) => patch("costIgnoredText", event.target.value)}
+                      placeholder="测试机&#10;node-uuid"
+                      className="surface-inset p-3 text-[13px] font-mono outline-none"
+                    />
+                    <span className="setting-hint">每行一个节点 UUID 或名称，计入资产时不摊销其成本。</span>
+                  </div>
+                </div>
+              </InstancePanel>
+
+              <InstancePanel
+                id="set-premiums"
+                kicker="溢价"
+                title="二手买入溢价/折价固化"
+                description="记录收购时的实际支出，系统自动算出折价盈亏并在到期日前线性摊销。"
+                aside={<CircleDollarSign size={16} />}
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <input
+                      value={premiumSearch}
+                      onChange={(event) => setPremiumSearch(event.target.value)}
+                      placeholder="搜索节点录入收购价…"
+                      className="surface-inset px-3 py-1.5 text-[13px] outline-none max-w-xs"
+                    />
+                    <span className="setting-hint">已记录 {premiumConfiguredCount} 台溢价</span>
+                  </div>
+
+                  <PremiumList
+                    clients={filteredPremiumClients}
+                    costPremiums={draft.costPremiums}
+                    detailByUuid={premiumDetailByUuid}
+                    rateLoading={premiumRateQuery.isLoading}
+                    acquiredAtMax={acquiredAtMax}
+                    onPatchPaid={patchPremiumPaid}
+                    onPatchAcquiredAt={patchPremiumAcquiredAt}
+                  />
+                </div>
+              </InstancePanel>
+            </>
+          )}
+
         </div>
       </div>
     </div>
