@@ -36,7 +36,31 @@ import {
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
 export type ClusterOverviewMode = "classic" | "nodes";
-export type MatrixColorTheme = "default" | "eva";
+export type MatrixColorTheme =
+  | "default"
+  | "eva"
+  | "cyberpunk"
+  | "divergence";
+
+export const MATRIX_COLOR_THEMES: readonly MatrixColorTheme[] = [
+  "default",
+  "eva",
+  "cyberpunk",
+  "divergence",
+] as const;
+
+export type MatrixBootEffect =
+  | "laser-scan"
+  | "digital-rain"
+  | "cyber-glitch"
+  | "divergence-flux";
+
+export const MATRIX_BOOT_EFFECTS: readonly MatrixBootEffect[] = [
+  "laser-scan",
+  "digital-rain",
+  "cyber-glitch",
+  "divergence-flux",
+] as const;
 
 export interface ResolvedThemeSettings {
   defaultAppearance: Appearance;
@@ -46,6 +70,7 @@ export interface ResolvedThemeSettings {
   matrixColorTheme: MatrixColorTheme;
   matrixMockFill: boolean;
   matrixBootAnimation: boolean;
+  matrixBootEffect: MatrixBootEffect;
   matrixCustomPattern: number[] | null;
   matrixUserPresets: UserMatrixPreset[];
   enableAdminButton: boolean;
@@ -101,6 +126,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   matrixColorTheme: "default",
   matrixMockFill: false,
   matrixBootAnimation: true,
+  matrixBootEffect: "laser-scan",
   matrixCustomPattern: null,
   matrixUserPresets: [],
   enableAdminButton: true,
@@ -222,7 +248,7 @@ function normalizeClusterOverviewMode(
 }
 
 export function isMatrixColorTheme(value: unknown): value is MatrixColorTheme {
-  return value === "default" || value === "eva";
+  return typeof value === "string" && (MATRIX_COLOR_THEMES as readonly string[]).includes(value);
 }
 
 function normalizeMatrixColorTheme(
@@ -238,6 +264,17 @@ function normalizeMatrixMockFill(value: unknown): boolean {
 
 export function normalizeMatrixBootAnimation(value: unknown): boolean {
   return value !== false;
+}
+
+export function isMatrixBootEffect(value: unknown): value is MatrixBootEffect {
+  return typeof value === "string" && (MATRIX_BOOT_EFFECTS as readonly string[]).includes(value);
+}
+
+export function normalizeMatrixBootEffect(
+  value: unknown,
+  fallback: MatrixBootEffect = DEFAULT_THEME_SETTINGS.matrixBootEffect,
+): MatrixBootEffect {
+  return isMatrixBootEffect(value) ? value : fallback;
 }
 
 export function normalizeMatrixCustomPattern(val: unknown): number[] | null {
@@ -319,6 +356,7 @@ export function normalizeThemeSettings(
     matrixColorTheme: normalizeMatrixColorTheme(settings?.matrixColorTheme),
     matrixMockFill: normalizeMatrixMockFill(settings?.matrixMockFill),
     matrixBootAnimation: normalizeMatrixBootAnimation(settings?.matrixBootAnimation),
+    matrixBootEffect: normalizeMatrixBootEffect(settings?.matrixBootEffect),
     matrixCustomPattern: normalizeMatrixCustomPattern(settings?.matrixCustomPattern),
     matrixUserPresets: normalizeMatrixUserPresets(settings?.matrixUserPresets),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),

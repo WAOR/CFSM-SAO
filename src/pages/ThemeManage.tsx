@@ -62,7 +62,7 @@ import {
   saveLocalThemeSettings,
 } from "@/services/themeSettingsStore";
 import { copyText } from "@/utils/clipboard";
-import type { NodeInfo, PingTask, ThemeSettings } from "@/types/cfsm";
+import type { MatrixColorTheme, MatrixBootEffect, NodeInfo, PingTask, ThemeSettings } from "@/types/cfsm";
 import {
   calculateCostSummary,
   calculateCostPremiumAmount,
@@ -130,6 +130,90 @@ const OVERVIEW_RATING_LABEL_FIELDS: Array<{
     description: "显示在首页「资产总值」指标卡片右下角，依据折算人民币总资产规模划分等级。",
     toggleKey: "showAssetRating",
     tierHint: "对应阶梯：≤500元、≤1500元、≤3000元、>3000元",
+  },
+];
+
+
+interface ColorThemeOption {
+  id: MatrixColorTheme;
+  label: string;
+  badge: string;
+  desc: string;
+  colors: [string, string, string, string];
+  badgeClass: string;
+}
+
+const COLOR_THEME_OPTIONS: ColorThemeOption[] = [
+  {
+    id: "default",
+    label: "经典标准",
+    badge: "CLASSIC",
+    desc: "绿 · 橙 · 红 常规监控色阶",
+    colors: ["#34d399", "#10b981", "#f59e0b", "#ef4444"],
+    badgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30",
+  },
+  {
+    id: "eva",
+    label: "EVA 初号机",
+    badge: "EVA UNIT-01",
+    desc: "机体紫 · 荧光绿 · 警告橙 · 暴走红",
+    colors: ["#7c3aed", "#00ff66", "#f97316", "#ef4444"],
+    badgeClass: "bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30",
+  },
+  {
+    id: "cyberpunk",
+    label: "夜之城 2077",
+    badge: "NIGHT CITY",
+    desc: "斯安威斯坦青 · 霓虹亮黄 · 超频绯红",
+    colors: ["#00f0ff", "#fcee0a", "#ff0055", "#ef4444"],
+    badgeClass: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30",
+  },
+  {
+    id: "divergence",
+    label: "命运石之门",
+    badge: "1.048596%",
+    desc: "待机暖杏橙 · 氖气放电暖橙 · 烈焰超频红橙",
+    colors: ["#fdba74", "#f97316", "#ea580c", "#ef4444"],
+    badgeClass: "bg-orange-500/15 text-orange-600 dark:text-orange-300 border-orange-500/30",
+  },
+];
+
+interface BootEffectOption {
+  id: MatrixBootEffect;
+  label: string;
+  badge: string;
+  desc: string;
+  badgeClass: string;
+}
+
+const BOOT_EFFECT_OPTIONS: BootEffectOption[] = [
+  {
+    id: "laser-scan",
+    label: "激光横扫 (Laser Scan)",
+    badge: "RADAR",
+    desc: "经典雷达激光束自左向右横向扫描显影，纯正 SAO 机能风格",
+    badgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30",
+  },
+  {
+    id: "digital-rain",
+    label: "数码雨流 (Digital Rain)",
+    badge: "CASCADE",
+    desc: "交错流光瀑布自上而下倾泻显影，如黑客帝国代码雨般涌现",
+    badgeClass: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30",
+  },
+  {
+    id: "cyber-glitch",
+    label: "神经故障 (Cyber Glitch)",
+    badge: "OVERCLOCK",
+    desc: "斯安威斯坦电光青与超频品红噪波爆闪、行撕裂与协议校准咬合",
+    badgeClass: "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300 border-fuchsia-500/30",
+  },
+  {
+    id: "divergence-flux",
+    label: "世界线跳变 (Divergence Flux)",
+    badge: "1.048596%",
+    desc: "真空管惰性氖气放电赤橙火花高频跳动，自左向右逐位锁定定格",
+    badgeClass: "bg-orange-500/15 text-orange-600 dark:text-orange-300 border-orange-500/30",
   },
 ];
 
@@ -294,6 +378,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     matrixColorTheme: settings.matrixColorTheme,
     matrixMockFill: settings.matrixMockFill,
     matrixBootAnimation: settings.matrixBootAnimation,
+    matrixBootEffect: settings.matrixBootEffect,
     matrixCustomPattern: settings.matrixCustomPattern,
     matrixUserPresets: settings.matrixUserPresets,
     homepagePingBindings: settings.homepagePingBindings,
@@ -1661,80 +1746,70 @@ export function ThemeManage() {
                   title="方格矩阵设置"
                   aside={<LayoutGrid size={16} />}
                 >
-                  {/* 1. 矩阵配色风格切换（经典标准 vs EVA 初号机） */}
+                  {/* 1. 矩阵配色风格切换 */}
                   <div>
                     <div className="flex items-center justify-between gap-3 mb-2.5">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
-                          <span>方格矩阵配色风格</span>
-                          {(draft.matrixColorTheme ?? "default") === "eva" ? (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                              UNIT-01
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
-                              CLASSIC
-                            </span>
-                          )}
+                          <span>配色风格</span>
+                          {(() => {
+                            const currentOpt = COLOR_THEME_OPTIONS.find(
+                              (opt) => opt.id === (draft.matrixColorTheme ?? "default"),
+                            ) ?? COLOR_THEME_OPTIONS[0];
+                            return (
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${currentOpt.badgeClass}`}
+                              >
+                                {currentOpt.badge}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <p className="text-[11px] text-(--text-muted) mt-0.5">
-                          定制方块热力矩阵的主题色阶。EVA 初号机版采用标志性机体紫、荧光绿、警告橙与暴走红。
+                          全局定制方块热力矩阵与左侧指标小卡片的图标光晕配色，支持深/浅色模式专属视觉优化。
                         </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => patch("matrixColorTheme", "default")}
-                        data-active={(draft.matrixColorTheme ?? "default") === "default" ? "true" : "false"}
-                        aria-pressed={(draft.matrixColorTheme ?? "default") === "default"}
-                        className="setting-color-theme-card"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#34d399]" />
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#10b981]" />
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#f59e0b]" />
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-xs font-medium text-(--text-primary) block">经典标准</span>
-                            <span className="text-[10px] text-(--text-muted) block">绿 · 橙 · 红 常规监控色阶</span>
-                          </div>
-                        </div>
-                        <div className="setting-color-theme-radio" aria-hidden="true">
-                          {(draft.matrixColorTheme ?? "default") === "default" && (
-                            <div className="setting-color-theme-radio-dot" />
-                          )}
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => patch("matrixColorTheme", "eva")}
-                        data-active={(draft.matrixColorTheme ?? "default") === "eva" ? "true" : "false"}
-                        aria-pressed={(draft.matrixColorTheme ?? "default") === "eva"}
-                        className="setting-color-theme-card is-eva"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#7c3aed]" />
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#00ff66]" />
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#f97316]" />
-                            <span className="w-2.5 h-2.5 rounded-xs bg-[#ef4444]" />
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-xs font-medium text-(--text-primary) block">EVA 初号机</span>
-                            <span className="text-[10px] text-(--text-muted) block">机体紫 · 荧光绿 · 暴走红</span>
-                          </div>
-                        </div>
-                        <div className="setting-color-theme-radio" aria-hidden="true">
-                          {(draft.matrixColorTheme ?? "default") === "eva" && (
-                            <div className="setting-color-theme-radio-dot" />
-                          )}
-                        </div>
-                      </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                      {COLOR_THEME_OPTIONS.map((opt) => {
+                        const isSelected = (draft.matrixColorTheme ?? "default") === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => patch("matrixColorTheme", opt.id)}
+                            data-active={isSelected ? "true" : "false"}
+                            aria-pressed={isSelected}
+                            className={`setting-color-theme-card ${opt.id === "eva" ? "is-eva" : ""}`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="flex items-center gap-1 shrink-0 p-1 rounded-md bg-(--bg-card) border border-(--hairline)">
+                                {opt.colors.map((c, i) => (
+                                  <span
+                                    key={i}
+                                    className="w-2.5 h-2.5 rounded-xs"
+                                    style={{ backgroundColor: c }}
+                                  />
+                                ))}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-xs font-medium text-(--text-primary) block truncate">
+                                  {opt.label}
+                                </span>
+                                <span className="text-[10px] text-(--text-muted) block truncate">
+                                  {opt.desc}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="setting-color-theme-radio" aria-hidden="true">
+                              {isSelected && (
+                                <div className="setting-color-theme-radio-dot" />
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1762,10 +1837,74 @@ export function ThemeManage() {
 
                     {/* 开场点阵图案自定义画布（仅在开启开场动画时展开） */}
                     {(draft.matrixBootAnimation ?? true) && (
-                      <MatrixPatternEditor
+                      <div className="mt-3.5 space-y-4">
+                        {/* 动效形式独立选择器 */}
+                        <div className="rounded-xl border border-(--hairline) bg-[color-mix(in_srgb,var(--bg-card)_55%,transparent)] p-3 sm:p-3.5">
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <div>
+                              <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
+                                <span>开屏动效形式 (Boot Animation Effect)</span>
+                                {(() => {
+                                  const currentEffect =
+                                    BOOT_EFFECT_OPTIONS.find(
+                                      (e) => e.id === (draft.matrixBootEffect ?? "laser-scan"),
+                                    ) ?? BOOT_EFFECT_OPTIONS[0];
+                                  return (
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${currentEffect.badgeClass}`}
+                                    >
+                                      {currentEffect.badge}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                              <p className="text-[11px] text-(--text-muted) mt-0.5">
+                                独立设置开机显影机制，与上方任意主题配色自由交叉搭配。系统已预留未来扩充更多动效模式的方案空间。
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {BOOT_EFFECT_OPTIONS.map((opt) => {
+                              const isSelected = (draft.matrixBootEffect ?? "laser-scan") === opt.id;
+                              return (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => patch("matrixBootEffect", opt.id)}
+                                  data-active={isSelected ? "true" : "false"}
+                                  aria-pressed={isSelected}
+                                  className="setting-color-theme-card"
+                                >
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-medium text-(--text-primary) truncate">
+                                          {opt.label}
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] text-(--text-muted) block truncate mt-0.5">
+                                        {opt.desc}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="setting-color-theme-radio" aria-hidden="true">
+                                    {isSelected && (
+                                      <div className="setting-color-theme-radio-dot" />
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 点阵画板 */}
+                        <MatrixPatternEditor
                         value={draft.matrixCustomPattern}
                         userPresets={draft.matrixUserPresets}
                         colorTheme={draft.matrixColorTheme ?? "default"}
+                        bootEffect={draft.matrixBootEffect ?? "laser-scan"}
                         onApply={(pattern) => {
                           patch("matrixCustomPattern", pattern);
                           showToast("已将点阵图案应用到首页并同步云端");
@@ -1775,7 +1914,8 @@ export function ThemeManage() {
                           showToast("用户预设已更新并同步云端");
                         }}
                       />
-                    )}
+                    </div>
+                  )}
                   </div>
 
                   {/* 3. 模拟数据填充空闲机位插槽 */}

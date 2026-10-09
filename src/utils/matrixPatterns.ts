@@ -4,6 +4,12 @@ export const GRID_COLUMNS = 20;
 export const MIN_RACK_ROWS = 5;
 export const TOTAL_PIXELS = GRID_COLUMNS * MIN_RACK_ROWS; // 100
 
+/** 黑客帝国模式专属：自上而下数据流动雨各列错落滴落延迟步数与总步进数 */
+export const MATRIX_RAIN_DELAYS = [
+  0, 2, 1, 3, 2, 0, 4, 1, 3, 2, 0, 4, 1, 3, 2, 5, 1, 3, 2, 0,
+] as const;
+export const MATRIX_RAIN_TOTAL_STEPS = 12;
+
 export interface PatternPreset {
   id: string;
   name: string;
