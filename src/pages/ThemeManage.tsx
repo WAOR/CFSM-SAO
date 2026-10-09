@@ -100,13 +100,13 @@ import {
   DEFAULT_PING_LOSS_COLORS,
   DEFAULT_PING_LOSS_THRESHOLDS,
   DEFAULT_TRAFFIC_SPECTRUM_COLORS,
-  TRAFFIC_SPECTRUM_PRESETS,
+  STATUS_BAR_PRESETS,
+  type StatusBarPreset,
   normalizePingLatencyColors,
   normalizePingLatencyThresholds,
   normalizePingLossColors,
   normalizePingLossThresholds,
   normalizeTrafficSpectrumColors,
-  type TrafficSpectrumPreset,
 } from "@/utils/themeSettings";
 import { buildTrafficQuotaSegmentColors } from "@/utils/metricTone";
 import { MAX_RENEWAL_REMINDER_DAYS } from "@/utils/renewalReminder";
@@ -1208,11 +1208,13 @@ export function ThemeManage() {
     [],
   );
 
-  const applyTrafficSpectrumPreset = useCallback((preset: TrafficSpectrumPreset) => {
-      editVersionRef.current += 1;
+  const applyStatusBarPreset = useCallback((preset: StatusBarPreset) => {
+    editVersionRef.current += 1;
     setDraft((prev) => ({
       ...prev,
       trafficSpectrumColors: { ...preset.colors },
+      pingLatencyColors: { ...preset.latencyColors },
+      pingLossColors: { ...preset.lossColors },
     }));
   }, []);
 
@@ -2462,6 +2464,7 @@ export function ThemeManage() {
                 </div>
               </InstancePanel>
             {/* 面板 5: 状态光柱 */}
+              {/* 面板 5: 状态光柱 */}
               <InstancePanel
                 kicker="光柱"
                 title="状态光柱"
@@ -2469,6 +2472,66 @@ export function ThemeManage() {
                 aside={<Sliders size={16} />}
               >
                 <div className="flex flex-col gap-5">
+                  {/* 顶置配套方案预设：一套方案联动覆盖流量、延迟、丢包三处光柱 */}
+                  <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
+                    <div>
+                      <span className="setting-subhead-title">配套预设方案</span>
+                      <p className="setting-hint mt-1">
+                        一键联动设定流量、延迟与丢包光柱的成套视觉方案。
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {STATUS_BAR_PRESETS.map((preset) => {
+                        const isSelected =
+                          draft.trafficSpectrumColors.start === preset.colors.start &&
+                          draft.trafficSpectrumColors.mid === preset.colors.mid &&
+                          draft.trafficSpectrumColors.high === preset.colors.high &&
+                          draft.trafficSpectrumColors.end === preset.colors.end &&
+                          draft.pingLatencyColors.excellent === preset.latencyColors.excellent &&
+                          draft.pingLatencyColors.good === preset.latencyColors.good &&
+                          draft.pingLatencyColors.moderate === preset.latencyColors.moderate &&
+                          draft.pingLatencyColors.elevated === preset.latencyColors.elevated &&
+                          draft.pingLatencyColors.critical === preset.latencyColors.critical &&
+                          draft.pingLossColors.zero === preset.lossColors.zero &&
+                          draft.pingLossColors.low === preset.lossColors.low &&
+                          draft.pingLossColors.medium === preset.lossColors.medium &&
+                          draft.pingLossColors.high === preset.lossColors.high;
+                        const gradient = `linear-gradient(to right, ${preset.colors.start}, ${preset.colors.mid}, ${preset.colors.high}, ${preset.colors.end})`;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyStatusBarPreset(preset)}
+                            data-active={isSelected ? "true" : "false"}
+                            aria-pressed={isSelected}
+                            className="setting-spectrum-preset-card"
+                          >
+                            <div className="flex items-center justify-between gap-1.5 w-full">
+                              <span
+                                className={clsx(
+                                  "text-xs font-semibold truncate",
+                                  isSelected
+                                    ? "text-(--accent-500)"
+                                    : "text-(--text-primary)",
+                                )}
+                              >
+                                {preset.name}
+                              </span>
+                              <div className="setting-color-theme-radio" aria-hidden="true">
+                                {isSelected && <div className="setting-color-theme-radio-dot" />}
+                              </div>
+                            </div>
+                            <div
+                              className="h-2 w-full rounded-full shadow-inner ring-1 ring-black/10 dark:ring-white/10"
+                              style={{ background: gradient }}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* 1. 流量进度光柱色谱自定义 */}
                   <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2511,51 +2574,6 @@ export function ThemeManage() {
                             <span key={i} className="traffic-quota-segment" style={{ background: color }} />
                           ))}
                         </div>
-                      </div>
-                    </div>
-
-                    {/* 快捷预设按钮组 */}
-                    <div className="flex flex-col gap-2 pt-0.5">
-                      <span className="text-[12px] font-medium text-(--text-secondary)">色谱预设方案：</span>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                        {TRAFFIC_SPECTRUM_PRESETS.map((preset) => {
-                          const isSelected =
-                            draft.trafficSpectrumColors.start === preset.colors.start &&
-                            draft.trafficSpectrumColors.mid === preset.colors.mid &&
-                            draft.trafficSpectrumColors.high === preset.colors.high &&
-                            draft.trafficSpectrumColors.end === preset.colors.end;
-                          const gradient = `linear-gradient(to right, ${preset.colors.start}, ${preset.colors.mid}, ${preset.colors.high}, ${preset.colors.end})`;
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              onClick={() => applyTrafficSpectrumPreset(preset)}
-                              data-active={isSelected ? "true" : "false"}
-                              aria-pressed={isSelected}
-                              className="setting-spectrum-preset-card"
-                            >
-                              <div className="flex items-center justify-between gap-1.5 w-full">
-                                <span
-                                  className={clsx(
-                                    "text-xs font-semibold truncate",
-                                    isSelected
-                                      ? "text-(--accent-500)"
-                                      : "text-(--text-primary)",
-                                  )}
-                                >
-                                  {preset.name}
-                                </span>
-                                <div className="setting-color-theme-radio" aria-hidden="true">
-                                  {isSelected && <div className="setting-color-theme-radio-dot" />}
-                                </div>
-                              </div>
-                              <div
-                                className="h-2 w-full rounded-full shadow-inner ring-1 ring-black/10 dark:ring-white/10"
-                                style={{ background: gradient }}
-                              />
-                            </button>
-                          );
-                        })}
                       </div>
                     </div>
 

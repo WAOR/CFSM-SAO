@@ -98,11 +98,15 @@ export const DEFAULT_PING_LOSS_COLORS: PingLossColors = {
   high: "#ef4444",
 };
 
-export interface TrafficSpectrumPreset {
+export interface StatusBarPreset {
   id: string;
   name: string;
   colors: TrafficSpectrumColors;
+  latencyColors: PingLatencyColors;
+  lossColors: PingLossColors;
 }
+
+export type TrafficSpectrumPreset = StatusBarPreset;
 
 export const DEFAULT_TRAFFIC_SPECTRUM_COLORS: TrafficSpectrumColors = {
   start: "#10b981",
@@ -111,48 +115,64 @@ export const DEFAULT_TRAFFIC_SPECTRUM_COLORS: TrafficSpectrumColors = {
   end: "#ef4444",
 };
 
-export const TRAFFIC_SPECTRUM_PRESETS: readonly TrafficSpectrumPreset[] = [
+export const STATUS_BAR_PRESETS: readonly StatusBarPreset[] = [
   {
     id: "classic",
-    name: "经典监控 (绿 · 黄 · 橙 · 红)",
-    colors: {
-      start: "#10b981",
-      mid: "#eab308",
-      high: "#f97316",
-      end: "#ef4444",
+    name: "经典运维 (翡翠绿 · 琥珀黄 · 警示橙 · 熔岩红)",
+    colors: { start: "#10b981", mid: "#eab308", high: "#f97316", end: "#ef4444" },
+    latencyColors: {
+      excellent: "#10b981",
+      good: "#84cc16",
+      moderate: "#eab308",
+      elevated: "#f97316",
+      critical: "#ef4444",
+    },
+    lossColors: {
+      zero: "#10b981",
+      low: "#eab308",
+      medium: "#f97316",
+      high: "#ef4444",
     },
   },
   {
-    id: "eva",
-    name: "EVA 初号机 (清透绿 · 机体深紫 · 装甲橙 · 暴走赤红)",
-    colors: {
-      start: "#22c55e",
-      mid: "#7c3aed",
-      high: "#f97316",
-      end: "#ef4444",
+    id: "icefire",
+    name: "深邃冰火 (冰川蓝 · 暮光紫 · 烈焰橙 · 绝境红)",
+    colors: { start: "#06b6d4", mid: "#8b5cf6", high: "#f97316", end: "#ef4444" },
+    latencyColors: {
+      excellent: "#06b6d4",
+      good: "#3b82f6",
+      moderate: "#8b5cf6",
+      elevated: "#f97316",
+      critical: "#ef4444",
+    },
+    lossColors: {
+      zero: "#06b6d4",
+      low: "#8b5cf6",
+      medium: "#f97316",
+      high: "#ef4444",
     },
   },
   {
-    id: "cyberpunk",
-    name: "夜之城 2077 (霓虹青 · 警戒黄 · 义体粉 · 绝境红)",
-    colors: {
-      start: "#00f0ff",
-      mid: "#fcee0a",
-      high: "#ff007f",
-      end: "#ef4444",
+    id: "marine",
+    name: "深海青翠 (薄荷青 · 蔚蓝海 · 暖杏黄 · 珊瑚红)",
+    colors: { start: "#14b8a6", mid: "#0284c7", high: "#f59e0b", end: "#ef4444" },
+    latencyColors: {
+      excellent: "#14b8a6",
+      good: "#06b6d4",
+      moderate: "#0284c7",
+      elevated: "#f59e0b",
+      critical: "#ef4444",
     },
-  },
-  {
-    id: "divergence",
-    name: "命运石之门 (暖杏橙 · 电离金 · 氖气红橙 · 收敛赤红)",
-    colors: {
-      start: "#ea580c",
-      mid: "#facc15",
-      high: "#ff7700",
-      end: "#ef4444",
+    lossColors: {
+      zero: "#14b8a6",
+      low: "#0284c7",
+      medium: "#f59e0b",
+      high: "#ef4444",
     },
   },
 ] as const;
+
+export const TRAFFIC_SPECTRUM_PRESETS: readonly StatusBarPreset[] = STATUS_BAR_PRESETS;
 
 export interface ResolvedThemeSettings {
   defaultAppearance: Appearance;
