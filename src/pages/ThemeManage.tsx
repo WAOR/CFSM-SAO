@@ -148,18 +148,18 @@ const OVERVIEW_RATING_LABEL_FIELDS: Array<{
 }> = [
   {
     key: "bandwidth",
-    title: "实时带宽徽章",
-    scopeBadge: "右上角集群状态",
-    description: "显示在右上角「集群状态」卡片顶部标题栏（状态健康旁），以呼吸灯徽章实时反馈集群总吞吐负荷。",
+    title: "实时带宽",
+    scopeBadge: "展台顶部",
+    description: "显示在「集群展台」标题旁，实时反馈总吞吐负荷。",
     toggleKey: "showBandwidthRating",
     tierHint: "对应阶梯：≤1Mbps、≤10Mbps、≤100Mbps、>100Mbps",
     isBadge: true,
   },
   {
     key: "asset",
-    title: "资产概览",
-    scopeBadge: "指标卡片底部",
-    description: "显示在首页「资产总值」指标卡片右下角，依据折算人民币总资产规模划分等级。",
+    title: "资产规模",
+    scopeBadge: "卡片底部",
+    description: "显示在「资产总值」卡片右下角，按总资产规模定级。",
     toggleKey: "showAssetRating",
     tierHint: "对应阶梯：≤500元、≤1500元、≤3000元、>3000元",
   },
@@ -935,9 +935,9 @@ const THEME_TABS: ReadonlyArray<{
   hint: string;
   icon: typeof ListFilter;
 }> = [
-  { id: "home", label: "首页", hint: "外观、视图、总览与排序", icon: ListFilter },
-  { id: "card", label: "服务器卡片", hint: "光柱色谱、指标展示与探测线路", icon: Server },
-  { id: "cost", label: "花费", hint: "资产统计与收购溢价", icon: CircleDollarSign },
+  { id: "home", label: "首页", hint: "外观、展台、权限与评级", icon: ListFilter },
+  { id: "card", label: "服务器", hint: "视图、指标、排序与延迟", icon: Server },
+  { id: "cost", label: "资产", hint: "费用统计与二手溢价", icon: CircleDollarSign },
 ];
 
 const DEFAULT_THEME_TAB: ThemeTabId = "home";
@@ -1646,7 +1646,7 @@ export function ThemeManage() {
           <ArrowLeft size={14} />
           <span>返回首页</span>
         </Link>
-        <h1 className="theme-topbar-title">SAO 主题设置</h1>
+        <h1 className="theme-topbar-title">主题设置</h1>
         <div className="theme-manage-toolbar-actions">
           {(!canSaveToSite || siteHasUnsyncedChanges) && (
             <button
@@ -1738,7 +1738,7 @@ export function ThemeManage() {
               <InstancePanel
                 id="set-appearance"
                 kicker="外观"
-                title="默认外观"
+                title="显示外观"
                 aside={<LayoutTemplate size={16} />}
               >
                 <div className="instance-segmented is-prominent is-even">
@@ -1759,115 +1759,22 @@ export function ThemeManage() {
               </InstancePanel>
 
               <InstancePanel
-                id="set-view"
-                kicker="视图"
-                title="默认卡片视图"
-                aside={<LayoutGrid size={16} />}
+                kicker="总览"
+                title="监控总览"
+                aside={<Layers size={16} />}
               >
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="surface-inset setting-segment-slot flex flex-col gap-3 px-4 py-4">
-                    <div>
-                      <div className="setting-subhead-title">
-                        桌面端默认
-                      </div>
-                      <div className="mt-1 setting-hint">
-                        适用于宽度大于 720px 的浏览器窗口。
-                      </div>
-                    </div>
-                    <div className="instance-segmented is-prominent is-even">
-                      {NODE_VIEW_MODE_OPTIONS.map(({ value, label, icon: Icon }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          data-active={draft.desktopNodeViewMode === value ? "true" : "false"}
-                          aria-pressed={draft.desktopNodeViewMode === value}
-                          onClick={() => patch("desktopNodeViewMode", value)}
-                          className="inline-flex items-center justify-center gap-2"
-                        >
-                          <Icon size={14} />
-                          <span>{label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="surface-inset setting-segment-slot flex flex-col gap-3 px-4 py-4">
-                    <div>
-                      <div className="setting-subhead-title">
-                        移动端默认
-                      </div>
-                      <div className="mt-1 setting-hint">
-                        适用于宽度小于等于 720px 的手机或窄屏窗口。
-                      </div>
-                    </div>
-                    <div className="instance-segmented is-prominent is-even">
-                      {MOBILE_VIEW_MODE_OPTIONS.map(({ value, label, icon: Icon }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          data-active={draft.mobileNodeViewMode === value ? "true" : "false"}
-                          aria-pressed={draft.mobileNodeViewMode === value}
-                          onClick={() => patch("mobileNodeViewMode", value)}
-                          className="inline-flex items-center justify-center gap-2"
-                        >
-                          <Icon size={14} />
-                          <span>{label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <ToggleRow
+                  field="showHomeOverview"
+                  title="监控总览"
+                  desc="在首页顶部展示监控总览模块。"
+                  checked={draft.showHomeOverview}
+                  onPatch={patch}
+                />
               </InstancePanel>
 
               <InstancePanel
-                id="set-home-overview"
-                kicker="顶部"
-                title="首页顶部组件"
-                aside={<ListFilter size={16} />}
-              >
-                <div className="grid gap-3 md:grid-cols-2">
-                  <ToggleRow
-                    field="showHomeOverview"
-                    title="显示顶部总览栏"
-                    desc="在首页顶部显示服务器总数、在线率、总流量与实时速率看板。"
-                    checked={draft.showHomeOverview}
-                    onPatch={patch}
-                  />
-                  <ToggleRow
-                    field="showGroupTabs"
-                    title="显示分组筛选栏"
-                    desc="在卡片列表上方展示分组 Tab 快速筛选。"
-                    checked={draft.showGroupTabs}
-                    onPatch={patch}
-                  />
-                  <ToggleRow
-                    field="showRegionBar"
-                    title="显示地区筛选栏"
-                    desc="在卡片列表上方展示国旗地区快捷标签。"
-                    checked={draft.showRegionBar}
-                    onPatch={patch}
-                  />
-                </div>
-                <div className="mt-4 pt-4 border-t border-(--border-color)">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-(--text-muted) mb-1.5">
-                    管理员问候昵称（显示在首页顶部）
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={40}
-                    value={draft.adminNickname}
-                    onChange={(e) => patch("adminNickname", e.target.value)}
-                    placeholder="留空则自动读取面板后台用户名 (如 jerry)"
-                    className="w-full px-3 py-2 text-sm rounded bg-(--input-bg,rgba(255,255,255,0.05)) border border-(--border-color) text-(--text-primary) placeholder:text-(--text-muted)/50 focus:outline-none focus:border-(--accent)"
-                  />
-                  <p className="mt-1.5 text-xs text-(--text-muted)">
-                    自定义首页顶部问候语显示的专属昵称（例如 <code>jerry</code>）。留空时将自动同步面板后端配置的真实用户名。
-                  </p>
-                </div>
-              </InstancePanel>
-
-              <InstancePanel
-                kicker="入口"
-                title="卡片扩展入口与访客权限"
+                kicker="权限"
+                title="访客权限"
                 aside={<Compass size={16} />}
               >
                 <div className="flex flex-col gap-4">
@@ -1876,15 +1783,15 @@ export function ThemeManage() {
                     <div className="grid gap-3 md:grid-cols-2">
                       <ToggleRow
                         field="showCostSummary"
-                        title="显示资产统计页入口按钮"
-                        desc="在首页资产总值卡片右上角显示进入资产统计页的钱币图标按钮。注意：若未开启下方的「向访客公开价格与资产」，该按钮仅管理员登录后可见，访客端将自动联动隐藏以保护财务隐私。"
+                        title="资产入口"
+                        desc="在资产卡片显示进入按钮；未公开时仅管理员可见。"
                         checked={draft.showCostSummary}
                         onPatch={patch}
                       />
                       <ToggleRow
                         field="showCostSummaryFloatingButton"
-                        title="显示资产看板悬浮按钮"
-                        desc="备用悬浮入口（显示在页面右下角）：为避免入口重复，仅在关闭了「资产总值」卡片右上角钱币按钮、或关闭了「显示顶部总览栏」时生效浮现。同样需管理员登录或开启「向访客公开价格与资产」后才会呈现。"
+                        title="悬浮入口"
+                        desc="在右下角悬浮显示资产入口，未显示卡片时生效。"
                         checked={draft.showCostSummaryFloatingButton}
                         onPatch={patch}
                       />
@@ -1896,8 +1803,8 @@ export function ThemeManage() {
                     <div className="grid gap-3">
                       <ToggleRow
                         field="showPriceForGuests"
-                        title="向访客公开价格与资产"
-                        desc="默认关闭。独立控制财务数据是否对访客脱敏：开启后访客可查看节点价格标签与资产总额（若上方开启了入口按钮则一并解锁访客跳转）；关闭时对访客隐藏价格标签，资产总值显示为保密。无论上方入口按钮是否开启，均可独立配置此项。"
+                        title="公开资产"
+                        desc="允许访客查看机器价格与资产总额，关闭则保密。"
                         checked={draft.showPriceForGuests}
                         onPatch={patch}
                       />
@@ -1906,62 +1813,13 @@ export function ThemeManage() {
                 </div>
               </InstancePanel>
 
-              <InstancePanel
-                id="set-cluster-overview-mode"
-                kicker="集群"
-                title="集群状态展示模式"
-                aside={<Activity size={16} />}
-              >
-                <p className="text-xs text-(--text-muted) mb-3 leading-relaxed">
-                  设置首页右侧「集群状态」核心卡片的展示模式。
-                </p>
-                <div className="setting-mode-cards">
-                  {[
-                    {
-                      value: "classic" as const,
-                      label: "经典布局",
-                      desc: "上方展示节点在线率与状态条，下方展示实时上下行带宽双曲线图，适用于全面综合监控。",
-                      icon: Layers,
-                    },
-                    {
-                      value: "nodes" as const,
-                      label: "方格矩阵",
-                      desc: "整屏展示机架式方格矩阵，专注排查每台机器的负载与健康状态，适用于节点排查与大集群。",
-                      icon: LayoutGrid,
-                    },
-                  ].map(({ value, label, desc, icon: ModeIcon }) => {
-                    const isActive = (draft.clusterOverviewMode ?? "classic") === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => patch("clusterOverviewMode", value)}
-                        data-active={isActive ? "true" : "false"}
-                        aria-pressed={isActive}
-                        className="setting-mode-card"
-                      >
-                        <div className="setting-mode-card-head">
-                          <div className="setting-mode-card-title">
-                            <ModeIcon size={15} />
-                            <span>{label}</span>
-                          </div>
-                          <div className="setting-mode-card-radio" aria-hidden="true">
-                            <div className="setting-mode-card-radio-dot" />
-                          </div>
-                        </div>
-                        <div className="setting-mode-card-desc">{desc}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </InstancePanel>
+              
 
-              {/* 当选择「方格矩阵」展示模式时，在下方动态呈现专属方格矩阵设置卡 */}
               {draft.clusterOverviewMode === "nodes" && (
                 <InstancePanel
                   id="set-matrix-settings"
                   kicker="矩阵"
-                  title="方格矩阵设置"
+                  title="矩阵定制"
                   aside={<LayoutGrid size={16} />}
                 >
                   {/* 1. 矩阵配色风格切换 */}
@@ -1984,7 +1842,7 @@ export function ThemeManage() {
                           })()}
                         </div>
                         <p className="text-[11px] text-(--text-muted) mt-0.5">
-                          全局定制方块热力矩阵与左侧指标小卡片的图标光晕配色，支持深/浅色模式专属视觉优化。
+                          定制方格矩阵与指标卡片的高光配色风格。
                         </p>
                       </div>
                     </div>
@@ -2036,13 +1894,13 @@ export function ThemeManage() {
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
                       <div className="min-w-0">
                         <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
-                          <span>SAO 主题开场动画</span>
+                          <span>开屏动画</span>
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30">
                             BOOT INTRO
                           </span>
                         </div>
                         <p className="text-[11px] text-(--text-muted) mt-0.5">
-                          开启后，进入首页时方格矩阵将播放光束横扫显现专属点阵文字并呼吸三下后切入实时集群数据；关闭后直接呈现真实节点。
+                          进入首页时播放光效开屏动画，随后载入数据。
                         </p>
                       </div>
                       <input
@@ -2061,7 +1919,7 @@ export function ThemeManage() {
                           <div className="flex items-center justify-between gap-2 mb-2.5">
                             <div>
                               <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
-                                <span>开屏动效形式 (Boot Animation Effect)</span>
+                                <span>动效样式</span>
                                 {(() => {
                                   const currentEffect =
                                     BOOT_EFFECT_OPTIONS.find(
@@ -2077,7 +1935,7 @@ export function ThemeManage() {
                                 })()}
                               </div>
                               <p className="text-[11px] text-(--text-muted) mt-0.5">
-                                独立设置开机显影机制，与上方任意主题配色自由交叉搭配。系统已预留未来扩充更多动效模式的方案空间。
+                                选择开屏画面的入场动效样式。
                               </p>
                             </div>
                           </div>
@@ -2162,106 +2020,9 @@ export function ThemeManage() {
               )}
 
               <InstancePanel
-                id="set-home-sort"
-                kicker="排序"
-                title="排序规则与默认选中"
-                aside={<Rows3 size={16} />}
-              >
-                <div className="flex flex-col gap-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <ToggleRow
-                      field="enableHomeSort"
-                      title="允许访客切换排序"
-                      desc="在首页提供排序下拉切换功能。"
-                      checked={draft.enableHomeSort}
-                      onPatch={patch}
-                    />
-                    <ToggleRow
-                      field="offlineNodesFirst"
-                      title="离线节点优先置顶"
-                      desc="开启后失联服务器将排在最上方方便巡检，默认关闭（置底）。"
-                      checked={draft.offlineNodesFirst}
-                      onPatch={patch}
-                    />
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                      <span className="setting-subhead-title">默认排序字段</span>
-                      <SettingSelect
-                        value={draft.homeSortField}
-                        onChange={(event) =>
-                          patch(
-                            "homeSortField",
-                            event.target.value as (typeof HOME_SORT_FIELDS)[number],
-                          )
-                        }
-                      >
-                        {HOME_SORT_FIELDS.map((field) => (
-                          <option key={field} value={field}>
-                            {HOME_SORT_FIELD_LABELS[field]}
-                          </option>
-                        ))}
-                      </SettingSelect>
-                    </div>
-
-                    <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                      <span className="setting-subhead-title">默认排序方向</span>
-                      <SettingSelect
-                        value={draft.homeSortDirection}
-                        onChange={(event) =>
-                          patch("homeSortDirection", event.target.value as "asc" | "desc")
-                        }
-                      >
-                        <option value="asc">升序 (ASC)</option>
-                        <option value="desc">降序 (DESC)</option>
-                      </SettingSelect>
-                    </div>
-                  </div>
-
-                  {availableGroups.length > 0 && (
-                    <div className="surface-inset flex flex-col gap-3 px-4 py-3">
-                      <div className="flex items-center justify-between">
-                        <span className="setting-subhead-title">分组展示顺序</span>
-                        <span className="setting-hint">使用上下箭头调整顺序</span>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        {orderedDraftGroups.map((group, index) => (
-                          <div
-                            key={group}
-                            className="flex items-center justify-between rounded-lg border border-(--hairline) px-3 py-2 text-[13px]"
-                          >
-                            <span>{group}</span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                disabled={index === 0}
-                                onClick={() => moveGroup(index, -1)}
-                                className="theme-manage-button is-compact"
-                              >
-                                <ChevronUp size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={index === orderedDraftGroups.length - 1}
-                                onClick={() => moveGroup(index, 1)}
-                                className="theme-manage-button is-compact"
-                              >
-                                <ChevronDown size={14} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </InstancePanel>
-
-              <InstancePanel
                 id="set-overview-ratings"
                 kicker="评级"
-                title="总览文字评级"
+                title="状态评级"
                 aside={<ListFilter size={16} />}
               >
                 <div className="grid gap-3 md:grid-cols-2">
@@ -2325,7 +2086,239 @@ export function ThemeManage() {
                   })}
                 </div>
               </InstancePanel>
+            </>
+          )}
 
+          {activeTab === "card" && (
+            <>
+              {/* 面板 1: 默认视图 */}
+              <InstancePanel
+                id="set-view"
+                kicker="视图"
+                title="默认视图"
+                aside={<LayoutGrid size={16} />}
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="surface-inset setting-segment-slot flex flex-col gap-3 px-4 py-4">
+                    <div>
+                      <div className="setting-subhead-title">
+                        桌面端
+                      </div>
+                      <div className="mt-1 setting-hint">
+                        适用于宽度大于 720px 的浏览器窗口。
+                      </div>
+                    </div>
+                    <div className="instance-segmented is-prominent is-even">
+                      {NODE_VIEW_MODE_OPTIONS.map(({ value, label, icon: Icon }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          data-active={draft.desktopNodeViewMode === value ? "true" : "false"}
+                          aria-pressed={draft.desktopNodeViewMode === value}
+                          onClick={() => patch("desktopNodeViewMode", value)}
+                          className="inline-flex items-center justify-center gap-2"
+                        >
+                          <Icon size={14} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="surface-inset setting-segment-slot flex flex-col gap-3 px-4 py-4">
+                    <div>
+                      <div className="setting-subhead-title">
+                        移动端
+                      </div>
+                      <div className="mt-1 setting-hint">
+                        适用于宽度小于等于 720px 的手机或窄屏窗口。
+                      </div>
+                    </div>
+                    <div className="instance-segmented is-prominent is-even">
+                      {MOBILE_VIEW_MODE_OPTIONS.map(({ value, label, icon: Icon }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          data-active={draft.mobileNodeViewMode === value ? "true" : "false"}
+                          aria-pressed={draft.mobileNodeViewMode === value}
+                          onClick={() => patch("mobileNodeViewMode", value)}
+                          className="inline-flex items-center justify-center gap-2"
+                        >
+                          <Icon size={14} />
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </InstancePanel>
+
+              {/* 面板 2: 卡片指标 */}
+              <InstancePanel
+              id="set-card-content"
+              kicker="指标"
+              title="卡片指标"
+              description="自选各视图卡片上呈现的具体参数与开关。"
+              aside={<Rows3 size={16} />}
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <ToggleRow
+                  field="showGroupTabs"
+                  title="分组标签"
+                  desc="在服务器列表上方显示分组切换标签。"
+                  checked={draft.showGroupTabs}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="showRegionBar"
+                  title="地区标签"
+                  desc="在服务器列表上方显示国旗地区筛选。"
+                  checked={draft.showRegionBar}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="showCardGroup"
+                  title="分组名称"
+                  desc="在服务器卡片副标题标注所属分组。"
+                  checked={draft.showCardGroup}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="showCardPrice"
+                  title="价格到期"
+                  desc="在卡片中显示续费周期、费用和到期日。"
+                  checked={draft.showCardPrice}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="compactShowTrafficTotal"
+                  title="累计流量"
+                  desc="在紧凑卡片中展示月度或累计总流量。"
+                  checked={draft.compactShowTrafficTotal}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="compactShowBilling"
+                  title="计费周期"
+                  desc="在紧凑卡片中标注续费计费周期。"
+                  checked={draft.compactShowBilling}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="compactShowUptime"
+                  title="在线时长"
+                  desc="在紧凑卡片中展示系统持续运行时间。"
+                  checked={draft.compactShowUptime}
+                  onPatch={patch}
+                />
+                <ToggleRow
+                  field="showConnections"
+                  title="连接数量"
+                  desc="在卡片网络区域标注实时网络连接数。"
+                  checked={draft.showConnections}
+                  onPatch={patch}
+                />
+              </div>
+            </InstancePanel>
+
+              {/* 面板 3: 列表排序 */}
+              <InstancePanel
+                id="set-home-sort"
+                kicker="排序"
+                title="列表排序"
+                aside={<Rows3 size={16} />}
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <ToggleRow
+                      field="enableHomeSort"
+                      title="允许访客切换排序"
+                      desc="在首页提供排序下拉切换功能。"
+                      checked={draft.enableHomeSort}
+                      onPatch={patch}
+                    />
+                    <ToggleRow
+                      field="offlineNodesFirst"
+                      title="离线节点优先置顶"
+                      desc="开启后失联服务器将排在最上方方便巡检，默认关闭（置底）。"
+                      checked={draft.offlineNodesFirst}
+                      onPatch={patch}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                      <span className="setting-subhead-title">默认指标</span>
+                      <SettingSelect
+                        value={draft.homeSortField}
+                        onChange={(event) =>
+                          patch(
+                            "homeSortField",
+                            event.target.value as (typeof HOME_SORT_FIELDS)[number],
+                          )
+                        }
+                      >
+                        {HOME_SORT_FIELDS.map((field) => (
+                          <option key={field} value={field}>
+                            {HOME_SORT_FIELD_LABELS[field]}
+                          </option>
+                        ))}
+                      </SettingSelect>
+                    </div>
+
+                    <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                      <span className="setting-subhead-title">默认次序</span>
+                      <SettingSelect
+                        value={draft.homeSortDirection}
+                        onChange={(event) =>
+                          patch("homeSortDirection", event.target.value as "asc" | "desc")
+                        }
+                      >
+                        <option value="asc">升序</option>
+                        <option value="desc">降序</option>
+                      </SettingSelect>
+                    </div>
+                  </div>
+
+                  {availableGroups.length > 0 && (
+                    <div className="surface-inset flex flex-col gap-3 px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <span className="setting-subhead-title">分组次序</span>
+                        <span className="setting-hint">点击上下箭头调整次序</span>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {orderedDraftGroups.map((group, index) => (
+                          <div
+                            key={group}
+                            className="flex items-center justify-between rounded-lg border border-(--hairline) px-3 py-2 text-[13px]"
+                          >
+                            <span>{group}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={index === 0}
+                                onClick={() => moveGroup(index, -1)}
+                                className="theme-manage-button is-compact"
+                              >
+                                <ChevronUp size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={index === orderedDraftGroups.length - 1}
+                                onClick={() => moveGroup(index, 1)}
+                                className="theme-manage-button is-compact"
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </InstancePanel>
+
+              {/* 面板 4: 隐藏节点 */}
               <InstancePanel
                 id="set-hidden-nodes"
                 kicker="过滤"
@@ -2333,7 +2326,7 @@ export function ThemeManage() {
                 aside={<Search size={16} />}
               >
                 <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                  <span className="setting-subhead-title">隐藏节点列表 (每行一个 UUID 或名称)</span>
+                  <span className="setting-subhead-title">隐藏名单 (每行一个 UUID 或名称)</span>
                   <textarea
                     rows={4}
                     value={draft.hiddenNodesText}
@@ -2342,20 +2335,16 @@ export function ThemeManage() {
                     className="surface-inset p-3 text-[13px] font-mono outline-none"
                   />
                   <span className="setting-hint">
-                    列在此处的节点将不会在首页及总览中展示。当前已生效 {draftHiddenNodes.length} 台。
+                    名单内的服务器不在首页呈现，已生效 {draftHiddenNodes.length} 台。
                   </span>
                 </div>
               </InstancePanel>
-            </>
-          )}
 
-          {activeTab === "card" && (
-            <>
-              {/* 面板 1: 光柱视觉与色彩自定义 */}
+              {/* 面板 5: 状态光柱 */}
               <InstancePanel
                 kicker="光柱"
-                title="卡片光柱视觉与色彩自定义"
-                description="定制服务器卡片的流量使用率光柱、延迟状态光柱与丢包状态光柱的连续色谱、门槛及色彩阶梯。"
+                title="状态光柱"
+                description="定制流量、延迟与丢包光柱的过渡色与判断门槛。"
                 aside={<Sliders size={16} />}
               >
                 <div className="flex flex-col gap-5">
@@ -2363,9 +2352,9 @@ export function ThemeManage() {
                   <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <span className="setting-subhead-title">流量进度光柱色谱自定义</span>
+                        <span className="setting-subhead-title">流量光柱</span>
                         <p className="setting-hint mt-1">
-                          流量使用率采用 4 锚点平滑连续光谱（Anchor Spectrum）插值算法，保证色相过渡平滑无阶跃断层，且末端 100% 严格呈现警报红守护。
+                          从用量充裕到即将耗尽，呈现平滑过渡色谱。
                         </p>
                       </div>
                       <button
@@ -2375,7 +2364,7 @@ export function ThemeManage() {
                         title="恢复为默认的监控绿色谱"
                       >
                         <RotateCcw size={13} />
-                        恢复色谱默认
+                        重置色彩
                       </button>
                     </div>
 
@@ -2384,7 +2373,7 @@ export function ThemeManage() {
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="font-medium text-(--text-secondary) flex items-center gap-1.5">
                           <Sparkles size={13} className="text-(--accent-500)" />
-                          流量进度光柱实时效果 (18 段发光光柱)
+                          流量光柱实时效果 (18 段)
                         </span>
                         <span className="text-[11px] text-(--text-tertiary)">
                           所见即所得 · 0% 充裕至 100% 耗尽连续色谱
@@ -2521,9 +2510,9 @@ export function ThemeManage() {
                   <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <span className="setting-subhead-title">延迟评级标准与色彩自定义</span>
+                        <span className="setting-subhead-title">延迟光柱</span>
                         <p className="setting-hint mt-1">
-                          设定服务器卡片延迟光柱在不同毫秒区间的阶梯门槛与对应光柱色彩。
+                          设定各毫秒区间的判断门槛与对应光柱颜色。
                         </p>
                       </div>
                       <button
@@ -2533,7 +2522,7 @@ export function ThemeManage() {
                         title="恢复为默认的 60/100/160/200ms 及预设色"
                       >
                         <RotateCcw size={13} />
-                        恢复延迟默认
+                        重置延迟
                       </button>
                     </div>
 
@@ -2641,9 +2630,9 @@ export function ThemeManage() {
                   <div className="surface-inset flex flex-col gap-3.5 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <span className="setting-subhead-title">丢包色彩与分档自定义</span>
+                        <span className="setting-subhead-title">丢包光柱</span>
                         <p className="setting-hint mt-1">
-                          设定服务器卡片丢包光柱在无丢包 (0%) 及不同丢包率时的色彩与分界点。
+                          设定不同丢包率区间的判断门槛与对应颜色。
                         </p>
                       </div>
                       <button
@@ -2653,7 +2642,7 @@ export function ThemeManage() {
                         title="恢复为默认的 3%/10% 门槛及预设色"
                       >
                         <RotateCcw size={13} />
-                        恢复丢包默认
+                        重置丢包
                       </button>
                     </div>
 
@@ -2763,84 +2752,31 @@ export function ThemeManage() {
                 </div>
               </InstancePanel>
 
-              {/* 面板 2: 卡片展示内容与指标开关 */}
-              <InstancePanel
-              id="set-card-content"
-              kicker="指标"
-              title="卡片展示内容与指标开关"
-              description="定制大卡片、小卡片和列表模式下呈现的具体指标。"
-              aside={<Rows3 size={16} />}
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <ToggleRow
-                  field="showCardGroup"
-                  title="显示节点分组标签"
-                  desc="在卡片副标题处标明其所属分组。"
-                  checked={draft.showCardGroup}
-                  onPatch={patch}
-                />
-                <ToggleRow
-                  field="showCardPrice"
-                  title="显示价格与到期日"
-                  desc="在卡片中显示续费周期、费用和到期倒计时。"
-                  checked={draft.showCardPrice}
-                  onPatch={patch}
-                />
-                <ToggleRow
-                  field="compactShowTrafficTotal"
-                  title="小卡片显示累计流量"
-                  desc="在紧凑视图中展示月度或累计出入站流量。"
-                  checked={draft.compactShowTrafficTotal}
-                  onPatch={patch}
-                />
-                <ToggleRow
-                  field="compactShowBilling"
-                  title="小卡片显示计费周期"
-                  desc="在紧凑视图中保留周期标注。"
-                  checked={draft.compactShowBilling}
-                  onPatch={patch}
-                />
-                <ToggleRow
-                  field="compactShowUptime"
-                  title="小卡片显示在线时长"
-                  desc="在紧凑视图中展示系统运行时间。"
-                  checked={draft.compactShowUptime}
-                  onPatch={patch}
-                />
-                <ToggleRow
-                  field="showConnections"
-                  title="显示 TCP/UDP 连接数"
-                  desc="在卡片网络区域标注实时活跃连接统计。"
-                  checked={draft.showConnections}
-                  onPatch={patch}
-                />
-              </div>
-            </InstancePanel>
-
-              {/* 面板 3: 延迟探测模式与线路绑定 */}
+              {/* 面板 6: 网络延迟 */}
               <InstancePanel
                 id="set-ping-mode"
-                kicker="探测"
-                title="延迟探测模式与线路绑定"
+                kicker="延迟"
+                title="网络延迟"
+                description="设定延迟展示方式并为服务器指定线路。"
                 aside={<Activity size={16} />}
               >
                 <div className="flex flex-col gap-4">
                   <div className="surface-inset flex flex-col gap-3 px-4 py-4">
-                    <span className="setting-subhead-title">首页探测展示模式</span>
+                    <span className="setting-subhead-title">展示模式</span>
                     <div className="instance-segmented is-prominent is-even is-stack-mobile">
                       <button
                         type="button"
                         data-active={!draft.enableHomepageMultiPing ? "true" : "false"}
                         onClick={() => patch("enableHomepageMultiPing", false)}
                       >
-                        单线路模式 (指定主线路)
+                        单线模式
                       </button>
                       <button
                         type="button"
                         data-active={draft.enableHomepageMultiPing ? "true" : "false"}
                         onClick={() => patch("enableHomepageMultiPing", true)}
                       >
-                        多线路模式 (并列展示三网/自定义线路)
+                        多线模式
                       </button>
                     </div>
                   </div>
@@ -2849,9 +2785,9 @@ export function ThemeManage() {
                     <div className="surface-inset flex flex-col gap-3 px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <span className="setting-subhead-title">多线路槽位展示列表</span>
+                          <span className="setting-subhead-title">多线槽位</span>
                           <p className="setting-hint mt-1">
-                            卡片将依序渲染这些线路的实时延迟柱条或色块。
+                            卡片将依序展示各线路的实时延迟光柱。
                           </p>
                         </div>
                         {draft.homepageMultiPingTaskIds.length < multiPingSlotLimit && (
@@ -2901,7 +2837,7 @@ export function ThemeManage() {
                   ) : (
                     <div className="flex flex-col gap-4">
                       <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                        <span className="setting-subhead-title">全局默认探测线路</span>
+                        <span className="setting-subhead-title">默认线路</span>
                         <SettingSelect
                           value={String(draft.homepageDefaultPingTaskId)}
                           onChange={(event) =>
@@ -2919,15 +2855,15 @@ export function ThemeManage() {
 
                       <ToggleRow
                         field="fakePingForUnbound"
-                        title="未绑定线路时模拟平滑延迟"
-                        desc="避免部分节点空缺无条形码时影响整体美观（仅视觉平滑占位）。"
+                        title="平滑占位"
+                        desc="无探测数据时显示平滑占位，保持视觉整齐。"
                         checked={draft.fakePingForUnbound}
                         onPatch={patch}
                       />
 
                       <div className="flex flex-col gap-3">
                         <span className="setting-subhead-title">
-                          逐节点指定线路 (已指定 {assignedNodeCount} 台)
+                          专属线路 (已设 {assignedNodeCount} 台)
                         </span>
                         {sortedTasks.map((task) => (
                           <TaskBindingSection
@@ -2955,10 +2891,12 @@ export function ThemeManage() {
 
           {activeTab === "cost" && (
             <>
+              {/* 面板 1: 财务设置 */}
               <InstancePanel
                 id="set-cost"
                 kicker="资产"
-                title="资产与财务设置"
+                title="财务设置"
+                description="管理汇率换算与不计费的排除服务器。"
                 aside={<CircleDollarSign size={16} />}
               >
                 <div className="flex flex-col gap-4">
@@ -2979,7 +2917,7 @@ export function ThemeManage() {
                     </label>
 
                     <label className="surface-inset flex flex-col gap-2 px-4 py-3">
-                      <span className="setting-subhead-title">实时汇率接口 API URL</span>
+                      <span className="setting-subhead-title">汇率接口</span>
                       <input
                         type="url"
                         value={draft.costRateApiUrl}
@@ -2987,12 +2925,12 @@ export function ThemeManage() {
                         placeholder="https://open.er-api.com/v6/latest/CNY"
                         className="surface-inset px-3 py-2 text-[13px] outline-none"
                       />
-                      <span className="setting-hint">留空使用官方默认免费公共汇率接口。</span>
+                      <span className="setting-hint">留空使用默认公共汇率接口。</span>
                     </label>
                   </div>
 
                   <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                    <span className="setting-subhead-title">忽略计算费用的节点</span>
+                    <span className="setting-subhead-title">排除机器</span>
                     <textarea
                       rows={3}
                       value={draft.costIgnoredText}
@@ -3000,16 +2938,17 @@ export function ThemeManage() {
                       placeholder="测试机&#10;node-uuid"
                       className="surface-inset p-3 text-[13px] font-mono outline-none"
                     />
-                    <span className="setting-hint">每行一个节点 UUID 或名称，计入资产时不摊销其成本。</span>
+                    <span className="setting-hint">填入的机器不计入资产总值与续费成本。</span>
                   </div>
                 </div>
               </InstancePanel>
 
+              {/* 面板 2: 买入溢价 */}
               <InstancePanel
                 id="set-premiums"
                 kicker="溢价"
-                title="二手买入溢价/折价固化"
-                description="记录收购时的实际支出，系统自动算出折价盈亏并在到期日前线性摊销。"
+                title="买入溢价"
+                description="记录收机实际花费，系统自动平摊折溢价。"
                 aside={<CircleDollarSign size={16} />}
               >
                 <div className="flex flex-col gap-3">
@@ -3017,7 +2956,7 @@ export function ThemeManage() {
                     <input
                       value={premiumSearch}
                       onChange={(event) => setPremiumSearch(event.target.value)}
-                      placeholder="搜索节点录入收购价…"
+                      placeholder="搜索服务器…"
                       className="surface-inset px-3 py-1.5 text-[13px] outline-none max-w-xs"
                     />
                     <span className="setting-hint">已记录 {premiumConfiguredCount} 台溢价</span>
@@ -3036,7 +2975,6 @@ export function ThemeManage() {
               </InstancePanel>
             </>
           )}
-
         </div>
       </div>
     </div>
