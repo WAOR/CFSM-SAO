@@ -457,6 +457,20 @@
               inset 0 0 5px color-mix(in srgb, var(--current-metric-color, #7c3aed) 16%, transparent);
 }
 
+:root[data-appearance="dark"] [data-palette="cyberpunk"] .mao-stat-icon-hud {
+  background: color-mix(in srgb, var(--current-metric-color, #00f0ff) 18%, rgba(13, 13, 17, 0.75));
+  border: 1px solid color-mix(in srgb, var(--current-metric-color, #fcee0a) 40%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--current-metric-color, #00f0ff) 36%, transparent),
+              inset 0 0 6px color-mix(in srgb, var(--current-metric-color, #fcee0a) 18%, transparent);
+}
+
+:root[data-appearance="dark"] [data-palette="divergence"] .mao-stat-icon-hud {
+  background: color-mix(in srgb, var(--current-metric-color, #ff7700) 18%, rgba(22, 19, 17, 0.75));
+  border: 1px solid color-mix(in srgb, var(--current-metric-color, #ff7700) 38%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--current-metric-color, #ff7700) 35%, transparent),
+              inset 0 0 5px color-mix(in srgb, var(--current-metric-color, #facc15) 18%, transparent);
+}
+
 /* 深色模式下悬停微互动：HUD 微底框微妙提亮与微光扩散 */
 :root[data-appearance="dark"] .mao-stat-card:hover .mao-stat-icon-hud {
   border-color: color-mix(in srgb, var(--current-metric-color, var(--text-primary)) 50%, transparent);
@@ -628,6 +642,56 @@
   color: #f97316;
   background: color-mix(in srgb, #f97316 15%, transparent);
   border-color: color-mix(in srgb, #f97316 35%, transparent);
+}
+
+/* 赛博朋克 2077：集群状态徽章（全健康=斯安威斯坦电光青；存在离线=夜之城警告亮黄） */
+.mao-progress-container[data-palette="cyberpunk"] .mao-status-pill.is-healthy {
+  background: color-mix(in srgb, #0891b2 10%, transparent);
+  color: #0891b2;
+  border-color: color-mix(in srgb, #0891b2 35%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="cyberpunk"] .mao-status-pill.is-healthy {
+  color: #00f0ff;
+  background: color-mix(in srgb, #00f0ff 14%, transparent);
+  border-color: color-mix(in srgb, #00f0ff 38%, transparent);
+}
+
+.mao-progress-container[data-palette="cyberpunk"] .mao-status-pill.is-warning {
+  background: color-mix(in srgb, #ca8a04 12%, transparent);
+  color: #ca8a04;
+  border-color: color-mix(in srgb, #ca8a04 35%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="cyberpunk"] .mao-status-pill.is-warning {
+  color: #fcee0a;
+  background: color-mix(in srgb, #fcee0a 15%, transparent);
+  border-color: color-mix(in srgb, #fcee0a 38%, transparent);
+}
+
+/* 命运石之门：集群状态徽章（全健康=氖气暖橙；存在离线=电离金黄） */
+.mao-progress-container[data-palette="divergence"] .mao-status-pill.is-healthy {
+  background: color-mix(in srgb, #ea580c 10%, transparent);
+  color: #ea580c;
+  border-color: color-mix(in srgb, #ea580c 35%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .mao-status-pill.is-healthy {
+  color: #ff7700;
+  background: color-mix(in srgb, #ff7700 15%, transparent);
+  border-color: color-mix(in srgb, #ff7700 38%, transparent);
+}
+
+.mao-progress-container[data-palette="divergence"] .mao-status-pill.is-warning {
+  background: color-mix(in srgb, #ca8a04 10%, transparent);
+  color: #ca8a04;
+  border-color: color-mix(in srgb, #ca8a04 35%, transparent);
+}
+
+:root[data-appearance="dark"] .mao-progress-container[data-palette="divergence"] .mao-status-pill.is-warning {
+  color: #facc15;
+  background: color-mix(in srgb, #facc15 15%, transparent);
+  border-color: color-mix(in srgb, #facc15 38%, transparent);
 }
 
 .mao-status-dot {
@@ -1156,9 +1220,9 @@
   --matrix-boot-fx-channel-b: #ff007f;
   --matrix-boot-fx-glow-a: rgba(0, 240, 255, 0.95);
   --matrix-boot-fx-glow-b: rgba(255, 0, 127, 0.95);
-  --matrix-boot-fx-flux: #fcee0a;
-  --matrix-boot-fx-flux-border: #fef08a;
-  --matrix-boot-fx-flux-glow: rgba(252, 238, 10, 0.95);
+  --matrix-boot-fx-flux: #ff007f;
+  --matrix-boot-fx-flux-border: #f472b6;
+  --matrix-boot-fx-flux-glow: rgba(255, 0, 127, 0.95);
 
   /* 指标卡片：电光青、霓虹黄、过载粉红、夜总会紫 */
   --metric-connections-color: #00f0ff;
@@ -1402,6 +1466,28 @@
   50% {
     filter: brightness(1.25);
     box-shadow: 0 0 16px rgba(168, 85, 247, 0.95), 0 0 4px #c084fc;
+  }
+}
+
+@keyframes sao-boot-pulse-cyberpunk {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 7px rgba(0, 240, 255, 0.65), 0 0 2px rgba(165, 243, 252, 0.7);
+  }
+  50% {
+    filter: brightness(1.3);
+    box-shadow: 0 0 17px rgba(0, 240, 255, 0.95), 0 0 4px #fcee0a;
+  }
+}
+
+@keyframes sao-boot-pulse-divergence {
+  0%, 100% {
+    filter: brightness(1);
+    box-shadow: 0 0 7px rgba(255, 119, 0, 0.65), 0 0 2px rgba(254, 215, 170, 0.7);
+  }
+  50% {
+    filter: brightness(1.3);
+    box-shadow: 0 0 17px rgba(255, 119, 0, 0.95), 0 0 4px #facc15;
   }
 }
 
