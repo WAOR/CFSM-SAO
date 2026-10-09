@@ -1093,6 +1093,7 @@
   --matrix-boot-fx-glow-a: rgba(255, 150, 0, 0.9);
   --matrix-boot-fx-glow-b: rgba(255, 215, 0, 0.9);
   --matrix-boot-fx-flux: #ff9600;
+  --matrix-boot-fx-flux-border: #ffd700;
   --matrix-boot-fx-flux-glow: rgba(255, 150, 0, 0.95);
 
   /* 指标卡片 6 维标准图标色（深浅模式保持同一套色值，避免撞色） */
@@ -1121,6 +1122,7 @@
   --matrix-boot-fx-glow-a: rgba(124, 58, 237, 0.92);
   --matrix-boot-fx-glow-b: rgba(0, 255, 102, 0.92);
   --matrix-boot-fx-flux: #a855f7;
+  --matrix-boot-fx-flux-border: #d8b4fe;
   --matrix-boot-fx-flux-glow: rgba(168, 85, 247, 0.95);
 
   /* 指标卡片 EVA 初号机专属机能色系（默认 / 深色模式：高亮霓虹光感） */
@@ -1155,6 +1157,7 @@
   --matrix-boot-fx-glow-a: rgba(0, 240, 255, 0.95);
   --matrix-boot-fx-glow-b: rgba(255, 0, 127, 0.95);
   --matrix-boot-fx-flux: #fcee0a;
+  --matrix-boot-fx-flux-border: #fef08a;
   --matrix-boot-fx-flux-glow: rgba(252, 238, 10, 0.95);
 
   /* 指标卡片：电光青、霓虹黄、过载粉红、夜总会紫 */
@@ -1189,6 +1192,7 @@
   --matrix-boot-fx-glow-a: rgba(255, 119, 0, 0.92);
   --matrix-boot-fx-glow-b: rgba(250, 204, 21, 0.92);
   --matrix-boot-fx-flux: #ea580c;
+  --matrix-boot-fx-flux-border: #fdba74;
   --matrix-boot-fx-flux-glow: rgba(234, 88, 12, 0.95);
 
   /* 全部 6 个指标卡片统一为纯正通透的辉光管放电暖橙，消除 CPU/资产发黄的突兀感 */
@@ -1281,21 +1285,25 @@
   z-index: 5;
 }
 
-/* 世界线变动率放电跳变态：与当前主题色谱完全一体化，纯粹高能放电，杜绝杂色边框 */
+/* 世界线变动率放电跳变态：与当前主题色谱完全一体化，纯粹高能放电，杜绝杂色边框与异色光晕 */
 .mao-heatmap-cell.is-flux-jumping,
 .mao-pattern-cell.is-flux-jumping {
-  background: var(--matrix-boot-fx-flux, var(--matrix-boot-pixel-bg)) !important;
-  border-color: var(--matrix-boot-pixel-border) !important;
-  box-shadow: 0 0 10px var(--matrix-boot-beam-glow), 0 0 3px var(--matrix-boot-pixel-border) !important;
+  --_flux-color: var(--matrix-boot-fx-flux, var(--matrix-boot-pixel-bg));
+  background: var(--_flux-color) !important;
+  border-color: var(--matrix-boot-fx-flux-border, color-mix(in srgb, var(--_flux-color) 75%, #ffffff)) !important;
+  box-shadow: 0 0 10px var(--matrix-boot-fx-flux-glow, color-mix(in srgb, var(--_flux-color) 75%, transparent)),
+              0 0 3px var(--matrix-boot-fx-flux-border, color-mix(in srgb, var(--_flux-color) 75%, #ffffff)) !important;
   opacity: 0.95 !important;
   z-index: 4;
 }
 
 :root[data-appearance="dark"] .mao-heatmap-cell.is-flux-jumping,
 :root[data-appearance="dark"] .mao-pattern-cell.is-flux-jumping {
-  background: var(--matrix-boot-fx-flux, var(--matrix-boot-pixel-bg)) !important;
-  border-color: var(--matrix-boot-pixel-border) !important;
-  box-shadow: 0 0 12px var(--matrix-boot-beam-glow), 0 0 4px var(--matrix-boot-pixel-border) !important;
+  --_flux-color: var(--matrix-boot-fx-flux, var(--matrix-boot-pixel-bg));
+  background: var(--_flux-color) !important;
+  border-color: var(--matrix-boot-fx-flux-border, color-mix(in srgb, var(--_flux-color) 85%, #ffffff)) !important;
+  box-shadow: 0 0 12px var(--matrix-boot-fx-flux-glow, color-mix(in srgb, var(--_flux-color) 85%, transparent)),
+              0 0 4px var(--matrix-boot-fx-flux-border, color-mix(in srgb, var(--_flux-color) 85%, #ffffff)) !important;
   opacity: 1 !important;
   z-index: 4;
 }
