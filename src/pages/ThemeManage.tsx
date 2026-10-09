@@ -2318,29 +2318,141 @@ export function ThemeManage() {
                 </div>
               </InstancePanel>
 
-              {/* 面板 4: 隐藏节点 */}
+              {/* 面板 4: 网络延迟 */}
               <InstancePanel
-                id="set-hidden-nodes"
-                kicker="过滤"
-                title="隐藏节点"
-                aside={<Search size={16} />}
+                id="set-ping-mode"
+                kicker="延迟"
+                title="网络延迟"
+                description="设定延迟展示方式并为服务器指定线路。"
+                aside={<Activity size={16} />}
               >
-                <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                  <span className="setting-subhead-title">隐藏名单 (每行一个 UUID 或名称)</span>
-                  <textarea
-                    rows={4}
-                    value={draft.hiddenNodesText}
-                    onChange={(event) => patch("hiddenNodesText", event.target.value)}
-                    placeholder="node-uuid-1&#10;Tokyo Edge"
-                    className="surface-inset p-3 text-[13px] font-mono outline-none"
-                  />
-                  <span className="setting-hint">
-                    名单内的服务器不在首页呈现，已生效 {draftHiddenNodes.length} 台。
-                  </span>
+                <div className="flex flex-col gap-4">
+                  <div className="surface-inset flex flex-col gap-3 px-4 py-4">
+                    <span className="setting-subhead-title">展示模式</span>
+                    <div className="instance-segmented is-prominent is-even is-stack-mobile">
+                      <button
+                        type="button"
+                        data-active={!draft.enableHomepageMultiPing ? "true" : "false"}
+                        onClick={() => patch("enableHomepageMultiPing", false)}
+                      >
+                        单线模式
+                      </button>
+                      <button
+                        type="button"
+                        data-active={draft.enableHomepageMultiPing ? "true" : "false"}
+                        onClick={() => patch("enableHomepageMultiPing", true)}
+                      >
+                        多线模式
+                      </button>
+                    </div>
+                  </div>
+
+                  {draft.enableHomepageMultiPing ? (
+                    <div className="surface-inset flex flex-col gap-3 px-4 py-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="setting-subhead-title">多线槽位</span>
+                          <p className="setting-hint mt-1">
+                            卡片将依序展示各线路的实时延迟光柱。
+                          </p>
+                        </div>
+                        {draft.homepageMultiPingTaskIds.length < multiPingSlotLimit && (
+                          <button
+                            type="button"
+                            onClick={addMultiPingTask}
+                            className="theme-manage-button is-compact"
+                          >
+                            + 添加展示线路
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {draft.homepageMultiPingTaskIds.map((taskId, slot) => (
+                          <div
+                            key={slot}
+                            className="flex items-center justify-between gap-2 rounded-[10px] border border-(--hairline) px-3 py-2"
+                          >
+                            <span className="text-[12px] font-medium text-(--text-secondary)">
+                              槽位 #{slot + 1}
+                            </span>
+                            <SettingSelect
+                              value={String(taskId)}
+                              onChange={(event) => patchMultiPingTask(slot, event.target.value)}
+                              wrapperClassName="flex-1"
+                            >
+                              {sortedTasks.map((task) => (
+                                <option key={task.id} value={task.id}>
+                                  {task.name || `线路 #${task.id}`}
+                                </option>
+                              ))}
+                            </SettingSelect>
+                            {draft.homepageMultiPingTaskIds.length > HOMEPAGE_MULTI_PING_MIN_COUNT && (
+                              <button
+                                type="button"
+                                onClick={() => removeMultiPingTask(slot)}
+                                className="theme-manage-button is-compact is-danger"
+                              >
+                                删除
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                        <span className="setting-subhead-title">默认线路</span>
+                        <SettingSelect
+                          value={String(draft.homepageDefaultPingTaskId)}
+                          onChange={(event) =>
+                            patch("homepageDefaultPingTaskId", Number(event.target.value))
+                          }
+                        >
+                          {sortedTasks.map((task) => (
+                            <option key={task.id} value={task.id}>
+                              {task.name || `线路 #${task.id}`}
+                            </option>
+                          ))}
+                        </SettingSelect>
+                        <span className="setting-hint">未单独指派线路的服务器均显示此线路数据。</span>
+                      </div>
+
+                      <ToggleRow
+                        field="fakePingForUnbound"
+                        title="平滑占位"
+                        desc="无探测数据时显示平滑占位，保持视觉整齐。"
+                        checked={draft.fakePingForUnbound}
+                        onPatch={patch}
+                      />
+
+                      <div className="flex flex-col gap-3">
+                        <span className="setting-subhead-title">
+                          专属线路 (已设 {assignedNodeCount} 台)
+                        </span>
+                        {sortedTasks.map((task) => (
+                          <TaskBindingSection
+                            key={task.id}
+                            task={task}
+                            defaultTaskId={draft.homepageDefaultPingTaskId}
+                            assigned={draft.homepagePingBindings[String(task.id)] ?? EMPTY_ASSIGNED_CLIENTS}
+                            expanded={expandedTaskId === task.id}
+                            clientsById={clientsById}
+                            visibleClients={visibleClients}
+                            assignedTaskByClientUuid={assignedTaskByClientUuid}
+                            nodeSearch={nodeSearch}
+                            onNodeSearch={setNodeSearch}
+                            onToggleExpand={toggleTaskExpanded}
+                            onPatchBindings={patchBindings}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </InstancePanel>
-
-              {/* 面板 5: 状态光柱 */}
+            {/* 面板 5: 状态光柱 */}
               <InstancePanel
                 kicker="光柱"
                 title="状态光柱"
@@ -2752,141 +2864,29 @@ export function ThemeManage() {
                 </div>
               </InstancePanel>
 
-              {/* 面板 6: 网络延迟 */}
+              {/* 面板 6: 隐藏节点 */}
               <InstancePanel
-                id="set-ping-mode"
-                kicker="延迟"
-                title="网络延迟"
-                description="设定延迟展示方式并为服务器指定线路。"
-                aside={<Activity size={16} />}
+                id="set-hidden-nodes"
+                kicker="过滤"
+                title="隐藏节点"
+                aside={<Search size={16} />}
               >
-                <div className="flex flex-col gap-4">
-                  <div className="surface-inset flex flex-col gap-3 px-4 py-4">
-                    <span className="setting-subhead-title">展示模式</span>
-                    <div className="instance-segmented is-prominent is-even is-stack-mobile">
-                      <button
-                        type="button"
-                        data-active={!draft.enableHomepageMultiPing ? "true" : "false"}
-                        onClick={() => patch("enableHomepageMultiPing", false)}
-                      >
-                        单线模式
-                      </button>
-                      <button
-                        type="button"
-                        data-active={draft.enableHomepageMultiPing ? "true" : "false"}
-                        onClick={() => patch("enableHomepageMultiPing", true)}
-                      >
-                        多线模式
-                      </button>
-                    </div>
-                  </div>
-
-                  {draft.enableHomepageMultiPing ? (
-                    <div className="surface-inset flex flex-col gap-3 px-4 py-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <span className="setting-subhead-title">多线槽位</span>
-                          <p className="setting-hint mt-1">
-                            卡片将依序展示各线路的实时延迟光柱。
-                          </p>
-                        </div>
-                        {draft.homepageMultiPingTaskIds.length < multiPingSlotLimit && (
-                          <button
-                            type="button"
-                            onClick={addMultiPingTask}
-                            className="theme-manage-button is-compact"
-                          >
-                            + 添加展示线路
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {draft.homepageMultiPingTaskIds.map((taskId, slot) => (
-                          <div
-                            key={slot}
-                            className="flex items-center justify-between gap-2 rounded-[10px] border border-(--hairline) px-3 py-2"
-                          >
-                            <span className="text-[12px] font-medium text-(--text-secondary)">
-                              槽位 #{slot + 1}
-                            </span>
-                            <SettingSelect
-                              value={String(taskId)}
-                              onChange={(event) => patchMultiPingTask(slot, event.target.value)}
-                              wrapperClassName="flex-1"
-                            >
-                              {sortedTasks.map((task) => (
-                                <option key={task.id} value={task.id}>
-                                  {task.name || `线路 #${task.id}`}
-                                </option>
-                              ))}
-                            </SettingSelect>
-                            {draft.homepageMultiPingTaskIds.length > HOMEPAGE_MULTI_PING_MIN_COUNT && (
-                              <button
-                                type="button"
-                                onClick={() => removeMultiPingTask(slot)}
-                                className="theme-manage-button is-compact is-danger"
-                              >
-                                删除
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                        <span className="setting-subhead-title">默认线路</span>
-                        <SettingSelect
-                          value={String(draft.homepageDefaultPingTaskId)}
-                          onChange={(event) =>
-                            patch("homepageDefaultPingTaskId", Number(event.target.value))
-                          }
-                        >
-                          {sortedTasks.map((task) => (
-                            <option key={task.id} value={task.id}>
-                              {task.name || `线路 #${task.id}`}
-                            </option>
-                          ))}
-                        </SettingSelect>
-                        <span className="setting-hint">未单独指派线路的服务器均显示此线路数据。</span>
-                      </div>
-
-                      <ToggleRow
-                        field="fakePingForUnbound"
-                        title="平滑占位"
-                        desc="无探测数据时显示平滑占位，保持视觉整齐。"
-                        checked={draft.fakePingForUnbound}
-                        onPatch={patch}
-                      />
-
-                      <div className="flex flex-col gap-3">
-                        <span className="setting-subhead-title">
-                          专属线路 (已设 {assignedNodeCount} 台)
-                        </span>
-                        {sortedTasks.map((task) => (
-                          <TaskBindingSection
-                            key={task.id}
-                            task={task}
-                            defaultTaskId={draft.homepageDefaultPingTaskId}
-                            assigned={draft.homepagePingBindings[String(task.id)] ?? EMPTY_ASSIGNED_CLIENTS}
-                            expanded={expandedTaskId === task.id}
-                            clientsById={clientsById}
-                            visibleClients={visibleClients}
-                            assignedTaskByClientUuid={assignedTaskByClientUuid}
-                            nodeSearch={nodeSearch}
-                            onNodeSearch={setNodeSearch}
-                            onToggleExpand={toggleTaskExpanded}
-                            onPatchBindings={patchBindings}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                  <span className="setting-subhead-title">隐藏名单 (每行一个 UUID 或名称)</span>
+                  <textarea
+                    rows={4}
+                    value={draft.hiddenNodesText}
+                    onChange={(event) => patch("hiddenNodesText", event.target.value)}
+                    placeholder="node-uuid-1&#10;Tokyo Edge"
+                    className="surface-inset p-3 text-[13px] font-mono outline-none"
+                  />
+                  <span className="setting-hint">
+                    名单内的服务器不在首页呈现，已生效 {draftHiddenNodes.length} 台。
+                  </span>
                 </div>
               </InstancePanel>
-            </>
+
+              </>
           )}
 
           {activeTab === "cost" && (
