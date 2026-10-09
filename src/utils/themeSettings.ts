@@ -15,10 +15,6 @@ import {
   type CostPremiumEntry,
 } from "@/utils/cost";
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
-import {
-  DEFAULT_RENEWAL_REMINDER_DAYS,
-  MAX_RENEWAL_REMINDER_DAYS,
-} from "@/utils/renewalReminder";
 import { normalizeHomeGroupOrder } from "@/utils/homeNodes";
 import {
   HOME_SORT_NATURAL_DIRECTION,
@@ -218,8 +214,6 @@ export interface ResolvedThemeSettings {
   showCostSummary: boolean;
   showCostSummaryFloatingButton: boolean;
   showPriceForGuests: boolean;
-  /** 还有几天到期开始提醒；0 = 不提醒。 */
-  renewalReminderDays: number;
   showOverviewRatings: boolean;
   showBandwidthRating: boolean;
   showAssetRating: boolean;
@@ -275,7 +269,6 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showCostSummary: true,
   showCostSummaryFloatingButton: true,
   showPriceForGuests: false,
-  renewalReminderDays: DEFAULT_RENEWAL_REMINDER_DAYS,
   showOverviewRatings: true,
   showBandwidthRating: true,
   showAssetRating: false,
@@ -294,13 +287,6 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
 /** 首页默认分组：只收非空字符串，长度掐在合理范围内（分组名来自后端）。 */
 function normalizeHomeDefaultGroup(value: unknown): string {
   return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 120) : "";
-}
-
-/** 提醒天数：0~60 的整数，0 = 不提醒；写坏了回到默认。 */
-function normalizeRenewalReminderDays(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsed)) return DEFAULT_RENEWAL_REMINDER_DAYS;
-  return Math.min(MAX_RENEWAL_REMINDER_DAYS, Math.max(0, Math.round(parsed)));
 }
 
 export function isAppearance(value: unknown): value is Appearance {
@@ -585,7 +571,6 @@ export function normalizeThemeSettings(
     showCostSummary: enabledUnlessFalse(settings?.showCostSummary),
     showCostSummaryFloatingButton: enabledUnlessFalse(settings?.showCostSummaryFloatingButton),
     showPriceForGuests: settings?.showPriceForGuests === true,
-    renewalReminderDays: normalizeRenewalReminderDays(settings?.renewalReminderDays),
     showOverviewRatings: enabledUnlessFalse(settings?.showOverviewRatings),
     showBandwidthRating: enabledUnlessFalse(settings?.showBandwidthRating),
     showAssetRating: settings?.showAssetRating === true,

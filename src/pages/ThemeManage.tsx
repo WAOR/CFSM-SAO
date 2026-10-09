@@ -109,7 +109,6 @@ import {
   normalizeTrafficSpectrumColors,
 } from "@/utils/themeSettings";
 import { buildTrafficQuotaSegmentColors } from "@/utils/metricTone";
-import { MAX_RENEWAL_REMINDER_DAYS } from "@/utils/renewalReminder";
 import {
   dedupeGroupLabels,
   normalizeHomeGroupOrder,
@@ -439,7 +438,6 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showCostSummary: settings.showCostSummary,
     showCostSummaryFloatingButton: settings.showCostSummaryFloatingButton,
     showPriceForGuests: settings.showPriceForGuests,
-    renewalReminderDays: settings.renewalReminderDays,
     showOverviewRatings: settings.showOverviewRatings,
     showBandwidthRating: settings.showBandwidthRating,
     showAssetRating: settings.showAssetRating,
@@ -2931,19 +2929,6 @@ export function ThemeManage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="surface-inset flex flex-col gap-2 px-4 py-3">
-                      <span className="setting-subhead-title">临期续费提醒天数</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={MAX_RENEWAL_REMINDER_DAYS}
-                        value={draft.renewalReminderDays}
-                        onChange={(event) => patch("renewalReminderDays", Number(event.target.value) || 0)}
-                        className="surface-inset px-3 py-2 text-[13px] outline-none"
-                      />
-                      <span className="setting-hint">到期前多少天标黄预警，0 表示不提醒。</span>
-                    </label>
-
-                    <label className="surface-inset flex flex-col gap-2 px-4 py-3">
                       <span className="setting-subhead-title">汇率接口</span>
                       <input
                         type="url"
@@ -2954,18 +2939,18 @@ export function ThemeManage() {
                       />
                       <span className="setting-hint">留空使用默认公共汇率接口。</span>
                     </label>
-                  </div>
 
-                  <div className="surface-inset flex flex-col gap-2 px-4 py-3">
-                    <span className="setting-subhead-title">排除机器</span>
-                    <textarea
-                      rows={3}
-                      value={draft.costIgnoredText}
-                      onChange={(event) => patch("costIgnoredText", event.target.value)}
-                      placeholder="测试机&#10;node-uuid"
-                      className="surface-inset p-3 text-[13px] font-mono outline-none"
-                    />
-                    <span className="setting-hint">填入的机器不计入资产总值与续费成本。</span>
+                    <div className="surface-inset flex flex-col gap-2 px-4 py-3">
+                      <span className="setting-subhead-title">排除机器</span>
+                      <textarea
+                        rows={3}
+                        value={draft.costIgnoredText}
+                        onChange={(event) => patch("costIgnoredText", event.target.value)}
+                        placeholder="测试机&#10;node-uuid"
+                        className="surface-inset min-h-24 w-full resize-y p-2.5 text-[13px] outline-none font-mono"
+                      />
+                      <span className="setting-hint">填入的机器不计入资产总值与续费成本。</span>
+                    </div>
                   </div>
                 </div>
               </InstancePanel>

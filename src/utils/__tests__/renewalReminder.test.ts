@@ -29,7 +29,7 @@ function node(overrides: Partial<RenewalReminderSource> = {}): RenewalReminderSo
   };
 }
 
-describe("提醒窗口可配（renewalReminderDays）", () => {
+describe("提醒窗口（warningDays 可选参数）", () => {
   it("按传入的天数取，0 = 一条都不提醒", () => {
     const nodes = [
       node({ uuid: "d3", expired_at: inDays(3) }),
