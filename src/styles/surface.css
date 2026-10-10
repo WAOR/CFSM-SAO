@@ -1808,6 +1808,10 @@
   overflow-x: auto;
 }
 
+.instance-segmented.is-scrollable > button {
+  flex-shrink: 0;
+}
+
 .instance-segmented.is-even {
   display: flex;
   width: 100%;
