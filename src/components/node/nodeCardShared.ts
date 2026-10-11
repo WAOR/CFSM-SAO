@@ -139,19 +139,36 @@ export function healthBarInteractionModel(
   };
 }
 
+
+import type {
+  PingLatencyColors,
+  PingLatencyThresholds,
+  PingLossColors,
+  PingLossThresholds,
+} from "@/types/cfsm";
+import { resolveCustomLatencyColor, resolveCustomLossColor } from "@/utils/metricTone";
+
+export interface HealthBarOptions {
+  latencyThresholds?: PingLatencyThresholds;
+  latencyColors?: PingLatencyColors;
+  lossThresholds?: PingLossThresholds;
+  lossColors?: PingLossColors;
+}
+
 const HEALTH_LOSS_BAR_HEIGHT = 0.84;
 const HEALTH_INACTIVE_BAR_HEIGHT = 0.25;
 
 export function healthBarSlotModel(
   bucket: PingOverviewBucket,
   kind: "latency" | "loss",
+  options?: HealthBarOptions,
 ): HealthBarSlotModel {
   // 掉线段不是「没采到」，是节点没了：延迟和丢包都涂满红，两排颜色一致。
   if (bucket.offline) {
     return {
       active: true,
       heightFraction: HEALTH_LOSS_BAR_HEIGHT,
-      color: lossHeatColor(100),
+      color: options?.lossColors?.high || (options?.lossThresholds || options?.lossColors ? resolveCustomLossColor(100, options?.lossThresholds, options?.lossColors) : lossHeatColor(100)),
       alpha: 0.94,
     };
   }
@@ -161,7 +178,7 @@ export function healthBarSlotModel(
       return {
         active: true,
         heightFraction: HEALTH_LOSS_BAR_HEIGHT,
-        color: latencyHeatColor(value),
+        color: options?.latencyThresholds || options?.latencyColors ? resolveCustomLatencyColor(value, options?.latencyThresholds, options?.latencyColors) : latencyHeatColor(value),
         alpha: 0.94,
       };
     }
@@ -177,7 +194,7 @@ export function healthBarSlotModel(
     return {
       active: true,
       heightFraction: HEALTH_LOSS_BAR_HEIGHT,
-      color: lossHeatColor(loss),
+      color: options?.lossThresholds || options?.lossColors ? resolveCustomLossColor(loss, options?.lossThresholds, options?.lossColors) : lossHeatColor(loss),
       alpha: 0.94,
     };
   }

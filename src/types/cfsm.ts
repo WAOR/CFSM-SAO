@@ -490,9 +490,55 @@ export const EMPTY_CARRIER_PING: CarrierPingSnapshot = Object.freeze(
   ]),
 ) as CarrierPingSnapshot;
 
-export type MatrixColorTheme = "default" | "eva";
+export type MatrixColorTheme =
+  | "default"
+  | "eva"
+  | "cyberpunk"
+  | "divergence";
+
+/** 方格矩阵开屏动效形式：laser-scan (激光横扫)、digital-rain (数码流雨) */
+export type MatrixBootEffect =
+  | "laser-scan"
+  | "digital-rain"
+  | "cyber-glitch"
+  | "divergence-flux";
 
 /** 用户自定义点阵预设（云端存储） */
+
+export interface PingLatencyThresholds {
+  excellent: number;
+  good: number;
+  moderate: number;
+  elevated: number;
+}
+
+export interface PingLatencyColors {
+  excellent: string;
+  good: string;
+  moderate: string;
+  elevated: string;
+  critical: string;
+}
+
+export interface PingLossThresholds {
+  low: number;
+  medium: number;
+}
+
+export interface PingLossColors {
+  zero: string;
+  low: string;
+  medium: string;
+  high: string;
+}
+
+export interface TrafficSpectrumColors {
+  start: string;
+  mid: string;
+  high: string;
+  end: string;
+}
+
 export interface UserMatrixPreset {
   id: string;
   name: string;
@@ -512,19 +558,26 @@ export interface ThemeSettings {
   homepageMultiPingTaskIds?: number[];
   /** 站长在卡片上换好、「保存到后端」写上来的逐节点换线：`{ uuid: { 行号: 线路 id } }`。 */
   homepagePingLineOverrides?: Record<string, Record<string, number>>;
-  fakePingForUnbound?: boolean;
+    fakePingForUnbound?: boolean;
+  pingLatencyThresholds?: Partial<PingLatencyThresholds>;
+  pingLatencyColors?: Partial<PingLatencyColors>;
+  pingLossThresholds?: Partial<PingLossThresholds>;
+  pingLossColors?: Partial<PingLossColors>;
+  trafficSpectrumColors?: Partial<TrafficSpectrumColors>;
   showHomeOverview?: boolean;
   showGroupTabs?: boolean;
   showRegionBar?: boolean;
   showCardGroup?: boolean;
   /** 首页右侧集群状态卡片的展示模式：经典上下双层（classic）、机架方格矩阵（nodes）。 */
   clusterOverviewMode?: "classic" | "nodes";
-  /** 机架方格矩阵配色风格：经典标准绿橙红（default）、EVA 初号机紫绿橙红（eva）。 */
-  matrixColorTheme?: "default" | "eva";
+  /** 机架方格矩阵配色风格。 */
+  matrixColorTheme?: MatrixColorTheme;
   /** 模拟数据填充空闲机位插槽。 */
   matrixMockFill?: boolean;
   /** 是否启用方格矩阵 SAO 主题开场动画（默认开启）。 */
   matrixBootAnimation?: boolean;
+  /** 开屏动效形式：laser-scan (激光横扫)、digital-rain (数码流雨)。 */
+  matrixBootEffect?: MatrixBootEffect;
   /** 自定义方格矩阵开场点阵图案（0~99的像素序号数组），为 null 或空时回退为默认 SAO。 */
   matrixCustomPattern?: number[] | null;
   /** 云端保存的用户自定义点阵预设列表（跨设备漫游）。 */

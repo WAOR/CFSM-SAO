@@ -16,7 +16,6 @@ import {
   type ChartTooltipState,
 } from "./chartShared";
 import { ChartTooltip, SwitchToggle } from "./ChartParts";
-import { PingLossStrip, type PingLossRow } from "./PingLossStrip";
 import {
   cutPeakValues,
   detectTypicalIntervalSeconds,
@@ -136,8 +135,6 @@ export function PingChart({
   const [hiddenTasks, setHiddenTasks] = useState<Set<number>>(new Set());
   const [connectNulls, setConnectNulls] = useState(false);
   const [cutPeak, setCutPeak] = useState(false);
-  const [showLoss, setShowLoss] = useState(true);
-  const [cursorLeft, setCursorLeft] = useState<number | null>(null);
   const chartRef = useRef<uPlot.AlignedData>([[]]);
   // tooltip 的 buildRows 只拿得到点位下标，丢包值走 ref 与图表数据同步。
   const lossRef = useRef<Array<Array<number | null>>>([]);
@@ -292,15 +289,6 @@ export function PingChart({
 
   const chart = chartBundle?.data ?? null;
 
-  // 只画当前可见的线路，和图例的显示/隐藏联动。
-  const lossRows = useMemo<PingLossRow[]>(() => {
-    if (!chartBundle) return [];
-    return visibleTasks.map((task) => ({
-      id: task.id,
-      label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-      loss: chartBundle.loss[taskIndexById.get(task.id) ?? 0] ?? [],
-    }));
-  }, [chartBundle, taskIndexById, taskLabels, visibleTasks]);
 
   useEffect(() => {
     if (chartBundle) {
@@ -445,16 +433,7 @@ export function PingChart({
           tooltipHooks.onInit,
         ],
         destroy: [tooltipHooks.onDestroy],
-        setCursor: [
-          tooltipHooks.onSetCursor,
-          // 把游标位置同步给上方的丢包色带，让那根竖线一路贯穿到色带里。
-          // 相同像素值时 React 会自行跳过重渲，不必额外节流。
-          (u) => {
-            const left = u.cursor.left;
-            const inside = left != null && left >= 0 && u.cursor.idx != null;
-            setCursorLeft(inside ? Math.round(left) : null);
-          },
-        ],
+        setCursor: [tooltipHooks.onSetCursor],
       },
     };
   }, [chart, connectNulls, hiddenTasks, hours, isDark, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
@@ -572,12 +551,6 @@ export function PingChart({
     <InstancePanel title="Ping 图表" description={panelDescription}>
       <div className="instance-ping-toolbar">
         <SwitchToggle
-          label="丢包色带"
-          active={showLoss}
-          onToggle={() => setShowLoss((value) => !value)}
-          title="在图表上方按线路显示丢包率色带：越红丢得越多，空缺表示该时段没有采样。不受削峰平滑影响。注意：查询超过 1 小时时，后端按后台设置的采样点数返回（可选 60/120/180/240），点数固定而区间不固定，所以区间越长采样越粗；持续一两分钟的短促丢包可能整段没被采到 —— 同一次丢包在 1 小时图里看得见、在 1 天图里消失就是这个原因，调大后台的采样点数可缓解。"
-        />
-        <SwitchToggle
           label="削峰平滑"
           active={cutPeak}
           onToggle={() => setCutPeak((value) => !value)}
@@ -648,18 +621,6 @@ export function PingChart({
         })}
       </div>
 
-      {showLoss && chart && lossRows.length > 0 && (
-        <PingLossStrip
-          times={chart[0] as number[]}
-          xRange={requestedXRange}
-          rows={lossRows}
-          chartWidth={w}
-          gutter={Y_AXIS_SIZE + CHART_PADDING_LEFT}
-          rightPad={CHART_PADDING_RIGHT}
-          isDark={isDark}
-          cursorLeft={cursorLeft}
-        />
-      )}
 
       <div ref={chartSizeRef} className="instance-uplot-wrap is-large">
         {chart && options && visibleTasks.length > 0 ? (

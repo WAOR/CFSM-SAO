@@ -4,10 +4,9 @@ import { getExpireDaysRemaining, resolveExpireTimestamp } from "@/utils/format";
 
 const DAY_MS = 86_400_000;
 
-/** 默认提前几天提醒续费；站长可在设置里改（0 = 不提醒，见 renewalReminderDays）。 */
+/** 默认提前几天提醒续费（7 天）。 */
 export const DEFAULT_RENEWAL_REMINDER_DAYS = 7;
-/** 提醒天数上限：再往前就等于常驻提醒了。 */
-export const MAX_RENEWAL_REMINDER_DAYS = 60;
+export const RENEWAL_WARNING_DAYS = DEFAULT_RENEWAL_REMINDER_DAYS;
 export const RENEWAL_SNOOZE_DAYS = 1;
 export const RENEWAL_SNOOZE_MS = RENEWAL_SNOOZE_DAYS * DAY_MS;
 
