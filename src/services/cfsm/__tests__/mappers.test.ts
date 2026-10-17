@@ -198,13 +198,15 @@ describe("toNodeMetrics", () => {
     expect(metrics.netDown).toBe(2048);
   });
 
-  it("keeps lifetime and monthly counters apart", () => {
+  it("keeps lifetime and monthly counters apart, aligning trafficUp to monthly cycle", () => {
     const metrics = toNodeMetrics(server(), NOW);
 
-    expect(metrics.trafficUp).toBe(800);
-    expect(metrics.trafficDown).toBe(900);
+    expect(metrics.trafficUp).toBe(400);
+    expect(metrics.trafficDown).toBe(500);
     expect(metrics.trafficUpMonthly).toBe(400);
     expect(metrics.trafficDownMonthly).toBe(500);
+    expect(metrics.totalUp).toBe(800);
+    expect(metrics.totalDown).toBe(900);
   });
 
   it("marks a node offline once it stops reporting", () => {
