@@ -258,16 +258,20 @@ function carryForwardTotals(next: NodeMetrics, previous: NodeMetrics): NodeMetri
     previous.trafficDownMonthly,
     next.trafficDownMonthly,
   );
+  const totalUp = resolveTrafficTotal(previous.totalUp ?? 0, next.totalUp ?? 0);
+  const totalDown = resolveTrafficTotal(previous.totalDown ?? 0, next.totalDown ?? 0);
 
   if (
     trafficUp === next.trafficUp &&
     trafficDown === next.trafficDown &&
     trafficUpMonthly === next.trafficUpMonthly &&
-    trafficDownMonthly === next.trafficDownMonthly
+    trafficDownMonthly === next.trafficDownMonthly &&
+    totalUp === (next.totalUp ?? 0) &&
+    totalDown === (next.totalDown ?? 0)
   ) {
     return next;
   }
-  return { ...next, trafficUp, trafficDown, trafficUpMonthly, trafficDownMonthly };
+  return { ...next, trafficUp, trafficDown, trafficUpMonthly, trafficDownMonthly, totalUp, totalDown };
 }
 
 function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
@@ -288,6 +292,8 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.trafficDown === b.trafficDown &&
     a.trafficUpMonthly === b.trafficUpMonthly &&
     a.trafficDownMonthly === b.trafficDownMonthly &&
+    a.totalUp === b.totalUp &&
+    a.totalDown === b.totalDown &&
     a.uptime === b.uptime &&
     a.load1 === b.load1 &&
     a.load5 === b.load5 &&
@@ -736,8 +742,12 @@ async function performServersSync() {
           ? {
               ...previousMetrics,
               online: restMetrics.online,
+              trafficUp: restMetrics.trafficUp,
+              trafficDown: restMetrics.trafficDown,
               trafficUpMonthly: restMetrics.trafficUpMonthly,
               trafficDownMonthly: restMetrics.trafficDownMonthly,
+              totalUp: restMetrics.totalUp,
+              totalDown: restMetrics.totalDown,
             }
           : trustSnapshotRate
             ? restMetrics

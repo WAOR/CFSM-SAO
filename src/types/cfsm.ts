@@ -414,12 +414,15 @@ export interface NodeMetrics {
   diskPct: number;
   netUp: number;
   netDown: number;
-  /** 累计上/下行（探针生命周期）。 */
+  /** 本计费周期内的上/下行（优先用于卡片出入站展示与流量排序），与 trafficUpMonthly 保持一致。 */
   trafficUp: number;
   trafficDown: number;
   /** 本计费周期内的上/下行，配额进度以此为准。 */
   trafficUpMonthly: number;
   trafficDownMonthly: number;
+  /** 累计上/下行（探针生命周期）。 */
+  totalUp?: number;
+  totalDown?: number;
   uptime: number;
   load1: number;
   load5: number;
