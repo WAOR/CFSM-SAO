@@ -84,13 +84,13 @@ describe("站点预设与本机覆盖的合并口径", () => {
   });
 
   it("两边都没有的键落到主题默认值", () => {
-    expect(merge({}, {}).defaultAppearance).toBe("system");
+    expect(merge({}, {}).defaultAppearance).toBe("dark");
   });
 
   it("只读站点预设会丢掉本机设置（回归用例）", () => {
     const local = { defaultAppearance: "dark" as const };
     // 错误口径：忽略 local。
-    expect(normalizeThemeSettings({}).defaultAppearance).toBe("system");
+    expect(normalizeThemeSettings({}).defaultAppearance).toBe("dark");
     // 正确口径。
     expect(merge({}, local).defaultAppearance).toBe("dark");
   });
@@ -120,7 +120,7 @@ describe("站点预设与本机覆盖的合并口径", () => {
   it("normalizes matrixColorTheme correctly", () => {
     expect(normalizeThemeSettings({ matrixColorTheme: "default" }).matrixColorTheme).toBe("default");
     expect(normalizeThemeSettings({ matrixColorTheme: "eva" }).matrixColorTheme).toBe("eva");
-    expect(normalizeThemeSettings({ matrixColorTheme: "invalid" as never }).matrixColorTheme).toBe("default");
+    expect(normalizeThemeSettings({ matrixColorTheme: "invalid" as never }).matrixColorTheme).toBe("eva");
   });
 
   it("normalizes matrixMockFill correctly", () => {

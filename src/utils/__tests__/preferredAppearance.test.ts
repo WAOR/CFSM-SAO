@@ -23,7 +23,7 @@ describe("后台「默认外观」垫底", () => {
     expect(resolve({ defaultAppearance: "system" })).toBe("system");
     // 老后端不下发：维持主题默认（跟随系统）。
     expect(normalizeThemeSettings(withPreferredAppearance(undefined, {})).defaultAppearance).toBe(
-      "system",
+      "dark",
     );
   });
 });

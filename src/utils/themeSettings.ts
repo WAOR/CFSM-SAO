@@ -6,6 +6,7 @@ import type {
   ThemeSettings,
   TrafficSpectrumColors,
   UserMatrixPreset,
+  OverviewCardId,
 } from "@/types/cfsm";
 import {
   DEFAULT_COST_RATE_API_URL,
@@ -43,13 +44,11 @@ export type ClusterOverviewMode = "classic" | "nodes";
 export type MatrixColorTheme =
   | "default"
   | "eva"
-  | "cyberpunk"
   | "divergence";
 
 export const MATRIX_COLOR_THEMES: readonly MatrixColorTheme[] = [
   "default",
   "eva",
-  "cyberpunk",
   "divergence",
 ] as const;
 
@@ -170,6 +169,75 @@ export const STATUS_BAR_PRESETS: readonly StatusBarPreset[] = [
 
 export const TRAFFIC_SPECTRUM_PRESETS: readonly StatusBarPreset[] = STATUS_BAR_PRESETS;
 
+export type { OverviewCardId };
+
+export const OVERVIEW_CARD_SLOT_COUNT = 6;
+
+export const DEFAULT_OVERVIEW_CARDS: readonly OverviewCardId[] = [
+  "connections",
+  "cpu",
+  "ram",
+  "disk",
+  "uptime",
+  "asset",
+] as const;
+
+export const ALL_OVERVIEW_CARD_IDS: readonly OverviewCardId[] = [
+  "connections",
+  "cpu",
+  "ram",
+  "disk",
+  "uptime",
+  "asset",
+  "nodes",
+  "bandwidth",
+  "swap",
+  "process",
+  "cores",
+] as const;
+
+export function normalizeOverviewCards(raw: unknown): OverviewCardId[] {
+  const allIds = new Set<OverviewCardId>(ALL_OVERVIEW_CARD_IDS);
+  const result: OverviewCardId[] = [];
+
+  const candidates: unknown[] = Array.isArray(raw)
+    ? raw
+    : typeof raw === "object" && raw !== null && "overviewCards" in raw && Array.isArray((raw as { overviewCards: unknown }).overviewCards)
+      ? (raw as { overviewCards: unknown[] }).overviewCards
+      : [];
+
+  for (const item of candidates) {
+    if (
+      typeof item === "string" &&
+      allIds.has(item as OverviewCardId) &&
+      !result.includes(item as OverviewCardId)
+    ) {
+      result.push(item as OverviewCardId);
+      if (result.length === OVERVIEW_CARD_SLOT_COUNT) break;
+    }
+  }
+
+  if (result.length < OVERVIEW_CARD_SLOT_COUNT) {
+    for (const id of DEFAULT_OVERVIEW_CARDS) {
+      if (!result.includes(id)) {
+        result.push(id);
+        if (result.length === OVERVIEW_CARD_SLOT_COUNT) break;
+      }
+    }
+  }
+
+  if (result.length < OVERVIEW_CARD_SLOT_COUNT) {
+    for (const id of ALL_OVERVIEW_CARD_IDS) {
+      if (!result.includes(id)) {
+        result.push(id);
+        if (result.length === OVERVIEW_CARD_SLOT_COUNT) break;
+      }
+    }
+  }
+
+  return result.slice(0, OVERVIEW_CARD_SLOT_COUNT);
+}
+
 export interface ResolvedThemeSettings {
   defaultAppearance: Appearance;
   desktopNodeViewMode: NodeViewMode;
@@ -195,6 +263,10 @@ export interface ResolvedThemeSettings {
   pingLossColors: PingLossColors;
   trafficSpectrumColors: TrafficSpectrumColors;
   showHomeOverview: boolean;
+  /** 首页顶部总览左侧小卡片列表（固定 6 个槽位） */
+  overviewCards: OverviewCardId[];
+  overviewCardOrder: OverviewCardId[];
+  overviewCardDisabled: OverviewCardId[];
   /** 顶部总览里的「资产概览」卡（把每月花多少钱亮给所有访客，单独给个开关）。 */
   showAssetOverview: boolean;
   showGroupTabs: boolean;
@@ -230,11 +302,11 @@ export interface ResolvedThemeSettings {
 }
 
 export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
-  defaultAppearance: "system",
+  defaultAppearance: "dark",
   desktopNodeViewMode: "large",
   mobileNodeViewMode: "compact",
   clusterOverviewMode: "classic",
-  matrixColorTheme: "default",
+  matrixColorTheme: "eva",
   matrixMockFill: false,
   matrixBootAnimation: true,
   matrixBootEffect: "laser-scan",
@@ -254,6 +326,9 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   pingLossColors: DEFAULT_PING_LOSS_COLORS,
   trafficSpectrumColors: DEFAULT_TRAFFIC_SPECTRUM_COLORS,
   showHomeOverview: true,
+  overviewCards: [...DEFAULT_OVERVIEW_CARDS],
+  overviewCardOrder: [...DEFAULT_OVERVIEW_CARDS],
+  overviewCardDisabled: [],
   showAssetOverview: true,
   showGroupTabs: true,
   showRegionBar: true,
@@ -557,6 +632,9 @@ export function normalizeThemeSettings(
     pingLossColors: normalizePingLossColors(settings?.pingLossColors),
     trafficSpectrumColors: normalizeTrafficSpectrumColors(settings?.trafficSpectrumColors),
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
+    overviewCards: normalizeOverviewCards(settings?.overviewCards ?? settings?.overviewCardOrder),
+    overviewCardOrder: normalizeOverviewCards(settings?.overviewCards ?? settings?.overviewCardOrder),
+    overviewCardDisabled: [],
     showAssetOverview: true,
     showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),
     showRegionBar: enabledUnlessFalse(settings?.showRegionBar),

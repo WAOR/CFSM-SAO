@@ -175,29 +175,29 @@ const BASE_SERVERS: MockServer[] = [
     sort_order: 50,
     is_hidden: "0",
   },
-  // 6. 香港 HNcloud
+  // 6. 澳大利亚悉尼（与 Komari/Monitor 统一前 6 台基准节点为 6 个不同地区）
   {
-    id: "hk-hncloud-06",
-    name: "HNcloud HK 01",
+    id: "au-syd-edge-06",
+    name: "Sydney AU-Edge",
     server_group: "生产",
-    region: "HK",
-    os: "Ubuntu 24.04",
+    region: "AU",
+    os: "Debian 12",
     arch: "x86_64",
-    cpu_info: "AMD EPYC 9654",
-    cpu_cores: 4,
-    kernel_version: "6.8.0-31-generic",
-    ram_total: 8 * 1024,
-    swap_total: 2048,
-    disk_total: 120 * 1024,
-    price: "35.00",
-    currency: "¥",
+    cpu_info: "Intel Xeon Platinum",
+    cpu_cores: 2,
+    kernel_version: "6.1.0-18-amd64",
+    ram_total: 4 * 1024,
+    swap_total: 0,
+    disk_total: 60 * 1024,
+    price: "12.00",
+    currency: "$",
     billing_cycle: "month",
     auto_renewal: "1",
-    expire_date: daysFromNow(45),
-    traffic_limit: "2048",
+    expire_date: daysFromNow(25),
+    traffic_limit: "2000",
     traffic_calc_type: "total",
-    reset_day: 20,
-    tags: "优质线路",
+    reset_day: 1,
+    tags: "大洋洲节点",
     sort_order: 60,
     is_hidden: "0",
   },
@@ -775,29 +775,29 @@ const BASE_SERVERS: MockServer[] = [
     sort_order: 280,
     is_hidden: "0",
   },
-  // 29. 澳大利亚悉尼
+  // 29. 香港 HNcloud
   {
-    id: "au-syd-edge-29",
-    name: "Sydney AU-Edge",
+    id: "hk-hncloud-29",
+    name: "HNcloud HK 01",
     server_group: "生产",
-    region: "AU",
-    os: "Debian 12",
+    region: "HK",
+    os: "Ubuntu 24.04",
     arch: "x86_64",
-    cpu_info: "Intel Xeon Platinum",
-    cpu_cores: 2,
-    kernel_version: "6.1.0-18-amd64",
-    ram_total: 4 * 1024,
-    swap_total: 0,
-    disk_total: 60 * 1024,
-    price: "12.00",
-    currency: "$",
+    cpu_info: "AMD EPYC 9654",
+    cpu_cores: 4,
+    kernel_version: "6.8.0-31-generic",
+    ram_total: 8 * 1024,
+    swap_total: 2048,
+    disk_total: 120 * 1024,
+    price: "35.00",
+    currency: "¥",
     billing_cycle: "month",
     auto_renewal: "1",
-    expire_date: daysFromNow(25),
-    traffic_limit: "2000",
+    expire_date: daysFromNow(45),
+    traffic_limit: "2048",
     traffic_calc_type: "total",
-    reset_day: 1,
-    tags: "大洋洲节点",
+    reset_day: 20,
+    tags: "优质线路",
     sort_order: 290,
     is_hidden: "0",
   },
@@ -885,8 +885,11 @@ function getMockServers(): MockServer[] {
   if (typeof window === "undefined") return BASE_SERVERS;
   const params = new URLSearchParams(window.location.search);
   const targetCount = Number(params.get("nodes"));
-  if (!targetCount || targetCount <= BASE_SERVERS.length) {
+  if (!targetCount) {
     return BASE_SERVERS;
+  }
+  if (targetCount < BASE_SERVERS.length) {
+    return BASE_SERVERS.slice(0, targetCount);
   }
 
   // 如果用户指定了像 ?mock=1&nodes=60 或 100，自动扩充复制
@@ -1135,6 +1138,20 @@ const MOCK_TURNSTILE_SITE_KEY =
 const MOCK_TURNSTILE_CREDENTIAL = "mock-turnstile-verified";
 
 export function installDevMockApi() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const adminParam = searchParams.get("admin");
+  if (adminParam === "1" || (searchParams.get("mock") === "1" && adminParam !== "0")) {
+    try {
+      window.localStorage.setItem("jwt_token", "mock-admin-token");
+      if (!window.localStorage.getItem("cfsm_admin_username")) {
+        window.localStorage.setItem("cfsm_admin_username", "Admin");
+      }
+    } catch {}
+  } else if (adminParam === "0") {
+    try {
+      window.localStorage.removeItem("jwt_token");
+    } catch {}
+  }
   const nativeFetch = window.fetch.bind(window);
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1187,20 +1204,32 @@ export function installDevMockApi() {
     }
 
     if (url.pathname === "/api/config") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const adminParam = searchParams.get("admin");
+      if (adminParam === "1") {
+        window.localStorage.setItem("jwt_token", "mock-jwt-token");
+      } else if (adminParam === "0") {
+        window.localStorage.removeItem("jwt_token");
+      }
       const loggedIn = Boolean(window.localStorage.getItem("jwt_token"));
+      const isMultiPing = searchParams.get("multiPing") === "1";
+      const mergedThemeOptions = {
+        ...mockThemeOptions,
+        ...(isMultiPing ? { enableHomepageMultiPing: true, homepageMultiPingTaskIds: [1, 2, 3] } : {}),
+      };
       return json({
         version: "2.8.5 Beta5",
         ...(loggedIn ? { last_workers_version: "2.8.6", last_agent_version: "1.0.3" } : {}),
         is_public: true,
         authorization: loggedIn,
-        preferred_theme: "auto",
+        preferred_theme: "dark",
         frontend_ws_timeout_minutes: 0,
         turnstile_enabled: MOCK_TURNSTILE,
         turnstile_login_enabled: false,
         turnstile_site_key: MOCK_TURNSTILE ? MOCK_TURNSTILE_SITE_KEY : "",
         site_title: "Mock Monitor",
         display_mode: "bar",
-        theme_options: mockThemeOptions,
+        theme_options: mergedThemeOptions,
         verified: MOCK_TURNSTILE && turnstilePassed,
         turnstile_verified: MOCK_TURNSTILE && turnstilePassed ? MOCK_TURNSTILE_CREDENTIAL : null,
         long_history_points: 120,

@@ -496,7 +496,6 @@ export const EMPTY_CARRIER_PING: CarrierPingSnapshot = Object.freeze(
 export type MatrixColorTheme =
   | "default"
   | "eva"
-  | "cyberpunk"
   | "divergence";
 
 /** 方格矩阵开屏动效形式：laser-scan (激光横扫)、digital-rain (数码流雨) */
@@ -507,6 +506,19 @@ export type MatrixBootEffect =
   | "divergence-flux";
 
 /** 用户自定义点阵预设（云端存储） */
+
+export type OverviewCardId =
+  | "connections"
+  | "cpu"
+  | "ram"
+  | "disk"
+  | "uptime"
+  | "asset"
+  | "nodes"
+  | "bandwidth"
+  | "swap"
+  | "process"
+  | "cores";
 
 export interface PingLatencyThresholds {
   excellent: number;
@@ -568,6 +580,9 @@ export interface ThemeSettings {
   pingLossColors?: Partial<PingLossColors>;
   trafficSpectrumColors?: Partial<TrafficSpectrumColors>;
   showHomeOverview?: boolean;
+  overviewCards?: OverviewCardId[];
+  overviewCardOrder?: OverviewCardId[];
+  overviewCardDisabled?: OverviewCardId[];
   showGroupTabs?: boolean;
   showRegionBar?: boolean;
   showCardGroup?: boolean;
