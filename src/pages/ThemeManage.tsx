@@ -2071,7 +2071,7 @@ export function ThemeManage() {
                           title="恢复官方默认 6 卡片配置与排序"
                         >
                           <RotateCcw size={12} strokeWidth={2.2} />
-                          <span>重置默认</span>
+                          <span>重置</span>
                         </button>
                       </div>
 
