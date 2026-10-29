@@ -190,7 +190,7 @@ export async function cfsmGet<S extends z.ZodTypeAny>(
   if (
     path === "/api/config" &&
     (!options?.base || options.base === getPrimaryApiBase()) &&
-    !options?.signal &&
+    !options?.signal?.aborted &&
     typeof window !== "undefined"
   ) {
     const earlyWin = window as unknown as EarlyDataWindow;
@@ -199,6 +199,9 @@ export async function cfsmGet<S extends z.ZodTypeAny>(
       earlyWin.__EARLY_DATA__!.config = null;
       try {
         const raw = await earlyConfig;
+        if (options?.signal?.aborted) {
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
         if (raw) {
           captureTurnstileVerified(raw);
           const parsed = schema.safeParse(raw);
@@ -206,7 +209,8 @@ export async function cfsmGet<S extends z.ZodTypeAny>(
             return parsed.data;
           }
         }
-      } catch {
+      } catch (err) {
+        if (options?.signal?.aborted) throw err;
         // 异常降级至标准请求
       }
     }
@@ -310,7 +314,7 @@ export async function cfsmGetAll<S extends z.ZodTypeAny>(
   // 消费超前预取的各站 /api/servers
   if (
     path === "/api/servers" &&
-    !options?.signal &&
+    !options?.signal?.aborted &&
     typeof window !== "undefined"
   ) {
     const earlyWin = window as unknown as EarlyDataWindow;
@@ -319,6 +323,9 @@ export async function cfsmGetAll<S extends z.ZodTypeAny>(
       earlyWin.__EARLY_DATA__!.servers = null;
       try {
         const settled = await Promise.all(earlyServers.map((item) => item.promise));
+        if (options?.signal?.aborted) {
+          throw new DOMException("The operation was aborted.", "AbortError");
+        }
         return settled.map((res) => {
           if (res.error || !res.data) {
             return { base: res.base, error: res.error || new Error("No data") };
@@ -334,7 +341,8 @@ export async function cfsmGetAll<S extends z.ZodTypeAny>(
             ),
           };
         });
-      } catch {
+      } catch (err) {
+        if (options?.signal?.aborted) throw err;
         // 异常降级至标准请求
       }
     }

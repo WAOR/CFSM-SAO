@@ -88,6 +88,29 @@ describe("Early Data Prefetching consumption", () => {
     expect(win.__EARLY_DATA__?.servers).toBeNull();
   });
 
+  it("consumes early data even when caller passes an un-aborted AbortSignal", async () => {
+    const earlyServerData = { servers: [{ id: "srv-signal" }] };
+    const earlyServersPromise = Promise.resolve({
+      base: window.location.origin,
+      data: earlyServerData,
+    });
+
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
+      config: Promise.resolve({ sitename: "Config-Signal" }),
+      servers: [{ base: window.location.origin, promise: earlyServersPromise }],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const controller = new AbortController();
+
+    const config = await cfsmGet("/api/config", DummyConfigSchema, { signal: controller.signal });
+    expect(config.sitename).toBe("Config-Signal");
+
+    const servers = await cfsmGetAll("/api/servers", DummyServersSchema, { signal: controller.signal });
+    expect(servers[0]?.data?.servers[0]?.id).toBe("srv-signal");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("discardEarlyData drops both prefetched config and servers so post-verification fetch hits the network", async () => {
     (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
       config: Promise.resolve({ sitename: "Stale" }),
