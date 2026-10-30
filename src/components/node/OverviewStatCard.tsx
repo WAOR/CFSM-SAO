@@ -142,18 +142,18 @@ export const OverviewStatCard: React.FC<OverviewStatCardProps> = ({
   const [diskUsedValue, diskUsedUnit] = formatBytes(totalDiskUsed).split(" ");
   const diskPct = totalDiskTotal > 0 ? (totalDiskUsed / totalDiskTotal) * 100 : 32.3;
 
-  const totalSwapUsed = overview?.totalSwapUsed ?? 7516192768;
-  const totalSwapTotal = overview?.totalSwapTotal ?? 23622320128;
+  const totalSwapUsed = overview ? (overview.totalSwapUsed ?? 0) : 7516192768;
+  const totalSwapTotal = overview ? (overview.totalSwapTotal ?? 0) : 23622320128;
   const [swapUsedValue, swapUsedUnit] = formatBytes(totalSwapUsed).split(" ");
-  const swapPct = totalSwapTotal > 0 ? (totalSwapUsed / totalSwapTotal) * 100 : 31.8;
+  const swapPct = overview?.swapPct ?? (totalSwapTotal > 0 ? (totalSwapUsed / totalSwapTotal) * 100 : (overview ? 0 : 31.8));
 
-  const netUp = overview?.netUp ?? 44459622;
-  const netDown = overview?.netDown ?? 64277708;
+  const netUp = overview ? (overview.netUp ?? 0) : 44459622;
+  const netDown = overview ? (overview.netDown ?? 0) : 64277708;
   const netTotal = netUp + netDown;
   const [bandwidthTotalValue, bandwidthTotalUnit] = formatBytes(netTotal).split(" ");
 
-  const totalProcesses = overview?.totalProcesses ?? 1842;
-  const totalCores = overview?.totalCores ?? 64;
+  const totalProcesses = overview ? (overview.totalProcesses ?? 0) : 1842;
+  const totalCores = overview ? (overview.totalCores ?? 0) : 64;
 
   const renderRating = (rating: OverviewRating | null) =>
     rating ? (
@@ -289,7 +289,9 @@ export const OverviewStatCard: React.FC<OverviewStatCardProps> = ({
             name: overview.recentRebootNode.name,
             ...formatRebootAgo(overview.recentRebootNode.seconds),
           }
-        : { value: "3", unit: "小时前", fullText: "3小时前", name: "Tokyo-01" };
+        : overview !== undefined
+          ? null
+          : { value: "3", unit: "小时前", fullText: "3小时前", name: "Tokyo-01" };
       return (
         <div key="uptime" data-metric="uptime" {...cardProps}>
           <div className="mao-stat-head">
@@ -299,17 +301,27 @@ export const OverviewStatCard: React.FC<OverviewStatCardProps> = ({
             </div>
           </div>
           <div className="mao-stat-value">
-            {recentReboot.value}{" "}
-            {recentReboot.unit && (
-              <span className="mao-stat-unit">{recentReboot.unit}</span>
+            {recentReboot ? (
+              <>
+                {recentReboot.value}{" "}
+                {recentReboot.unit && (
+                  <span className="mao-stat-unit">{recentReboot.unit}</span>
+                )}
+              </>
+            ) : (
+              "—"
             )}
           </div>
           <div className="mao-stat-footer">
             <span
               className="mao-stat-caption truncate"
-              title={`最近重启设备: ${recentReboot.name} · ${recentReboot.fullText}`}
+              title={
+                recentReboot
+                  ? `最近重启设备: ${recentReboot.name} · ${recentReboot.fullText}`
+                  : "暂无在线设备"
+              }
             >
-              {recentReboot.name}
+              {recentReboot ? recentReboot.name : "暂无在线设备"}
             </span>
           </div>
         </div>
