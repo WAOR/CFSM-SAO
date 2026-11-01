@@ -43,7 +43,6 @@ import {
   ExternalLink,
   Github,
   HelpCircle,
-  MessageSquare,
   Star,
   PackagePlus,
   Palette,
@@ -62,6 +61,7 @@ import { getNodeMetricsSnapshot } from "@/services/wsStore";
 import { useCarrierNames, usePublicConfig } from "@/hooks/usePublicConfig";
 import { useHourlyClock } from "@/hooks/useClock";
 import { useThemeUpdate } from "@/hooks/useThemeUpdate";
+import { usePreferences } from "@/hooks/usePreferences";
 import { useAllPingLineOverrides } from "@/hooks/usePingOverview";
 import {
   cancelSiteThemeSync,
@@ -151,37 +151,164 @@ import {
 
 import {
   type OverviewRatingKind,
-  getDefaultOverviewRatingLabelText,
 } from "@/utils/overviewRating";
 import { HOME_SORT_FIELDS, HOME_SORT_FIELD_LABELS } from "@/utils/homeSort";
 
-const OVERVIEW_RATING_LABEL_FIELDS: Array<{
-  key: Extract<OverviewRatingKind, "bandwidth" | "asset">;
-  title: string;
-  scopeBadge: string;
-  description: string;
-  toggleKey: "showBandwidthRating" | "showAssetRating";
-  tierHint: string;
-  isBadge?: boolean;
-}> = [
+interface BandwidthTierItem {
+  level: 0 | 1 | 2 | 3;
+  tierTitle: string;
+  threshold: string;
+  defaultLabel: string;
+  desc: string;
+}
+
+const BANDWIDTH_TIERS: readonly BandwidthTierItem[] = [
   {
-    key: "bandwidth",
-    title: "实时带宽",
-    scopeBadge: "展台顶部",
-    description: "显示在「集群展台」标题旁，实时反馈总吞吐负荷。",
-    toggleKey: "showBandwidthRating",
-    tierHint: "对应阶梯：≤1Mbps、≤10Mbps、≤100Mbps、>100Mbps",
-    isBadge: true,
+    level: 0,
+    tierTitle: "一阶 · 闲置",
+    threshold: "≤ 1 Mbps",
+    defaultLabel: "IDLE",
+    desc: "极低吞吐或待机心跳",
   },
   {
-    key: "asset",
-    title: "资产规模",
-    scopeBadge: "卡片底部",
-    description: "显示在「资产总值」卡片右下角，按总资产规模定级。",
-    toggleKey: "showAssetRating",
-    tierHint: "对应阶梯：≤500元、≤1500元、≤3000元、>3000元",
+    level: 1,
+    tierTitle: "二阶 · 轻载",
+    threshold: "≤ 10 Mbps",
+    defaultLabel: "LIGHT",
+    desc: "平稳轻度网络流量",
   },
-];
+  {
+    level: 2,
+    tierTitle: "三阶 · 活跃",
+    threshold: "≤ 100 Mbps",
+    defaultLabel: "ACTIVE",
+    desc: "节点负载持续运转",
+  },
+  {
+    level: 3,
+    tierTitle: "四阶 · 激增",
+    threshold: "> 100 Mbps",
+    defaultLabel: "SURGE",
+    desc: "高吞吐或满载跑峰",
+  },
+] as const;
+
+const BandwidthTierCard = memo(function BandwidthTierCard({
+  tier,
+  customValue,
+  disabled,
+  onCommit,
+  onReset,
+}: {
+  tier: BandwidthTierItem;
+  customValue: string | undefined;
+  disabled: boolean;
+  onCommit: (val: string) => void;
+  onReset: () => void;
+}) {
+  const [text, setText] = useState<string>(customValue ?? tier.defaultLabel);
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setText(customValue ?? tier.defaultLabel);
+    }
+  }, [customValue, tier.defaultLabel]);
+
+  const isCustom = Boolean(customValue && customValue !== tier.defaultLabel);
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    isFocusedRef.current = true;
+    e.target.select();
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextVal = e.target.value.replace(/,/g, "");
+    setText(nextVal);
+    onCommit(nextVal);
+  };
+
+  const handleBlur = () => {
+    isFocusedRef.current = false;
+    const trimmed = text.trim();
+    if (!trimmed || trimmed === tier.defaultLabel) {
+      setText(tier.defaultLabel);
+      onReset();
+    } else {
+      setText(trimmed);
+      onCommit(trimmed);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    } else if (e.key === "Escape") {
+      setText(customValue ?? tier.defaultLabel);
+      e.currentTarget.blur();
+    }
+  };
+
+  const handleReset = () => {
+    setText(tier.defaultLabel);
+    onReset();
+  };
+
+  return (
+    <div className="surface-inset rounded-xl p-3.5 flex flex-col items-center justify-between gap-3 text-center border border-(--hairline) hover:border-(--hairline-hover) transition-colors group/card">
+      <div className="w-full flex items-center justify-between text-[11px] text-(--text-muted)">
+        <span className="font-medium text-(--text-secondary)">{tier.tierTitle}</span>
+        <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-md bg-(--bg-card) text-(--text-secondary) border border-(--hairline) shadow-2xs">
+          {tier.threshold}
+        </span>
+      </div>
+
+      <div className="py-1 flex items-center justify-center gap-1.5 w-full">
+        <div
+          className={clsx(
+            "overview-card-rating is-bandwidth-badge pr-2! pl-5! transition-all shadow-xs cursor-text",
+            "focus-within:ring-2 focus-within:ring-(--accent-500) focus-within:ring-offset-1 focus-within:ring-offset-(--bg-card)"
+          )}
+          data-rating-level={tier.level}
+          title="点击直接修改徽章文字"
+        >
+          <span className="mao-status-dot" />
+          <input
+            type="text"
+            disabled={disabled}
+            value={text}
+            placeholder={tier.defaultLabel}
+            onFocus={handleFocus}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            style={{
+              width: `${Math.max(4, (text || tier.defaultLabel).length) + 1.2}ch`,
+            }}
+            className="bg-transparent border-none outline-none text-center font-inherit text-inherit tracking-inherit text-[11px] font-bold min-w-11.5 max-w-25 cursor-text placeholder:opacity-35"
+            aria-label={`${tier.tierTitle}分级词`}
+          />
+        </div>
+
+        {isCustom && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={handleReset}
+            title={`恢复默认（${tier.defaultLabel}）`}
+            className="p-1 rounded-md text-(--text-muted) hover:text-(--accent-400) hover:bg-(--surface-hover) transition-colors cursor-pointer shrink-0"
+          >
+            <RotateCcw size={11} />
+          </button>
+        )}
+      </div>
+
+      <span className="text-[10px] text-(--text-tertiary) leading-tight">
+        {tier.desc}
+      </span>
+    </div>
+  );
+});
 
 
 interface ColorThemeOption {
@@ -452,9 +579,7 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showPriceForGuests: settings.showPriceForGuests,
     showOverviewRatings: settings.showOverviewRatings,
     showBandwidthRating: settings.showBandwidthRating,
-    showAssetRating: settings.showAssetRating,
     bandwidthRatingLabels: settings.bandwidthRatingLabels,
-    assetRatingLabels: settings.assetRatingLabels,
     compactShowTrafficTotal: settings.compactShowTrafficTotal,
     compactShowBilling: settings.compactShowBilling,
     compactShowUptime: settings.compactShowUptime,
@@ -481,12 +606,8 @@ type ThemeDraft = Omit<
   | "hiddenNodes"
   | "costIgnoredNodes"
   | "bandwidthRatingLabels"
-  | "assetRatingLabels"
 > & {
-  ratingLabels: {
-    bandwidth: string;
-    asset: string;
-  };
+  ratingLabels: Record<OverviewRatingKind, string>;
   hiddenNodesText: string;
   costIgnoredText: string;
 };
@@ -496,7 +617,6 @@ function draftFromSettings(settings: ResolvedThemeSettings): ThemeDraft {
     hiddenNodes,
     costIgnoredNodes,
     bandwidthRatingLabels,
-    assetRatingLabels,
     ...rest
   } = pickManagedThemeSettings(settings);
   return {
@@ -504,7 +624,6 @@ function draftFromSettings(settings: ResolvedThemeSettings): ThemeDraft {
     overviewCards: normalizeOverviewCards(rest.overviewCards),
     ratingLabels: {
       bandwidth: bandwidthRatingLabels,
-      asset: assetRatingLabels,
     },
     hiddenNodesText: hiddenNodes.join("\n"),
     costIgnoredText: costIgnoredNodes.join("\n"),
@@ -949,7 +1068,7 @@ const THEME_TABS: ReadonlyArray<{
   { id: "home", label: "首页", hint: "外观、展台、权限与评级", icon: ListFilter },
   { id: "card", label: "服务器", hint: "视图、指标、排序与延迟", icon: Server },
   { id: "cost", label: "资产", hint: "费用统计与二手溢价", icon: CircleDollarSign },
-  { id: "feedback", label: "反馈", hint: "问题反馈与设计建议", icon: MessageSquare },
+  { id: "feedback", label: "帮助", hint: "常见问题与建议反馈", icon: HelpCircle },
 ];
 
 const PROJECT_REPOS = [
@@ -1045,6 +1164,7 @@ function SiteSyncIndicator({
 export function ThemeManage() {
   const now = useHourlyClock();
   const { currentVersion } = useThemeUpdate();
+  const { setAppearance } = usePreferences();
   const {
     data: config,
     isLoading: configLoading,
@@ -1695,7 +1815,7 @@ export function ThemeManage() {
     draft.enableHomepageMultiPing &&
     !isHomepageMultiPingConfigured(draft.homepageMultiPingTaskIds);
 
-  const setRatingLabelDraft = useCallback((key: "bandwidth" | "asset", value: string) => {
+  const setRatingLabelDraft = useCallback((key: OverviewRatingKind, value: string) => {
     editVersionRef.current += 1;
     setDraft((prev) => ({
       ...prev,
@@ -1713,7 +1833,6 @@ export function ThemeManage() {
       homepagePingBindings: pruneBindings(rest.homepagePingBindings),
       homeGroupOrder: normalizeHomeGroupOrder(rest.homeGroupOrder),
       bandwidthRatingLabels: ratingLabels.bandwidth,
-      assetRatingLabels: ratingLabels.asset,
       hiddenNodes: normalizeNodeIdentityList(hiddenNodesText),
       costIgnoredNodes: normalizeCostIgnoredNodes(costIgnoredText),
       costPremiums: normalizeCostPremiums(rest.costPremiums),
@@ -1983,7 +2102,7 @@ export function ThemeManage() {
               <InstancePanel
                 id="set-appearance"
                 kicker="外观"
-                title="显示外观"
+                title="访客默认外观"
                 aside={<LayoutTemplate size={16} />}
               >
                 <div className="instance-segmented is-prominent is-even">
@@ -1993,7 +2112,10 @@ export function ThemeManage() {
                       type="button"
                       data-active={draft.defaultAppearance === value ? "true" : "false"}
                       aria-pressed={draft.defaultAppearance === value}
-                      onClick={() => patch("defaultAppearance", value)}
+                      onClick={() => {
+                        patch("defaultAppearance", value);
+                        setAppearance(value);
+                      }}
                       className="inline-flex items-center justify-center gap-2"
                     >
                       <Icon size={14} />
@@ -2582,70 +2704,96 @@ export function ThemeManage() {
               
 
               <InstancePanel
-                id="set-overview-ratings"
-                kicker="评级"
-                title="状态评级"
-                aside={<ListFilter size={16} />}
+                kicker="展台"
+                title="实时带宽评级"
+                description="在首页「集群展台」标题旁以呼吸动态胶囊徽章呈现全站实时吞吐负荷分级。"
+                aside={<Activity size={16} />}
               >
-                <div className="grid gap-3 md:grid-cols-2">
-                  {OVERVIEW_RATING_LABEL_FIELDS.map((field) => {
-                    const defaultLabel = getDefaultOverviewRatingLabelText(field.key);
-                    const ratingEnabled = draft[field.toggleKey];
-                    return (
-                      <div
-                        key={field.key}
-                        className={`surface-inset flex min-w-0 flex-col gap-2.5 px-4 py-3 transition-colors ${
-                          field.isBadge ? "border-l-2 border-l-(--accent-500)" : ""
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="setting-subhead-title">{field.title}</span>
-                              <span
-                                className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                                  field.isBadge
-                                    ? "bg-(--accent-500)/15 text-(--accent-400) border border-(--accent-500)/30"
-                                    : "bg-white/5 text-(--text-muted) border border-white/10"
-                                }`}
-                              >
-                                {field.isBadge && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" />}
-                                {field.scopeBadge}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-[11px] text-(--text-tertiary) leading-normal">
-                              {field.description}
-                            </p>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={draft[field.toggleKey]}
-                            onChange={(event) => patch(field.toggleKey, event.target.checked)}
-                            className="h-4 w-4 shrink-0 mt-0.5 accent-(--accent-500)"
-                            title={`开启/关闭${field.title}`}
-                          />
-                        </div>
+                <div className="flex flex-col gap-4">
+                  <ToggleRow
+                    field="showBandwidthRating"
+                    title="开启展台带宽状态徽章"
+                    desc="在集群展台顶部实时反馈全站网络吞吐负荷级别（空闲、轻载、活跃、激增）。"
+                    checked={draft.showBandwidthRating}
+                    onPatch={patch}
+                  />
 
-                        <div className="flex flex-col gap-1.5 mt-auto pt-1">
-                          <div className="flex items-center justify-between text-[11px] text-(--text-muted)">
-                            <span>自定义分级词</span>
-                            {!ratingEnabled && <span className="opacity-70">(已停用)</span>}
-                          </div>
-                          <input
-                            value={draft.ratingLabels[field.key]}
-                            disabled={!ratingEnabled}
-                            onChange={(event) => setRatingLabelDraft(field.key, event.target.value)}
-                            placeholder={defaultLabel}
-                            aria-label={`${field.title}评级名称`}
-                            className="surface-inset w-full px-3 py-1.5 text-[12px] outline-none disabled:opacity-60 font-mono"
-                          />
-                          <span className="setting-hint">
-                            {field.tierHint}
-                          </span>
+                  <div
+                    className={clsx(
+                      "rounded-2xl border border-(--hairline) bg-[color-mix(in_srgb,var(--bg-card)_55%,transparent)] p-4 sm:p-5 shadow-xs transition-opacity",
+                      !draft.showBandwidthRating && "opacity-60"
+                    )}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-(--hairline)">
+                      <div>
+                        <div className="text-xs font-semibold text-(--text-primary) flex items-center gap-1.5">
+                          <Sparkles size={13} className="text-(--accent-500)" />
+                          <span>4 阶梯负荷徽章（点击徽章直接修改文案）</span>
                         </div>
+                        <p className="text-[11px] text-(--text-muted) mt-0.5">
+                          直接在对应胶囊徽章内打字修改分级词，支持中英文，修改即刻生效；各阶梯独立可重置。
+                        </p>
                       </div>
-                    );
-                  })}
+                      {Boolean(draft.ratingLabels.bandwidth) && (
+                        <button
+                          type="button"
+                          disabled={!draft.showBandwidthRating}
+                          onClick={() => setRatingLabelDraft("bandwidth", "")}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-(--accent-500) hover:text-(--accent-400) border border-(--hairline) rounded-md bg-(--bg-card) hover:bg-(--surface-hover) transition-colors shrink-0 self-start sm:self-auto cursor-pointer"
+                        >
+                          <RotateCcw size={12} />
+                          <span>全部恢复默认</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div
+                      className="mao-progress-container p-0! border-none! bg-transparent! shadow-none! backdrop-filter-none! gap-0! h-auto!"
+                      data-palette={draft.matrixColorTheme || "default"}
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {(() => {
+                          const rawString = draft.ratingLabels.bandwidth ?? "";
+                          const rawParts = rawString ? rawString.split(",").map((s) => s.trim()) : [];
+
+                          const handleCommitTier = (level: number, val: string) => {
+                            const currentList = BANDWIDTH_TIERS.map((t, idx) => rawParts[idx] ?? t.defaultLabel);
+                            currentList[level] = val.trim();
+
+                            const allDefault = currentList.every(
+                              (item, idx) => !item || item === BANDWIDTH_TIERS[idx].defaultLabel
+                            );
+                            if (allDefault) {
+                              setRatingLabelDraft("bandwidth", "");
+                            } else {
+                              const filled = currentList.map((item, idx) => item || BANDWIDTH_TIERS[idx].defaultLabel);
+                              setRatingLabelDraft("bandwidth", filled.join(","));
+                            }
+                          };
+
+                          const handleResetTier = (level: number) => {
+                            const currentList = BANDWIDTH_TIERS.map((t, idx) => rawParts[idx] ?? t.defaultLabel);
+                            currentList[level] = BANDWIDTH_TIERS[level].defaultLabel;
+                            const allDefault = currentList.every(
+                              (item, idx) => !item || item === BANDWIDTH_TIERS[idx].defaultLabel
+                            );
+                            setRatingLabelDraft("bandwidth", allDefault ? "" : currentList.join(","));
+                          };
+
+                          return BANDWIDTH_TIERS.map((tier) => (
+                            <BandwidthTierCard
+                              key={tier.level}
+                              tier={tier}
+                              customValue={rawParts[tier.level]}
+                              disabled={!draft.showBandwidthRating}
+                              onCommit={(newVal) => handleCommitTier(tier.level, newVal)}
+                              onReset={() => handleResetTier(tier.level)}
+                            />
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </InstancePanel>
             </>
@@ -2653,11 +2801,11 @@ export function ThemeManage() {
 
           {activeTab === "feedback" && (
             <>
-              {/* 面板 1：三大项目反馈通道 */}
+              {/* 面板 1：三大项目反馈与帮助通道 */}
               <InstancePanel
-                kicker="反馈"
-                title="项目反馈与代码仓库"
-                aside={<MessageSquare size={16} />}
+                kicker="帮助"
+                title="项目帮助与代码仓库"
+                aside={<HelpCircle size={16} />}
               >
                 <div className="space-y-4">
                   <p className="text-xs text-(--text-muted) leading-relaxed">
@@ -2841,7 +2989,7 @@ export function ThemeManage() {
                       </span>
                     </div>
                     <p className="text-xs text-(--text-muted)">
-                      服务于探针数据呈现本身的功能型探针主题
+                      服务于探针数据呈现本身的高自由度模块化主题
                     </p>
                   </div>
                   <a

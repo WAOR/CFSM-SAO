@@ -199,8 +199,6 @@ function HomeOverviewCards({
   showOverviewRatings,
   showBandwidthRating,
   bandwidthRatingLabels,
-  showAssetRating,
-  assetRatingLabels,
   showDetailButton,
   showAssetCard,
   renewalNodes,
@@ -225,8 +223,6 @@ function HomeOverviewCards({
   showOverviewRatings: boolean;
   showBandwidthRating: boolean;
   bandwidthRatingLabels: string;
-  showAssetRating: boolean;
-  assetRatingLabels: string;
   showDetailButton: boolean;
   showAssetCard: boolean;
   renewalNodes: RenewalReminderSource[];
@@ -277,15 +273,6 @@ function HomeOverviewCards({
       })
       : null;
 
-  const assetRating =
-    isPriceVisible && showOverviewRatings && showAssetRating && costSummary
-      ? getOverviewRating({
-        kind: "asset",
-        value: costSummary.remainingCny,
-        customLabels: assetRatingLabels,
-      })
-      : null;
-
   const isAllHealthy = overview.offlineNodes === 0 && overview.totalNodes > 0;
   const renewalReminders = getRenewalReminders(renewalNodes, Date.now(), {
     requireOnlineForExpired: true,
@@ -313,7 +300,6 @@ function HomeOverviewCards({
         costSummary={costSummary}
         costLoading={costLoading}
         showDetailButton={showDetailButton}
-        assetRating={assetRating}
         renewalNodes={renewalNodes}
       />
     );
@@ -1246,8 +1232,6 @@ export function NodeGrid() {
           showOverviewRatings={themeSettings.showOverviewRatings}
           showBandwidthRating={themeSettings.showBandwidthRating}
           bandwidthRatingLabels={themeSettings.bandwidthRatingLabels}
-          showAssetRating={themeSettings.showAssetRating}
-          assetRatingLabels={themeSettings.assetRatingLabels}
           username={
             me?.logged_in
               ? (themeSettings.adminNickname?.trim() || me?.username || "Admin")

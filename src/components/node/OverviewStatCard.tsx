@@ -15,7 +15,6 @@ import { Link } from "react-router-dom";
 import { StatMetricIcon } from "../ui/StatMetricIcon";
 import { formatBytes } from "@/utils/format";
 import type { OverviewCardId } from "@/types/cfsm";
-import type { OverviewRating } from "@/utils/overviewRating";
 import { RenewalReminder } from "./RenewalReminder";
 import type { RenewalReminderSource } from "@/utils/renewalReminder";
 import { getRenewalReminders } from "@/utils/renewalReminder";
@@ -56,8 +55,6 @@ export interface OverviewStatCardProps {
   costLoading?: boolean;
   showTrafficDetailButton?: boolean;
   showDetailButton?: boolean;
-  trafficRating?: OverviewRating | null;
-  assetRating?: OverviewRating | null;
   renewalNodes?: RenewalReminderSource[];
   onWarmTraffic?: () => void;
   className?: string;
@@ -108,7 +105,6 @@ export const OverviewStatCard: React.FC<OverviewStatCardProps> = ({
   costSummary,
   costLoading = false,
   showDetailButton = false,
-  assetRating,
   renewalNodes,
   className = "",
   draggable,
@@ -154,17 +150,6 @@ export const OverviewStatCard: React.FC<OverviewStatCardProps> = ({
 
   const totalProcesses = overview ? (overview.totalProcesses ?? 0) : 1842;
   const totalCores = overview ? (overview.totalCores ?? 0) : 64;
-
-  const renderRating = (rating: OverviewRating | null) =>
-    rating ? (
-      <span
-        className="overview-card-rating"
-        data-rating-level={rating.level}
-        title={`指标定级: ${rating.label}`}
-      >
-        {rating.label}
-      </span>
-    ) : null;
 
   const renderAssetValue = () => {
     if (!isPriceVisible) return "保密";
@@ -365,7 +350,6 @@ export const OverviewStatCard: React.FC<OverviewStatCardProps> = ({
             <span className="mao-stat-caption">
               {!isPriceVisible ? "仅管理员可见" : "实时汇率折算"}
             </span>
-            {renderRating(assetRating ?? null)}
           </div>
         </div>
       );

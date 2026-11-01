@@ -288,9 +288,7 @@ export interface ResolvedThemeSettings {
   showPriceForGuests: boolean;
   showOverviewRatings: boolean;
   showBandwidthRating: boolean;
-  showAssetRating: boolean;
   bandwidthRatingLabels: string;
-  assetRatingLabels: string;
   compactShowTrafficTotal: boolean;
   compactShowBilling: boolean;
   compactShowUptime: boolean;
@@ -346,9 +344,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showPriceForGuests: false,
   showOverviewRatings: true,
   showBandwidthRating: true,
-  showAssetRating: false,
   bandwidthRatingLabels: "",
-  assetRatingLabels: "",
   compactShowTrafficTotal: true,
   compactShowBilling: true,
   compactShowUptime: true,
@@ -651,9 +647,7 @@ export function normalizeThemeSettings(
     showPriceForGuests: settings?.showPriceForGuests === true,
     showOverviewRatings: enabledUnlessFalse(settings?.showOverviewRatings),
     showBandwidthRating: enabledUnlessFalse(settings?.showBandwidthRating),
-    showAssetRating: settings?.showAssetRating === true,
     bandwidthRatingLabels: normalizePlainText(settings?.bandwidthRatingLabels),
-    assetRatingLabels: normalizePlainText(settings?.assetRatingLabels),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),
