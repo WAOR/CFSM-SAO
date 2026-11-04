@@ -1170,6 +1170,32 @@ export function installDevMockApi() {
         headers: { "Content-Type": "application/json" },
       });
 
+    if (
+      url.hostname === "api.frankfurter.dev" ||
+      url.hostname === "open.er-api.com" ||
+      url.hostname === "api.exchangerate-api.com"
+    ) {
+      if (url.hostname === "api.frankfurter.dev") {
+        return json([
+          { base: "USD", quote: "CNY", rate: 7.18 },
+          { base: "USD", quote: "EUR", rate: 0.86 },
+          { base: "USD", quote: "JPY", rate: 146.4 },
+        ]);
+      }
+      return json({
+        result: "success",
+        rates: {
+          USD: 1,
+          CNY: 7.18,
+          EUR: 0.86,
+          JPY: 146.4,
+          CAD: 1.38,
+          HKD: 7.82,
+          GBP: 0.76,
+        },
+      });
+    }
+
     const log = ((window as unknown as { __mockApiLog?: string[] }).__mockApiLog ??= []);
     const requestHeaders = new Headers(init?.headers);
     const turnstilePassed =
