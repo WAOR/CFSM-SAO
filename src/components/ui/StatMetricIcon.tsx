@@ -13,7 +13,8 @@ export type MetricType =
   | "swap"
   | "load"
   | "process"
-  | "cores";
+  | "cores"
+  | "loss";
 
 export interface StatMetricIconProps {
   metric: MetricType;

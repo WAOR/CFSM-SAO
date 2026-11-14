@@ -115,6 +115,7 @@ const windowByUuid = new Map<string, readonly PingLiveSample[]>();
 /** 对外可见的合并结果，引用稳定（`useSyncExternalStore` 要求）。 */
 const seriesByUuid = new Map<string, readonly PingLiveSample[]>();
 const listenersByUuid = new Map<string, Set<Listener>>();
+const globalPingListeners = new Set<Listener>();
 let hydrated = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -444,8 +445,10 @@ function refreshSeries(uuid: string, now: number): void {
 
 function emit(uuid: string): void {
   const listeners = listenersByUuid.get(uuid);
-  if (!listeners) return;
-  for (const listener of listeners) listener();
+  if (listeners) {
+    for (const listener of listeners) listener();
+  }
+  for (const listener of globalPingListeners) listener();
 }
 
 /**
@@ -629,6 +632,17 @@ export function subscribePingHistory(uuid: string, listener: Listener): () => vo
   };
 }
 
+export function getAllPingUuids(): string[] {
+  return [...new Set([...samplesByUuid.keys(), ...windowByUuid.keys()])];
+}
+
+export function subscribeAllPingHistory(listener: Listener): () => void {
+  globalPingListeners.add(listener);
+  return () => {
+    globalPingListeners.delete(listener);
+  };
+}
+
 /** 节点被删除后清掉它的缓冲区，避免无限增长。 */
 export function retainPingNodes(uuids: Iterable<string>): void {
   const keep = new Set(uuids);
@@ -653,6 +667,7 @@ export function resetPingLiveStore(): void {
   windowByUuid.clear();
   seriesByUuid.clear();
   listenersByUuid.clear();
+  globalPingListeners.clear();
   hydrated = false;
   if (persistTimer != null) {
     clearTimeout(persistTimer);

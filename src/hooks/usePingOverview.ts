@@ -3,7 +3,9 @@ import { useMinuteClock } from "@/hooks/useClock";
 import { useCarrierNames } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
+  getAllPingUuids,
   getPingHistorySnapshot,
+  subscribeAllPingHistory,
   subscribePingHistory,
   PING_WINDOW_MS,
   SAMPLE_TTL_MS,
@@ -365,6 +367,42 @@ export function useAllPingLineOverrides(): PingLineOverridesByNode {
     getAllPingLineOverrides,
     getAllPingLineOverrides,
   );
+}
+
+let pingLiveChangeCounter = 0;
+export function useAllPingOverview(): {
+  multiLines: Map<string, HomepagePingLine[]>;
+  singleItems: Map<string, PingOverviewItem>;
+} {
+  const subscribe = useCallback((cb: () => void) => {
+    return subscribeAllPingHistory(() => {
+      pingLiveChangeCounter = (pingLiveChangeCounter + 1) % 1_000_000;
+      cb();
+    });
+  }, []);
+  const getSnapshot = useCallback(() => pingLiveChangeCounter, []);
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
+  const { homepageMultiPingTaskIds, homepagePingLineOverrides } = useThemeSettings();
+  const carrierNames = useCarrierNames();
+
+  return useMemo(() => {
+    const multiLines = new Map<string, HomepagePingLine[]>();
+    const singleItems = new Map<string, PingOverviewItem>();
+    const uuids = getAllPingUuids();
+    for (const uuid of uuids) {
+      const samples = getPingHistorySnapshot(uuid);
+      const siteOverrides = nodePingLineOverrides(homepagePingLineOverrides, uuid);
+      const localOverrides = getPingLineOverrides(uuid);
+      const taskIds = resolveNodePingLineTaskIds(
+        resolveNodePingLineTaskIds(homepageMultiPingTaskIds, siteOverrides),
+        localOverrides,
+      );
+      const lines = getCachedLines(uuid, taskIds, samples, undefined, carrierNames);
+      multiLines.set(uuid, lines);
+    }
+    return { multiLines, singleItems };
+  }, [carrierNames, homepageMultiPingTaskIds, homepagePingLineOverrides]);
 }
 
 /**

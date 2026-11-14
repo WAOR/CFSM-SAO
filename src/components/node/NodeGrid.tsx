@@ -20,7 +20,9 @@ import {
   useNodeOnlineSummaries,
   useNodeStoreStatus,
 } from "@/hooks/useNode";
-import { useHomepagePingOverview } from "@/hooks/usePingOverview";
+import { useHomepagePingOverview, useAllPingOverview } from "@/hooks/usePingOverview";
+import { calculateCarrierLoss, type CarrierLossSummary } from "@/utils/carrierLoss";
+import { isHomepageMultiPingConfigured } from "@/utils/pingTasks";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useViewMode } from "@/hooks/useViewMode";
@@ -58,7 +60,7 @@ import {
   type MatrixColorTheme,
   type MatrixBootEffect,
 } from "@/utils/themeSettings";
-import type { OverviewCardId } from "@/types/cfsm";
+import type { OverviewCardId, OverviewCardVisualMode, OverviewMicroVisualMode } from "@/types/cfsm";
 import { getRenewalReminders, type RenewalReminderSource } from "@/utils/renewalReminder";
 import { DiaTextReveal } from "@/components/ui/DiaTextReveal";
 
@@ -105,6 +107,7 @@ interface HomeOverview {
   swapPct: number;
   totalProcesses: number;
   totalCores: number;
+  carrierLoss?: CarrierLossSummary | null;
 }
 
 function HomeBrand({ siteName }: { siteName: string }) {
@@ -215,6 +218,11 @@ function HomeOverviewCards({
   matrixCustomPattern = null,
   overviewCards,
   overviewCardOrder,
+  overviewCardVisualMode = "visual",
+  overviewMicroVisualMode = "dynamic",
+  overviewStaticCards = [],
+  costCurrency = "CNY",
+  exchangeRates,
 }: {
   overview: HomeOverview;
   costSummary: { remainingCny: number; totalOriginalPriceCny?: number } | null;
@@ -238,6 +246,11 @@ function HomeOverviewCards({
   matrixCustomPattern?: number[] | null;
   overviewCards?: OverviewCardId[];
   overviewCardOrder?: OverviewCardId[];
+  overviewCardVisualMode?: OverviewCardVisualMode;
+  overviewMicroVisualMode?: OverviewMicroVisualMode;
+  overviewStaticCards?: OverviewCardId[];
+  costCurrency?: import("@/utils/cost").CostTargetCurrency;
+  exchangeRates?: Record<string, number>;
 }) {
   const queryClient = useQueryClient();
   const [isEditingName, setIsEditingName] = useState(false);
@@ -285,6 +298,8 @@ function HomeOverviewCards({
     renewalCount,
   );
 
+  const [touchActiveCardId, setTouchActiveCardId] = useState<OverviewCardId | null>(null);
+
   const activeCardIds = useMemo(() => {
     return normalizeOverviewCards(overviewCards ?? overviewCardOrder);
   }, [overviewCards, overviewCardOrder]);
@@ -299,8 +314,19 @@ function HomeOverviewCards({
         isPriceVisible={isPriceVisible}
         costSummary={costSummary}
         costLoading={costLoading}
+        costCurrency={costCurrency}
+        exchangeRates={exchangeRates}
         showDetailButton={showDetailButton}
         renewalNodes={renewalNodes}
+        isActive={touchActiveCardId === cardId}
+        onClick={() => {
+          setTouchActiveCardId(cardId);
+        }}
+        microVisualMode={
+          overviewStaticCards?.includes(cardId)
+            ? "static"
+            : overviewMicroVisualMode
+        }
       />
     );
   };
@@ -374,7 +400,7 @@ function HomeOverviewCards({
         </div>
 
         {/* 6 宫格指标卡片 */}
-        <div className="mao-stat-grid">
+        <div className="mao-stat-grid" data-visual-mode={overviewCardVisualMode || "adaptive"}>
           {activeCardIds.map((cardId) => renderCard(cardId))}
         </div>
       </div>
@@ -914,6 +940,37 @@ export function NodeGrid() {
     for (const node of visibleMeta) map.set(node.uuid, node.name?.trim() || node.uuid);
     return map;
   }, [visibleMeta]);
+
+  const allPing = useAllPingOverview();
+  const carrierLoss = useMemo(() => {
+    let visibleUuids = visibleMeta.map((m) => m.uuid);
+    const included = themeSettings.carrierLossIncludedNodes;
+    if (included && included.length > 0) {
+      const includedSet = new Set(included);
+      visibleUuids = visibleUuids.filter((uuid) => {
+        const meta = visibleMeta.find((m) => m.uuid === uuid);
+        const name = meta?.name?.trim() || "";
+        return includedSet.has(uuid) || (name && includedSet.has(name));
+      });
+    }
+    const isMultiPingMode =
+      themeSettings.enableHomepageMultiPing &&
+      isHomepageMultiPingConfigured(themeSettings.homepageMultiPingTaskIds);
+    return calculateCarrierLoss(
+      allPing.multiLines,
+      allPing.singleItems,
+      visibleUuids,
+      isMultiPingMode,
+    );
+  }, [
+    allPing.multiLines,
+    allPing.singleItems,
+    visibleMeta,
+    themeSettings.carrierLossIncludedNodes,
+    themeSettings.enableHomepageMultiPing,
+    themeSettings.homepageMultiPingTaskIds,
+  ]);
+
   const overview = useMemo<HomeOverview>(() => {
     let onlineNodes = 0;
     let offlineNodes = 0;
@@ -1013,8 +1070,9 @@ export function NodeGrid() {
       swapPct,
       totalProcesses,
       totalCores,
+      carrierLoss,
     };
-  }, [visibleNodes, visibleMeta]);
+  }, [visibleNodes, visibleMeta, carrierLoss]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
   const hasNodes = visibleMeta.length > 0;
   const loggedIn = Boolean(me?.logged_in);
@@ -1249,6 +1307,11 @@ export function NodeGrid() {
           matrixCustomPattern={themeSettings.matrixCustomPattern}
           overviewCards={themeSettings.overviewCards}
           overviewCardOrder={themeSettings.overviewCardOrder}
+          overviewCardVisualMode={themeSettings.overviewCardVisualMode}
+          overviewMicroVisualMode={themeSettings.overviewMicroVisualMode}
+          overviewStaticCards={themeSettings.overviewStaticCards}
+          costCurrency={themeSettings.costCurrency}
+          exchangeRates={rateQuery.data?.rates}
         />
       )}
     </>

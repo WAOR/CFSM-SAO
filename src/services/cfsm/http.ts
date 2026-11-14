@@ -326,21 +326,24 @@ export async function cfsmGetAll<S extends z.ZodTypeAny>(
         if (options?.signal?.aborted) {
           throw new DOMException("The operation was aborted.", "AbortError");
         }
-        return settled.map((res) => {
-          if (res.error || !res.data) {
-            return { base: res.base, error: res.error || new Error("No data") };
-          }
-          const parsed = schema.safeParse(res.data);
-          if (parsed.success) {
-            return { base: res.base, data: parsed.data };
-          }
-          return {
-            base: res.base,
-            error: new Error(
-              `Schema mismatch on /api/servers: ${parsed.error.issues[0]?.message ?? "unknown"}`,
-            ),
-          };
-        });
+        const hasValidData = settled.some((res) => !res.error && res.data);
+        if (hasValidData) {
+          return settled.map((res) => {
+            if (res.error || !res.data) {
+              return { base: res.base, error: res.error || new Error("No data") };
+            }
+            const parsed = schema.safeParse(res.data);
+            if (parsed.success) {
+              return { base: res.base, data: parsed.data };
+            }
+            return {
+              base: res.base,
+              error: new Error(
+                `Schema mismatch on /api/servers: ${parsed.error.issues[0]?.message ?? "unknown"}`,
+              ),
+            };
+          });
+        }
       } catch (err) {
         if (options?.signal?.aborted) throw err;
         // 异常降级至标准请求

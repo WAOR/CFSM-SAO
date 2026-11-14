@@ -19,6 +19,12 @@ describe("normalizeThemeSettings", () => {
     );
   });
 
+  it("normalizes overviewMicroVisualMode defaulting to dynamic and accepting static", () => {
+    expect(normalizeThemeSettings({}).overviewMicroVisualMode).toBe("dynamic");
+    expect(normalizeThemeSettings({ overviewMicroVisualMode: "static" }).overviewMicroVisualMode).toBe("static");
+    expect(normalizeThemeSettings({ overviewMicroVisualMode: "unknown" as never }).overviewMicroVisualMode).toBe("dynamic");
+  });
+
   it("defaults overview ratings on unless explicitly disabled", () => {
     const defaults = normalizeThemeSettings({});
     expect(defaults.showOverviewRatings).toBe(true);
@@ -91,5 +97,12 @@ describe("normalizeThemeSettings", () => {
   it("normalizes and trims adminNickname cleanly", () => {
     expect(normalizeThemeSettings({}).adminNickname).toBe("");
     expect(normalizeThemeSettings({ adminNickname: "  jerry  " }).adminNickname).toBe("jerry");
+  });
+
+  it("normalizes serverCardTemplate, defaulting to layered", () => {
+    expect(normalizeThemeSettings({}).serverCardTemplate).toBe("layered");
+    expect(normalizeThemeSettings({ serverCardTemplate: "layered" }).serverCardTemplate).toBe("layered");
+    expect(normalizeThemeSettings({ serverCardTemplate: "classic" }).serverCardTemplate).toBe("classic");
+    expect(normalizeThemeSettings({ serverCardTemplate: "unknown" as never }).serverCardTemplate).toBe("layered");
   });
 });

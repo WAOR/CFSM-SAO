@@ -84,13 +84,13 @@ describe("站点预设与本机覆盖的合并口径", () => {
   });
 
   it("两边都没有的键落到主题默认值", () => {
-    expect(merge({}, {}).defaultAppearance).toBe("dark");
+    expect(merge({}, {}).defaultAppearance).toBe("system");
   });
 
   it("只读站点预设会丢掉本机设置（回归用例）", () => {
     const local = { defaultAppearance: "dark" as const };
     // 错误口径：忽略 local。
-    expect(normalizeThemeSettings({}).defaultAppearance).toBe("dark");
+    expect(normalizeThemeSettings({}).defaultAppearance).toBe("system");
     // 正确口径。
     expect(merge({}, local).defaultAppearance).toBe("dark");
   });

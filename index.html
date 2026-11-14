@@ -31,6 +31,25 @@
         // 超前核心 API 预加载：利用浏览器解析 HTML 与下载 React Bundle 的网络空档期，提前并发拉取关键数据
         try {
           if (typeof window !== "undefined" && typeof fetch === "function") {
+            const search = window.location.search || "";
+            // Mock 纯前端开发预览时跳过预加载，避免打到未启动的本地后端端口并污染首屏
+            let isMock = search.includes("mock=1") || search.includes("mock=true");
+            if (!isMock && !search.includes("mock=0")) {
+              try {
+                const stored = sessionStorage.getItem("cfsm_dev_mock");
+                isMock = stored
+                  ? stored === "1"
+                  : window.location.port === "5175" ||
+                    window.location.port === "5174" ||
+                    window.location.port === "5173" ||
+                    window.location.hostname === "localhost" ||
+                    window.location.hostname === "127.0.0.1";
+              } catch {
+                isMock = true;
+              }
+            }
+            if (isMock) return;
+
             const getMeta = (name) => {
               const el = document.querySelector(`meta[name="${name}"]`);
               return el ? (el.content || "").trim() : "";

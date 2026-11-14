@@ -518,7 +518,12 @@ export type OverviewCardId =
   | "bandwidth"
   | "swap"
   | "process"
-  | "cores";
+  | "cores"
+  | "loss";
+
+/** 指标小卡呈现模式：智能切换 (桌面并存/移动保微图) | 图形卡片 (强制常驻微图) | 文字卡片 (经典文字明细) */
+export type OverviewCardVisualMode = "adaptive" | "visual" | "text";
+export type OverviewMicroVisualMode = "dynamic" | "static";
 
 export interface PingLatencyThresholds {
   excellent: number;
@@ -561,10 +566,15 @@ export interface UserMatrixPreset {
   createdAt: number;
 }
 
+export type ServerCardTemplate = "classic" | "layered";
+
 export interface ThemeSettings {
+  [key: string]: unknown;
+  carrierLossIncludedNodes?: string[];
   defaultAppearance?: "system" | "light" | "dark";
   desktopNodeViewMode?: "large" | "compact" | "mini" | "list";
   mobileNodeViewMode?: "large" | "compact" | "mini" | "list";
+  serverCardTemplate?: ServerCardTemplate;
   enableAdminButton?: boolean;
   showPingChart?: boolean;
   homepagePingBindings?: Record<string, string[]>;
@@ -581,6 +591,11 @@ export interface ThemeSettings {
   trafficSpectrumColors?: Partial<TrafficSpectrumColors>;
   showHomeOverview?: boolean;
   overviewCards?: OverviewCardId[];
+  overviewCardVisualMode?: OverviewCardVisualMode;
+  /** 首页易闲置指标卡（平均CPU/今日流量/活跃连接）微图呈现模式（已废弃全局单选，兼容旧配置）：动态真实数据(dynamic)、静态美化微图(static) */
+  overviewMicroVisualMode?: OverviewMicroVisualMode;
+  /** 单卡片独立静态微图呈现列表：包含在此数组中的卡片强制呈现静态美化微图，未包含的默认保持动态 */
+  overviewStaticCards?: OverviewCardId[];
   overviewCardOrder?: OverviewCardId[];
   overviewCardDisabled?: OverviewCardId[];
   showGroupTabs?: boolean;
@@ -608,9 +623,7 @@ export interface ThemeSettings {
   showCostSummaryFloatingButton?: boolean;
   showOverviewRatings?: boolean;
   showBandwidthRating?: boolean;
-  showAssetRating?: boolean;
   bandwidthRatingLabels?: string;
-  assetRatingLabels?: string;
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;
   compactShowUptime?: boolean;
@@ -623,6 +636,7 @@ export interface ThemeSettings {
     number | { amount?: number; paidCny?: number; acquiredAt?: string }
   >;
   costRateApiUrl?: string;
+  costCurrency?: "CNY" | "USD" | "EUR";
   showPriceForGuests?: boolean;
 }
 
@@ -779,6 +793,8 @@ export interface PublicConfig {
   version: string;
   latestVersion: string;
   private_site: boolean;
+  /** `/api/config.authorization`：当前请求是否已通过后端认证（含 Cloudflare Access 等外部 Cookie 鉴权）。 */
+  authorization: boolean;
   turnstile_enabled: boolean;
   turnstile_site_key: string;
   verified: boolean;

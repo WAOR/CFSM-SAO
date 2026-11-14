@@ -83,7 +83,7 @@ const CURRENCY_ALIASES: Record<string, string> = {
   "加元": "CAD",
 };
 
-interface CostSummary {
+export interface CostSummary {
   totalCny: number;
   monthlyCny: number;
   remainingCny: number;
@@ -101,7 +101,7 @@ interface CostSummary {
   details: CostSummaryDetail[];
 }
 
-interface CostSummaryDetail {
+export interface CostSummaryDetail {
   uuid: string;
   name: string;
   region: string;
@@ -122,7 +122,7 @@ interface CostSummaryDetail {
   note: string;
 }
 
-interface ExchangeRateData {
+export interface ExchangeRateData {
   rates: Record<string, number>;
   time: number;
 }
@@ -634,11 +634,41 @@ export function calculateCostPremiumBasisAt(
   return detail.counted ? detail.remainingCny : null;
 }
 
-const CNY_MONEY_FORMATTER = new Intl.NumberFormat("zh-CN", {
+export type CostTargetCurrency = "CNY" | "USD" | "EUR";
+
+export const CURRENCY_SYMBOLS: Record<CostTargetCurrency, string> = {
+  CNY: "¥",
+  USD: "$",
+  EUR: "€",
+};
+
+export function convertCnyToTargetCurrency(
+  amountCny: number,
+  targetCurrency: CostTargetCurrency,
+  rates: Record<string, number>,
+): number {
+  if (targetCurrency === "CNY") return amountCny;
+  const cnyRate = rates["CNY"];
+  const targetRate = rates[targetCurrency];
+  if (!cnyRate || !targetRate || cnyRate <= 0) return amountCny;
+  return (amountCny / cnyRate) * targetRate;
+}
+
+const MONEY_FORMATTER = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
+export function formatCurrencyMoney(value: number, currency: CostTargetCurrency = "CNY") {
+  const symbol = CURRENCY_SYMBOLS[currency] || "¥";
+  return `${symbol} ${MONEY_FORMATTER.format(value || 0)}`;
+}
+
+export function formatSignedCurrency(value: number, currency: CostTargetCurrency = "CNY") {
+  const sign = value < 0 ? "-" : "+";
+  return `${sign}${formatCurrencyMoney(Math.abs(value), currency)}`;
+}
+
 export function formatCnyMoney(value: number) {
-  return `¥ ${CNY_MONEY_FORMATTER.format(value || 0)}`;
+  return formatCurrencyMoney(value, "CNY");
 }

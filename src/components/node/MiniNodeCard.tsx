@@ -18,6 +18,7 @@ import { IpStackBadges } from "./IpStackBadges";
 import { HealthBucketTooltip } from "./HealthBucketTooltip";
 import { resolveTouchBucketIndex, TOUCH_BUCKET_HOLD_MS } from "./touchBucketPick";
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { HOMEPAGE_PING_BUCKET_COUNT } from "@/hooks/usePingOverview";
 import { speedRateColor } from "@/utils/metricTone";
 import { supportsFineHover } from "@/utils/mediaQuery";
@@ -428,6 +429,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({
   const model = useNodeCardModel(uuid, {
     pingBucketCount: HOMEPAGE_PING_BUCKET_COUNT,
   });
+  const themeSettings = useThemeSettings();
 
   if (!model.node) {
     return <article className="mini-node-card animate-pulse" aria-busy />;
@@ -451,6 +453,43 @@ export const MiniNodeCard = memo(function MiniNodeCard({
     isOffline,
     osName,
   } = model;
+
+  const isLayered = themeSettings.serverCardTemplate === "layered";
+
+  if (isLayered) {
+    return (
+      <article
+        className={clsx("mini-node-card is-layered", isOffline && "is-offline")}
+      >
+        <div className="server-card-layered-top">
+          <MiniHeader
+            node={node}
+            osName={osName}
+          />
+          <MiniChips
+            tags={footerTags}
+            renewalPrice={isPriceVisible ? renewalPrice : null}
+            ipv4={node.ipv4}
+            ipv6={node.ipv6}
+          />
+          <MiniVitals node={node} loadFraction={loadFraction} />
+          <MiniFlow node={node} upRate={upRate} downRate={downRate} />
+        </div>
+
+        <div className="server-card-layered-bottom">
+          <MiniHealth
+            ping={ping}
+            pingBuckets={pingBuckets}
+            latencyColor={latencyColor}
+            lossColor={lossColor}
+            hasRealHomepagePingBinding={hasRealHomepagePingBinding}
+            pingLoading={pingLoading}
+            pingError={pingError}
+          />
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className={clsx("mini-node-card", isOffline && "is-offline")}>

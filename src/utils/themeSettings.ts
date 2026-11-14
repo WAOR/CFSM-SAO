@@ -40,6 +40,11 @@ import {
 
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
+export type ServerCardTemplate = "classic" | "layered";
+export const SERVER_CARD_TEMPLATES: readonly ServerCardTemplate[] = [
+  "classic",
+  "layered",
+] as const;
 export type ClusterOverviewMode = "classic" | "nodes";
 export type MatrixColorTheme =
   | "default"
@@ -171,28 +176,62 @@ export const TRAFFIC_SPECTRUM_PRESETS: readonly StatusBarPreset[] = STATUS_BAR_P
 
 export type { OverviewCardId };
 
+export type OverviewCardVisualMode = "adaptive" | "visual" | "text";
+
+export const OVERVIEW_CARD_VISUAL_MODES: readonly {
+  id: OverviewCardVisualMode;
+  label: string;
+  desc: string;
+}[] = [
+  { id: "adaptive", label: "智能排版", desc: "大屏展示完整内容，小屏自动精简防重叠" },
+  { id: "visual", label: "纯图模式", desc: "只看数值和右侧微图" },
+  { id: "text", label: "文字模式", desc: "只看数值和辅助文字说明" },
+] as const;
+
+export type OverviewMicroVisualMode = "dynamic" | "static";
+
+export const OVERVIEW_MICRO_VISUAL_MODES = ["dynamic", "static"] as const;
+
+export function normalizeOverviewMicroVisualMode(val: unknown): OverviewMicroVisualMode {
+  return val === "static" ? "static" : "dynamic";
+}
+
+export function normalizeOverviewStaticCards(val: unknown): OverviewCardId[] {
+  if (!Array.isArray(val)) return [];
+  const valid = new Set<OverviewCardId>(ALL_OVERVIEW_CARD_IDS);
+  return val.filter((item): item is OverviewCardId => typeof item === "string" && valid.has(item as OverviewCardId));
+}
+
+export function normalizeOverviewCardVisualMode(
+  raw: unknown,
+  fallback: OverviewCardVisualMode = "adaptive",
+): OverviewCardVisualMode {
+  return raw === "adaptive" || raw === "visual" || raw === "text" ? raw : fallback;
+}
+
 export const OVERVIEW_CARD_SLOT_COUNT = 6;
 
 export const DEFAULT_OVERVIEW_CARDS: readonly OverviewCardId[] = [
-  "connections",
-  "cpu",
-  "ram",
-  "disk",
-  "uptime",
   "asset",
+  "disk",
+  "cpu",
+  "connections",
+  "bandwidth",
+  "loss",
 ] as const;
 
 export const ALL_OVERVIEW_CARD_IDS: readonly OverviewCardId[] = [
-  "connections",
-  "cpu",
-  "ram",
-  "disk",
-  "uptime",
-  "asset",
   "nodes",
+  "asset",
+  "cpu",
   "bandwidth",
+  "loss",
+  "uptime",
+  "connections",
+  "ram",
   "swap",
   "process",
+  "disk",
   "cores",
 ] as const;
 
@@ -239,9 +278,12 @@ export function normalizeOverviewCards(raw: unknown): OverviewCardId[] {
 }
 
 export interface ResolvedThemeSettings {
+  [key: string]: unknown;
+  carrierLossIncludedNodes: string[];
   defaultAppearance: Appearance;
   desktopNodeViewMode: NodeViewMode;
   mobileNodeViewMode: NodeViewMode;
+  serverCardTemplate: ServerCardTemplate;
   clusterOverviewMode: ClusterOverviewMode;
   matrixColorTheme: MatrixColorTheme;
   matrixMockFill: boolean;
@@ -265,6 +307,11 @@ export interface ResolvedThemeSettings {
   showHomeOverview: boolean;
   /** 首页顶部总览左侧小卡片列表（固定 6 个槽位） */
   overviewCards: OverviewCardId[];
+  overviewCardVisualMode: OverviewCardVisualMode;
+  /** 首页易闲置指标卡（平均CPU/今日流量/活跃连接）微图呈现模式：动态真实数据(dynamic)、静态美化微图(static) */
+  overviewMicroVisualMode: OverviewMicroVisualMode;
+  /** 单卡片独立静态微图呈现列表：包含在此数组中的卡片强制呈现静态美化微图，未包含的默认保持动态 */
+  overviewStaticCards: OverviewCardId[];
   overviewCardOrder: OverviewCardId[];
   overviewCardDisabled: OverviewCardId[];
   /** 顶部总览里的「资产概览」卡（把每月花多少钱亮给所有访客，单独给个开关）。 */
@@ -297,12 +344,14 @@ export interface ResolvedThemeSettings {
   costIgnoredNodes: string[];
   costPremiums: Record<string, CostPremiumEntry>;
   costRateApiUrl: string;
+  costCurrency: "CNY" | "USD" | "EUR";
 }
 
 export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
-  defaultAppearance: "dark",
+  defaultAppearance: "system",
   desktopNodeViewMode: "large",
   mobileNodeViewMode: "compact",
+  serverCardTemplate: "layered",
   clusterOverviewMode: "classic",
   matrixColorTheme: "eva",
   matrixMockFill: false,
@@ -325,6 +374,9 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   trafficSpectrumColors: DEFAULT_TRAFFIC_SPECTRUM_COLORS,
   showHomeOverview: true,
   overviewCards: [...DEFAULT_OVERVIEW_CARDS],
+  overviewCardVisualMode: "visual",
+  overviewMicroVisualMode: "dynamic",
+  overviewStaticCards: [],
   overviewCardOrder: [...DEFAULT_OVERVIEW_CARDS],
   overviewCardDisabled: [],
   showAssetOverview: true,
@@ -349,10 +401,12 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   compactShowBilling: true,
   compactShowUptime: true,
   showConnections: false,
+  carrierLossIncludedNodes: [],
   hiddenNodes: [],
   costIgnoredNodes: [],
   costPremiums: {},
   costRateApiUrl: DEFAULT_COST_RATE_API_URL,
+  costCurrency: "CNY",
 };
 
 /** 首页默认分组：只收非空字符串，长度掐在合理范围内（分组名来自后端）。 */
@@ -411,6 +465,17 @@ function normalizeMobileNodeViewMode(
 ): NodeViewMode {
   const mode = normalizeNodeViewMode(value, fallback);
   return mode === "list" ? fallback : mode;
+}
+
+export function isServerCardTemplate(value: unknown): value is ServerCardTemplate {
+  return value === "classic" || value === "layered";
+}
+
+export function normalizeServerCardTemplate(
+  value: unknown,
+  fallback: ServerCardTemplate = DEFAULT_THEME_SETTINGS.serverCardTemplate,
+): ServerCardTemplate {
+  return isServerCardTemplate(value) ? value : fallback;
 }
 
 export function isClusterOverviewMode(value: unknown): value is ClusterOverviewMode {
@@ -588,6 +653,13 @@ export function normalizeTrafficSpectrumColors(val: unknown): TrafficSpectrumCol
   };
 }
 
+export function normalizeCostCurrency(
+  value: unknown,
+): "CNY" | "USD" | "EUR" {
+  if (value === "USD" || value === "EUR") return value;
+  return "CNY";
+}
+
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
@@ -604,6 +676,10 @@ export function normalizeThemeSettings(
     mobileNodeViewMode: normalizeMobileNodeViewMode(
       settings?.mobileNodeViewMode,
       DEFAULT_THEME_SETTINGS.mobileNodeViewMode,
+    ),
+    serverCardTemplate: normalizeServerCardTemplate(
+      settings?.serverCardTemplate,
+      DEFAULT_THEME_SETTINGS.serverCardTemplate,
     ),
     clusterOverviewMode: normalizeClusterOverviewMode(settings?.clusterOverviewMode),
     matrixColorTheme: normalizeMatrixColorTheme(settings?.matrixColorTheme),
@@ -629,6 +705,9 @@ export function normalizeThemeSettings(
     trafficSpectrumColors: normalizeTrafficSpectrumColors(settings?.trafficSpectrumColors),
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
     overviewCards: normalizeOverviewCards(settings?.overviewCards ?? settings?.overviewCardOrder),
+    overviewCardVisualMode: normalizeOverviewCardVisualMode(settings?.overviewCardVisualMode),
+    overviewMicroVisualMode: normalizeOverviewMicroVisualMode(settings?.overviewMicroVisualMode),
+    overviewStaticCards: normalizeOverviewStaticCards(settings?.overviewStaticCards),
     overviewCardOrder: normalizeOverviewCards(settings?.overviewCards ?? settings?.overviewCardOrder),
     overviewCardDisabled: [],
     showAssetOverview: true,
@@ -652,9 +731,11 @@ export function normalizeThemeSettings(
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),
     showConnections: settings?.showConnections === true,
+    carrierLossIncludedNodes: normalizeNodeIdentityList(settings?.carrierLossIncludedNodes),
     hiddenNodes: normalizeNodeIdentityList(settings?.hiddenNodes),
     costIgnoredNodes: normalizeCostIgnoredNodes(settings?.costIgnoredNodes),
     costPremiums: normalizeCostPremiums(settings?.costPremiums),
     costRateApiUrl: normalizeCostRateApiUrl(settings?.costRateApiUrl),
+    costCurrency: normalizeCostCurrency(settings?.costCurrency),
   };
 }

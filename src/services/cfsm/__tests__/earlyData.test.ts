@@ -142,4 +142,27 @@ describe("Early Data Prefetching consumption", () => {
     expect(results[0]?.data?.servers[0]?.id).toBe("srv-fresh");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to standard request when all early servers fail", async () => {
+    (window as unknown as { __EARLY_DATA__?: unknown }).__EARLY_DATA__ = {
+      servers: [
+        {
+          base: window.location.origin,
+          promise: Promise.resolve({ base: window.location.origin, error: new Error("404") }),
+        },
+      ],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ servers: [{ id: "srv-fallback" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const results = await cfsmGetAll("/api/servers", DummyServersSchema);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.data?.servers[0]?.id).toBe("srv-fallback");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });

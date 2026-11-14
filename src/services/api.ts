@@ -175,6 +175,7 @@ export async function getPublic(options?: RequestOptions): Promise<PublicConfig>
     version: config.version,
     latestVersion: config.last_workers_version,
     private_site: !config.is_public,
+    authorization: config.authorization,
     turnstile_enabled: config.turnstile_enabled,
     turnstile_site_key: config.turnstile_site_key,
     verified: config.verified,
@@ -258,12 +259,13 @@ export function getInitialAuth(): Me {
 
 /**
  * CF-Server-Monitor 没有 `/api/me`：登录态由 `/api/config` 的 `authorization` 决定。
+ *
+ * 兼容两种认证通道：
+ * 1. 传统面板登录：通过 Authorization Header 附带 JWT Token；
+ * 2. 外部网关验证（如 Cloudflare Access）：通过 Session Cookie 完成验证，前端本地无 JWT。
  */
 export async function getMe(options?: RequestOptions): Promise<Me> {
   const token = getJwtToken();
-  if (!token) {
-    return { logged_in: false, username: "", uuid: "" };
-  }
   const config = await getSiteConfig(options);
   if (!config.authorization) {
     return { logged_in: false, username: "", uuid: "" };
