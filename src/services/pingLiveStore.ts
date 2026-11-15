@@ -251,10 +251,14 @@ function hydrate(): void {
     const now = Date.now();
     for (const [uuid, entries] of Object.entries(nodes as Record<string, unknown>)) {
       if (!Array.isArray(entries)) continue;
-      const samples = entries
+      const allSamples = entries
         .map(fromPersisted)
-        .filter((sample): sample is PingLiveSample => sample != null && isFresh(sample, now))
+        .filter((sample): sample is PingLiveSample => sample != null && sample.time > 0)
         .sort((left, right) => left.time - right.time);
+      if (allSamples.length === 0) continue;
+      const fresh = allSamples.filter((sample) => isFresh(sample, now));
+      // SWR: 优先取新鲜样本; 若已超期, 保留最近的样本作为初值占位, 避免首屏闪烁横杠
+      const samples = fresh.length > 0 ? fresh : allSamples.slice(-5);
       if (samples.length > 0) samplesByUuid.set(uuid, samples);
     }
   } catch {
