@@ -31,6 +31,25 @@
         // 超前核心 API 预加载：利用浏览器解析 HTML 与下载 React Bundle 的网络空档期，提前并发拉取关键数据
         try {
           if (typeof window !== "undefined" && typeof fetch === "function") {
+            const search = window.location.search || "";
+            // Mock 纯前端开发预览时跳过预加载，避免打到未启动的本地后端端口并污染首屏
+            let isMock = search.includes("mock=1") || search.includes("mock=true");
+            if (!isMock && !search.includes("mock=0")) {
+              try {
+                const stored = sessionStorage.getItem("cfsm_dev_mock");
+                isMock = stored
+                  ? stored === "1"
+                  : window.location.port === "5175" ||
+                    window.location.port === "5174" ||
+                    window.location.port === "5173" ||
+                    window.location.hostname === "localhost" ||
+                    window.location.hostname === "127.0.0.1";
+              } catch {
+                isMock = true;
+              }
+            }
+            if (isMock) return;
+
             const getMeta = (name) => {
               const el = document.querySelector(`meta[name="${name}"]`);
               return el ? (el.content || "").trim() : "";
@@ -180,16 +199,16 @@
         } catch {}
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-C3TjVQu1.js"></script>
+    <script type="module" crossorigin src="./assets/index-Chig_jbD.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-Cyuzqnbw.js">
     <link rel="modulepreload" crossorigin href="./assets/charts-lRTmaCY8.js">
     <link rel="modulepreload" crossorigin href="./assets/react-CfATAyk4.js">
     <link rel="modulepreload" crossorigin href="./assets/query-B2KnTXgC.js">
     <link rel="modulepreload" crossorigin href="./assets/validation-ByCAF8jQ.js">
-    <link rel="modulepreload" crossorigin href="./assets/createLucideIcon-BsLn8QSj.js">
+    <link rel="modulepreload" crossorigin href="./assets/createLucideIcon-C-m9JzD1.js">
     <link rel="stylesheet" crossorigin href="./assets/charts-CnsZ1jie.css">
-    <link rel="stylesheet" crossorigin href="./assets/index-B9UCubLV.css">
-    <meta name="theme-version" content="SAO v1.3.4" />
+    <link rel="stylesheet" crossorigin href="./assets/index-DMI6pzhe.css">
+    <meta name="theme-version" content="SAO v2.0.1" />
   </head>
   <body>
     <div id="root" class="relative z-30"></div>
