@@ -663,10 +663,19 @@ export function normalizeCostCurrency(
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
+  const rawMultiIds = settings?.homepageMultiPingTaskIds;
+  const legacyIndependentIds = (settings as Record<string, unknown> | null | undefined)?.homepageIndependentDefaultTaskIds;
+  const fallbackIndependentIds = Array.isArray(legacyIndependentIds)
+    ? normalizeHomepageMultiPingTaskIds(legacyIndependentIds)
+    : [];
   const homepageMultiPingTaskIds =
     settings?.homepageMultiPingTaskIds == null
-      ? [...DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS]
-      : normalizeHomepageMultiPingTaskIds(settings.homepageMultiPingTaskIds);
+      ? fallbackIndependentIds.length > 0
+        ? fallbackIndependentIds
+        : [...DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS]
+      : rawMultiIds?.length === 0 && fallbackIndependentIds.length > 0
+        ? fallbackIndependentIds
+        : normalizeHomepageMultiPingTaskIds(rawMultiIds);
   return {
     defaultAppearance: normalizeAppearance(settings?.defaultAppearance),
     desktopNodeViewMode: normalizeNodeViewMode(

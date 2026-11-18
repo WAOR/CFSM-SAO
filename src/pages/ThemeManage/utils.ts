@@ -1,6 +1,10 @@
 import type { NodeInfo, PingTask, ThemeSettings } from "@/types/cfsm";
 import type { CostPremiumEntry } from "@/utils/cost";
-import { normalizeHomepagePingTaskBindings, type HomepagePingTaskBindings } from "@/utils/pingTasks";
+import {
+  DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS,
+  normalizeHomepagePingTaskBindings,
+  type HomepagePingTaskBindings,
+} from "@/utils/pingTasks";
 import {
   normalizeOverviewCards,
   normalizePingLatencyColors,
@@ -173,7 +177,10 @@ export function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     homepagePingBindings: settings.homepagePingBindings,
     homepageDefaultPingTaskId: settings.homepageDefaultPingTaskId,
     enableHomepageMultiPing: settings.enableHomepageMultiPing,
-    homepageMultiPingTaskIds: settings.homepageMultiPingTaskIds,
+    homepageMultiPingTaskIds:
+      settings.homepageMultiPingTaskIds.length > 0
+        ? settings.homepageMultiPingTaskIds
+        : [...DEFAULT_HOMEPAGE_MULTI_PING_TASK_IDS],
     fakePingForUnbound: settings.fakePingForUnbound,
     pingLatencyThresholds: normalizePingLatencyThresholds(settings.pingLatencyThresholds),
     pingLatencyColors: normalizePingLatencyColors(settings.pingLatencyColors),
