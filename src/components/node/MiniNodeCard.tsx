@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { HomeInstanceLink } from "./HomeInstanceLink";
 import {
   ArrowDown,
   ArrowUp,
@@ -46,21 +46,20 @@ function MiniHeader({
   osName: string;
 }) {
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
-  const detailHref = `/server/${encodeURIComponent(node.uuid)}`;
   return (
     <header className="mini-node-header">
       <Flag region={node.region} size={14} />
-      <Link to={detailHref} className="mini-node-title" title={node.name}>
+      <HomeInstanceLink uuid={node.uuid} className="mini-node-title" title={node.name}>
         {node.name}
-      </Link>
-      <Link
-        to={detailHref}
+      </HomeInstanceLink>
+      <HomeInstanceLink
+        uuid={node.uuid}
         className="mini-node-os"
         title={detailLabels.title}
         aria-label={detailLabels.ariaLabel}
       >
         <OsLogo value={node.os} size={14} />
-      </Link>
+      </HomeInstanceLink>
     </header>
   );
 }

@@ -1,5 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { HomeInstanceLink } from "./HomeInstanceLink";
 import {
   Cpu,
   Gauge,
@@ -302,13 +302,13 @@ function NodeCardHeader({
       <div className="server-card-title-block">
         <div className="server-card-title-row">
           <Flag region={node.region} size={15} />
-          <Link
-            to={`/server/${encodeURIComponent(node.uuid)}`}
+          <HomeInstanceLink
+            uuid={node.uuid}
             className="server-card-title-link"
             title={node.name}
           >
             {node.name}
-          </Link>
+          </HomeInstanceLink>
         </div>
         {(subtitle || node.ipv4 || node.ipv6) && (
           <div className="server-card-subtitle-row">
@@ -322,14 +322,14 @@ function NodeCardHeader({
         )}
       </div>
       <div className="server-card-actions">
-        <Link
-          to={`/server/${encodeURIComponent(node.uuid)}`}
+        <HomeInstanceLink
+          uuid={node.uuid}
           className="server-card-detail-link"
           title={detailLabels.title}
           aria-label={detailLabels.ariaLabel}
         >
           <OsLogo value={node.os} size={15} />
-        </Link>
+        </HomeInstanceLink>
       </div>
     </header>
   );

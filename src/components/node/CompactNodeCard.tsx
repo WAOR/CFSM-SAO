@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { HomeInstanceLink } from "./HomeInstanceLink";
 import {
   ArrowDown,
   ArrowUp,
@@ -360,24 +360,24 @@ function CompactNodeHeader({
       <div className="compact-node-title-wrap">
         <div className="compact-node-title-row">
           <Flag region={node.region} size={15} />
-          <Link
-            to={`/server/${encodeURIComponent(node.uuid)}`}
+          <HomeInstanceLink
+            uuid={node.uuid}
             className="compact-node-title"
             title={node.name}
           >
             {node.name}
-          </Link>
+          </HomeInstanceLink>
         </div>
       </div>
       <div className="compact-node-actions">
-        <Link
-          to={`/server/${encodeURIComponent(node.uuid)}`}
+        <HomeInstanceLink
+          uuid={node.uuid}
           className="compact-node-detail-link"
           title={detailLabels.title}
           aria-label={detailLabels.ariaLabel}
         >
           <OsLogo value={node.os} size={15} />
-        </Link>
+        </HomeInstanceLink>
       </div>
     </header>
   );

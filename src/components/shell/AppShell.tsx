@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, ScrollRestoration, useLocation } from "react-router-dom";
 import { Lock, WifiOff, RotateCw, ArrowRight } from "lucide-react";
 import { TurnstileGate } from "./TurnstileGate";
 import { RealtimeSessionPrompt } from "./RealtimeSessionPrompt";
@@ -120,6 +120,7 @@ export function AppShell() {
           )}
         </div>
       </main>
+      <ScrollRestoration />
       <RealtimeSessionPrompt />
       <SiteThemeSyncNotice />
     </div>
