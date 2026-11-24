@@ -55,7 +55,7 @@ export function HelpTab({
       keywords: ["开源", "修改", "发布", "授权", "协议", "版权", "二次开发"],
       renderAnswer: () => (
         <div className="mt-2.5 pt-2.5 border-t border-(--hairline) text-xs text-(--text-secondary) leading-relaxed">
-                      非常欢迎你基于本项目修改或开发满足自己需要的分支。如果你的修改版本和原版 SAO 风格高度相似，为了避免给其他用户带来辨认和混淆困扰，建议不要将高相似度的衍生主题直接上架到官方市场；当然这只是一条友好的建议，并不构成硬性限制。
+                      欢迎基于本项目修改或开发满足自己需要的分支。但当您的衍生分支在外观设计上与 SAO 十分相似时，为避免给其他用户带来辨识和认知混淆困扰，请不要直接将其提交至探针主题市场。
                     </div>
       ),
     },
